@@ -1,0 +1,23 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-ink/10; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-cream font-sans text-ink antialiased; }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+  ::selection { @apply bg-coral/30 text-ink; }
+}
+
+@layer components {
+  .container-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+  .section-pad { @apply py-16 sm:py-20 lg:py-24; }
+  .glass { @apply border border-white/30 bg-white/75 shadow-soft backdrop-blur-xl; }
+  .field { @apply w-full rounded-2xl border border-ink/10 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-ink/35 focus:border-coral/60 focus:ring-4 focus:ring-coral/10; }
+  .label { @apply mb-2 block text-sm font-semibold text-ink/75; }
+}
+
+button, a { -webkit-tap-highlight-color: transparent; }
