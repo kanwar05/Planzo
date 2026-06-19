@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createVendorProfile,
   deleteVendorProfile,
+  getMyVendorProfile,
   getVendorById,
   getVendors,
   updateVendorProfile,
@@ -14,6 +15,12 @@ import {
 const router = Router();
 
 router.get("/", getVendors);
+router.get(
+  "/me",
+  protect,
+  authorizeRoles("vendor"),
+  getMyVendorProfile,
+);
 router.post(
   "/profile",
   protect,

@@ -1,14 +1,14 @@
 import { ArrowRight, CalendarCheck, CheckCircle2, MapPin, Search, ShieldCheck, Sparkles, Star, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import hero from "../assets/planzo-hero.png";
 import Button from "../components/Button";
 import SectionHeading from "../components/SectionHeading";
 import VendorCard from "../components/VendorCard";
 import { services } from "../data/services";
-import { vendors } from "../data/vendors";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { getVendors } from "../services/vendorService";
 
 const testimonials = [
   { name: "Ananya & Veer", event: "Wedding · Jaipur", quote: "We found our decorator, DJ, and planner in one weekend. Every vendor felt vetted, responsive, and genuinely invested.", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" },
@@ -19,6 +19,13 @@ export default function HomePage() {
   useDocumentTitle("Plan beautiful events");
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [popularVendors, setPopularVendors] = useState([]);
+
+  useEffect(() => {
+    getVendors({ limit: 3 })
+      .then((data) => setPopularVendors(data.vendors))
+      .catch(() => setPopularVendors([]));
+  }, []);
   const search = (event) => {
     event.preventDefault();
     navigate(`/vendors?q=${encodeURIComponent(query)}`);
@@ -50,7 +57,7 @@ export default function HomePage() {
       <section className="section-pad container-shell">
         <div className="flex items-end justify-between gap-8"><SectionHeading eyebrow="Explore by service" title="Everything your event needs." description="Handpicked professionals for every moving part of your celebration." /><Button to="/services" variant="ghost" className="hidden sm:flex">View all <ArrowRight className="h-4 w-4" /></Button></div>
         <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
-          {services.map(({ title, slug, icon: Icon, image }) => <motion.button onClick={() => navigate(`/vendors?q=${slug}`)} whileHover={{ y: -5 }} key={title} className="group overflow-hidden rounded-[1.5rem] border border-ink/8 bg-white text-left shadow-soft"><div className="h-28 overflow-hidden"><img src={image} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /></div><div className="p-4"><Icon className="h-5 w-5 text-coral" /><p className="mt-3 text-sm font-bold leading-tight">{title}</p></div></motion.button>)}
+          {services.map(({ title, icon: Icon, image }) => <motion.button onClick={() => navigate(`/vendors?category=${encodeURIComponent(title)}`)} whileHover={{ y: -5 }} key={title} className="group overflow-hidden rounded-[1.5rem] border border-ink/8 bg-white text-left shadow-soft"><div className="h-28 overflow-hidden"><img src={image} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-110" /></div><div className="p-4"><Icon className="h-5 w-5 text-coral" /><p className="mt-3 text-sm font-bold leading-tight">{title}</p></div></motion.button>)}
         </div>
       </section>
 
@@ -69,7 +76,7 @@ export default function HomePage() {
 
       <section className="section-pad container-shell">
         <div className="flex items-end justify-between gap-8"><SectionHeading eyebrow="Loved locally" title="Popular vendors" description="Consistently exceptional, highly rated, and ready for your date." /><Button to="/vendors" variant="outline" className="hidden sm:flex">Explore all vendors</Button></div>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">{vendors.filter((vendor) => vendor.featured).slice(0, 3).map((vendor) => <VendorCard key={vendor.id} vendor={vendor} />)}</div>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">{popularVendors.map((vendor) => <VendorCard key={vendor._id} vendor={vendor} />)}</div>
       </section>
 
       <section className="bg-plum text-white">
