@@ -128,6 +128,17 @@ export const getVendorById = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, vendor });
 });
 
+export const getMyVendorProfile = asyncHandler(async (req, res) => {
+  const vendor = await Vendor.findOne({ userId: req.user._id }).populate(
+    "userId",
+    "name email phone",
+  );
+
+  if (!vendor) throw new ApiError(404, "Vendor profile not found.");
+
+  res.status(200).json({ success: true, vendor });
+});
+
 export const updateVendorProfile = asyncHandler(async (req, res) => {
   const updates = normalizeVendorInput(req.body);
 

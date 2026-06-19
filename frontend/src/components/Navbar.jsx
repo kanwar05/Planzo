@@ -3,6 +3,7 @@ import { Menu, X } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import Logo from "./Logo";
 import Button from "./Button";
+import { useAuth } from "../context/AuthContext";
 
 const links = [
   { label: "Discover", to: "/vendors" },
@@ -12,6 +13,9 @@ const links = [
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const { isAuthenticated, user } = useAuth();
+  const dashboard =
+    user?.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
   return (
     <header className="sticky top-0 z-50 border-b border-ink/5 bg-cream/90 backdrop-blur-xl">
       <div className="container-shell flex h-20 items-center justify-between">
@@ -24,8 +28,14 @@ export default function Navbar() {
           ))}
         </nav>
         <div className="hidden items-center gap-3 md:flex">
-          <Button to="/login" variant="ghost">Log in</Button>
-          <Button to="/register">Join PLANZO</Button>
+          {isAuthenticated ? (
+            <Button to={dashboard}>Dashboard</Button>
+          ) : (
+            <>
+              <Button to="/login" variant="ghost">Log in</Button>
+              <Button to="/register">Join PLANZO</Button>
+            </>
+          )}
         </div>
         <button onClick={() => setOpen(!open)} className="grid h-11 w-11 place-items-center rounded-full bg-white shadow-sm md:hidden" aria-label="Toggle navigation">
           {open ? <X /> : <Menu />}
@@ -35,7 +45,16 @@ export default function Navbar() {
         <div className="container-shell border-t border-ink/5 py-5 md:hidden">
           <div className="flex flex-col gap-2">
             {links.map((link) => <NavLink key={link.label} onClick={() => setOpen(false)} to={link.to} className="rounded-xl px-3 py-3 font-semibold text-ink/70 hover:bg-white">{link.label}</NavLink>)}
-            <div className="mt-3 grid grid-cols-2 gap-3"><Button to="/login" variant="outline">Log in</Button><Button to="/register">Join PLANZO</Button></div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {isAuthenticated ? (
+                <Button to={dashboard} className="col-span-2">Dashboard</Button>
+              ) : (
+                <>
+                  <Button to="/login" variant="outline">Log in</Button>
+                  <Button to="/register">Join PLANZO</Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

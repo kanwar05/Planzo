@@ -61,6 +61,7 @@ should be provisioned directly by a trusted administrator.
 ### Vendors
 
 - `POST /api/vendors/profile` — vendor only
+- `GET /api/vendors/me` — current vendor's profile
 - `GET /api/vendors`
 - `GET /api/vendors/:id`
 - `PATCH /api/vendors/profile` — profile owner only
