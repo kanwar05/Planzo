@@ -1,5 +1,5 @@
-import { ImagePlus, Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ImagePlus, Save, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
@@ -11,6 +11,10 @@ import {
   getMyVendorProfile,
   updateVendorProfile,
 } from "../services/vendorService";
+import {
+  deletePortfolioImage,
+  uploadPortfolioImages,
+} from "../services/uploadService";
 import { getApiError } from "../utils/apiError";
 
 const initialForm = {
@@ -20,8 +24,22 @@ const initialForm = {
   experience: "",
   pricing: "",
   location: "",
-  portfolioImages: "",
 };
+
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_PORTFOLIO_IMAGES = 8;
+
+const normalizePortfolioImages = (images = []) =>
+  images
+    .map((image) =>
+      typeof image === "string" ? { url: image, publicId: "" } : image,
+    )
+    .filter((image) => image?.url);
 
 export default function VendorProfilePage() {
   useDocumentTitle("Vendor profile setup");
@@ -34,6 +52,11 @@ export default function VendorProfilePage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [portfolioImages, setPortfolioImages] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const selectedFilesRef = useRef([]);
+  const [uploading, setUploading] = useState(false);
+  const [deletingUrl, setDeletingUrl] = useState("");
   const [toast, setToast] = useState({ message: "", type: "success" });
 
   useEffect(() => {
@@ -47,8 +70,8 @@ export default function VendorProfilePage() {
           experience: profile.experience,
           pricing: profile.pricing,
           location: profile.location,
-          portfolioImages: profile.portfolioImages.join("\n"),
         });
+        setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
       })
       .catch((error) => {
         if (error.response?.status !== 404) {
@@ -60,6 +83,19 @@ export default function VendorProfilePage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    selectedFilesRef.current = selectedFiles;
+  }, [selectedFiles]);
+
+  useEffect(
+    () => () => {
+      selectedFilesRef.current.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl),
+      );
+    },
+    [],
+  );
 
   const change = (event) => {
     setForm((current) => ({
@@ -77,10 +113,6 @@ export default function VendorProfilePage() {
       ...form,
       experience: Number(form.experience),
       pricing: Number(form.pricing),
-      portfolioImages: form.portfolioImages
-        .split("\n")
-        .map((url) => url.trim())
-        .filter(Boolean),
     };
 
     try {
@@ -92,10 +124,7 @@ export default function VendorProfilePage() {
         message: "Vendor profile saved successfully.",
         type: "success",
       });
-      setForm((current) => ({
-        ...current,
-        portfolioImages: profile.portfolioImages.join("\n"),
-      }));
+      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
     } catch (error) {
       setToast({
         message: getApiError(error, "Unable to save your vendor profile."),
@@ -103,6 +132,122 @@ export default function VendorProfilePage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const selectImages = (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+
+    if (!files.length) return;
+
+    const invalidType = files.find(
+      (file) => !ALLOWED_IMAGE_TYPES.has(file.type),
+    );
+    if (invalidType) {
+      setToast({
+        message: "Only JPG, JPEG, PNG, and WEBP images are allowed.",
+        type: "error",
+      });
+      return;
+    }
+
+    const oversized = files.find((file) => file.size > MAX_IMAGE_SIZE);
+    if (oversized) {
+      setToast({
+        message: "Each portfolio image must be 5MB or smaller.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (
+      portfolioImages.length + selectedFiles.length + files.length >
+      MAX_PORTFOLIO_IMAGES
+    ) {
+      setToast({
+        message: "You can add up to 8 portfolio images in total.",
+        type: "error",
+      });
+      return;
+    }
+
+    setSelectedFiles((current) => [
+      ...current,
+      ...files.map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ]);
+  };
+
+  const removeSelectedImage = (previewUrl) => {
+    URL.revokeObjectURL(previewUrl);
+    setSelectedFiles((current) =>
+      current.filter((item) => item.previewUrl !== previewUrl),
+    );
+  };
+
+  const uploadImages = async () => {
+    if (!profileExists) {
+      setToast({
+        message:
+          "Please create your vendor profile before uploading portfolio images.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (!selectedFiles.length) {
+      setToast({
+        message: "Select at least one image to upload.",
+        type: "error",
+      });
+      return;
+    }
+
+    setUploading(true);
+    setToast({ message: "", type: "success" });
+
+    try {
+      const profile = await uploadPortfolioImages(
+        selectedFiles.map((item) => item.file),
+      );
+      selectedFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      setSelectedFiles([]);
+      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
+      setToast({
+        message: "Portfolio images uploaded successfully.",
+        type: "success",
+      });
+    } catch (error) {
+      setToast({
+        message: getApiError(error, "Unable to upload portfolio images."),
+        type: "error",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteImage = async (imageUrl) => {
+    setDeletingUrl(imageUrl);
+    setToast({ message: "", type: "success" });
+
+    try {
+      const profile = await deletePortfolioImage(imageUrl);
+      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
+      setToast({
+        message: "Portfolio image deleted successfully.",
+        type: "success",
+      });
+    } catch (error) {
+      setToast({
+        message: getApiError(error, "Unable to delete the portfolio image."),
+        type: "error",
+      });
+    } finally {
+      setDeletingUrl("");
     }
   };
 
@@ -208,18 +353,94 @@ export default function VendorProfilePage() {
         <Card id="portfolio" className="p-6">
           <h2 className="text-lg font-extrabold">Portfolio</h2>
           <p className="mt-1 text-xs text-ink/40">
-            Add one public image URL per line. Cloudinary uploads can be added
-            later.
+            Upload up to 8 JPG, PNG, or WEBP images. Each image can be up to 5MB.
           </p>
-          <div className="relative mt-6">
-            <ImagePlus className="absolute left-4 top-4 h-5 w-5 text-coral" />
-            <textarea
-              name="portfolioImages"
-              value={form.portfolioImages}
-              onChange={change}
-              className="field min-h-40 resize-y !pl-12"
-              placeholder={"https://example.com/event-1.jpg\nhttps://example.com/event-2.jpg"}
-            />
+
+          {portfolioImages.length > 0 && (
+            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {portfolioImages.map((image) => (
+                <div
+                  key={image.url}
+                  className="group relative overflow-hidden rounded-2xl border bg-sand"
+                >
+                  <img
+                    src={image.url}
+                    alt="Vendor portfolio"
+                    className="h-40 w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => deleteImage(image.url)}
+                    disabled={Boolean(deletingUrl)}
+                    className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-red-500 shadow-md transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label="Delete portfolio image"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedFiles.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
+                Ready to upload
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {selectedFiles.map((item) => (
+                  <div
+                    key={item.previewUrl}
+                    className="relative overflow-hidden rounded-2xl border border-coral/20 bg-sand"
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt={item.file.name}
+                      className="h-40 w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSelectedImage(item.previewUrl)}
+                      disabled={uploading}
+                      className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 shadow-md disabled:opacity-60"
+                      aria-label={`Remove ${item.file.name}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-bold text-ink transition hover:-translate-y-0.5 hover:border-coral/50 hover:text-coral">
+              <ImagePlus className="h-4 w-4" />
+              Select images
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                multiple
+                onChange={selectImages}
+                disabled={
+                  uploading ||
+                  portfolioImages.length + selectedFiles.length >=
+                    MAX_PORTFOLIO_IMAGES
+                }
+                className="sr-only"
+              />
+            </label>
+            <Button
+              type="button"
+              onClick={uploadImages}
+              loading={uploading}
+              disabled={uploading || !selectedFiles.length}
+            >
+              <Upload className="h-4 w-4" /> Upload images
+            </Button>
+            <span className="text-xs text-ink/40">
+              {portfolioImages.length + selectedFiles.length}/8 images
+            </span>
           </div>
         </Card>
         <div className="flex justify-end">

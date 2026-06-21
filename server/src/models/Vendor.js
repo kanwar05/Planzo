@@ -10,6 +10,22 @@ export const SERVICE_CATEGORIES = [
   "Rental Services",
 ];
 
+const portfolioImageSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      required: [true, "Portfolio image URL is required."],
+      trim: true,
+    },
+    publicId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  { _id: false },
+);
+
 const vendorSchema = new mongoose.Schema(
   {
     userId: {
@@ -53,11 +69,11 @@ const vendorSchema = new mongoose.Schema(
       maxlength: [160, "Location cannot exceed 160 characters."],
     },
     portfolioImages: {
-      type: [String],
+      type: [portfolioImageSchema],
       default: [],
       validate: {
-        validator: (images) => images.length <= 20,
-        message: "A portfolio can contain at most 20 images.",
+        validator: (images) => images.length <= 8,
+        message: "A portfolio can contain at most 8 images.",
       },
     },
     rating: {
@@ -81,6 +97,18 @@ const vendorSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+
+// Convert portfolios created before Cloudinary support into the new object shape
+// as documents are hydrated, so existing profiles remain readable and editable.
+vendorSchema.pre("init", function normalizeLegacyPortfolio(data) {
+  if (Array.isArray(data.portfolioImages)) {
+    data.portfolioImages = data.portfolioImages
+      .map((image) =>
+        typeof image === "string" ? { url: image, publicId: "" } : image,
+      )
+      .filter((image) => image?.url);
+  }
+});
 
 vendorSchema.index({
   businessName: "text",

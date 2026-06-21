@@ -1,5 +1,8 @@
 import Booking from "../models/Booking.js";
 import Vendor from "../models/Vendor.js";
+import cloudinary, {
+  isCloudinaryConfigured,
+} from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
@@ -16,7 +19,6 @@ const EDITABLE_FIELDS = [
   "experience",
   "pricing",
   "location",
-  "portfolioImages",
 ];
 
 function normalizeVendorInput(body) {
@@ -28,16 +30,125 @@ function normalizeVendorInput(body) {
   if (data.pricing !== undefined) {
     data.pricing = toNonNegativeNumber(data.pricing, "Pricing");
   }
-  if (
-    data.portfolioImages !== undefined &&
-    (!Array.isArray(data.portfolioImages) ||
-      data.portfolioImages.some((image) => typeof image !== "string"))
-  ) {
-    throw new ApiError(400, "portfolioImages must be an array of strings.");
-  }
-
   return data;
 }
+
+const destroyCloudinaryImages = async (files = []) => {
+  await Promise.allSettled(
+    files
+      .map((file) => file.filename)
+      .filter(Boolean)
+      .map((publicId) => cloudinary.uploader.destroy(publicId)),
+  );
+};
+
+export const requireVendorProfile = asyncHandler(async (req, res, next) => {
+  const vendor = await Vendor.findOne({ userId: req.user._id });
+
+  if (!vendor) {
+    throw new ApiError(
+      404,
+      "Please create your vendor profile before uploading portfolio images.",
+    );
+  }
+
+  req.vendorProfile = vendor;
+  next();
+});
+
+export const addPortfolioImages = asyncHandler(async (req, res) => {
+  const files = req.files || [];
+
+  if (!files.length) {
+    throw new ApiError(400, 'Please upload at least one image using the "images" field.');
+  }
+
+  if (req.vendorProfile.portfolioImages.length + files.length > 8) {
+    await destroyCloudinaryImages(files);
+    throw new ApiError(400, "A portfolio can contain at most 8 images.");
+  }
+
+  const uploadedImages = files.map((file) => ({
+    url: file.path,
+    publicId: file.filename,
+  }));
+
+  try {
+    const vendor = await Vendor.findOneAndUpdate(
+      {
+        _id: req.vendorProfile._id,
+        $expr: {
+          $lte: [
+            { $size: { $ifNull: ["$portfolioImages", []] } },
+            8 - files.length,
+          ],
+        },
+      },
+      { $push: { portfolioImages: { $each: uploadedImages } } },
+      { new: true, runValidators: true },
+    );
+
+    if (!vendor) {
+      await destroyCloudinaryImages(files);
+      throw new ApiError(400, "A portfolio can contain at most 8 images.");
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Portfolio images uploaded successfully.",
+      vendor,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      await destroyCloudinaryImages(files);
+    }
+    throw error;
+  }
+});
+
+export const removePortfolioImage = asyncHandler(async (req, res) => {
+  const imageUrl =
+    typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : "";
+
+  if (!imageUrl) {
+    throw new ApiError(400, "imageUrl is required.");
+  }
+
+  const vendor = await Vendor.findOne({ userId: req.user._id });
+
+  if (!vendor) {
+    throw new ApiError(404, "Vendor profile not found.");
+  }
+
+  const image = vendor.portfolioImages.find((item) => item.url === imageUrl);
+
+  if (!image) {
+    throw new ApiError(404, "Portfolio image not found.");
+  }
+
+  if (image.publicId) {
+    if (!isCloudinaryConfigured()) {
+      throw new ApiError(500, "Cloudinary image uploads are not configured.");
+    }
+
+    const result = await cloudinary.uploader.destroy(image.publicId);
+
+    if (!["ok", "not found"].includes(result.result)) {
+      throw new ApiError(502, "Cloudinary could not delete the portfolio image.");
+    }
+  }
+
+  vendor.portfolioImages = vendor.portfolioImages.filter(
+    (item) => item.url !== imageUrl,
+  );
+  await vendor.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    success: true,
+    message: "Portfolio image deleted successfully.",
+    vendor,
+  });
+});
 
 export const createVendorProfile = asyncHandler(async (req, res) => {
   requireFields(req.body, [

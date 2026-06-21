@@ -1,16 +1,20 @@
 import { Router } from "express";
 import {
+  addPortfolioImages,
   createVendorProfile,
   deleteVendorProfile,
   getMyVendorProfile,
   getVendorById,
   getVendors,
+  removePortfolioImage,
+  requireVendorProfile,
   updateVendorProfile,
 } from "../controllers/vendorController.js";
 import {
   authorizeRoles,
   protect,
 } from "../middleware/authMiddleware.js";
+import { uploadPortfolioImages } from "../middleware/upload.js";
 
 const router = Router();
 
@@ -38,6 +42,20 @@ router.delete(
   protect,
   authorizeRoles("vendor"),
   deleteVendorProfile,
+);
+router.post(
+  "/portfolio",
+  protect,
+  authorizeRoles("vendor"),
+  requireVendorProfile,
+  uploadPortfolioImages,
+  addPortfolioImages,
+);
+router.delete(
+  "/portfolio",
+  protect,
+  authorizeRoles("vendor"),
+  removePortfolioImage,
 );
 router.get("/:id", getVendorById);
 
