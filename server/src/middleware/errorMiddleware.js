@@ -36,6 +36,19 @@ export function errorHandler(error, req, res, next) {
     message = "Request body contains invalid JSON.";
   }
 
+  if (error.code === "LIMIT_FILE_SIZE") {
+    statusCode = 400;
+    message = "Each portfolio image must be 5MB or smaller.";
+  }
+
+  if (
+    error.code === "LIMIT_FILE_COUNT" ||
+    error.code === "LIMIT_UNEXPECTED_FILE"
+  ) {
+    statusCode = 400;
+    message = 'Upload at most 8 images using the "images" field.';
+  }
+
   const response = {
     success: false,
     message,

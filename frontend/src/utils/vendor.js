@@ -10,12 +10,16 @@ const FALLBACK_IMAGES = {
     "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1200&q=80",
 };
 
+const getImageUrl = (image) =>
+  typeof image === "string" ? image : image?.url;
+
 export const getVendorImage = (vendor) =>
-  vendor?.portfolioImages?.[0] ||
+  getImageUrl(vendor?.portfolioImages?.[0]) ||
   FALLBACK_IMAGES[vendor?.serviceCategory] ||
   "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80";
 
 export const getVendorGallery = (vendor) => {
-  const images = vendor?.portfolioImages?.filter(Boolean) || [];
+  const images =
+    vendor?.portfolioImages?.map(getImageUrl).filter(Boolean) || [];
   return images.length ? images : [getVendorImage(vendor)];
 };
