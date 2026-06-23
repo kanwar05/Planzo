@@ -38,6 +38,13 @@ curl http://localhost:5001/api/health
 | `JWT_SECRET` | Secret used to sign access tokens |
 | `JWT_EXPIRES_IN` | Token lifetime; defaults to `7d` |
 | `CLIENT_URL` | Allowed frontend origin; comma-separate multiple origins |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary account cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret; never expose it in the frontend |
+
+Vendor image uploads are sent directly from the API to Cloudinary. Keep all
+Cloudinary credentials in `server/.env`; only committed placeholders belong in
+`.env.example`.
 
 ## Authentication
 
@@ -66,9 +73,76 @@ should be provisioned directly by a trusted administrator.
 - `GET /api/vendors/:id`
 - `PATCH /api/vendors/profile` — profile owner only
 - `DELETE /api/vendors/profile` — profile owner only
+- `POST /api/vendors/images` — upload any combination of vendor images
+- `PUT /api/vendors/profile-image` — replace the profile image
+- `DELETE /api/vendors/profile-image` — delete the profile image
+- `PUT /api/vendors/cover-image` — replace the cover image
+- `DELETE /api/vendors/cover-image` — delete the cover image
+- `POST /api/vendors/portfolio` — add portfolio images
+- `DELETE /api/vendors/portfolio` — delete one portfolio image
 
 Vendor listing supports `category`, `location`, `search`, `verified`, `page`,
 `limit`, and `sort=price_asc|price_desc` query parameters.
+
+All image mutation routes require a vendor JWT:
+
+```text
+Authorization: Bearer <vendor-token>
+Content-Type: multipart/form-data
+```
+
+Only JPEG, PNG, and WEBP files are accepted. Each image can be at most 5 MB,
+and a vendor can store at most eight portfolio images. Cloudinary's secure URL
+and public ID are stored in MongoDB as:
+
+```json
+{
+  "url": "https://res.cloudinary.com/.../image/upload/...",
+  "publicId": "planzo/vendors/portfolio/example"
+}
+```
+
+The combined upload endpoint accepts these multipart fields:
+
+| Field | Maximum |
+| --- | ---: |
+| `profileImage` | 1 |
+| `coverImage` | 1 |
+| `portfolioImages` | 8 |
+
+```bash
+curl -X POST http://localhost:5001/api/vendors/images \
+  -H "Authorization: Bearer <vendor-token>" \
+  -F "profileImage=@./profile.jpg" \
+  -F "coverImage=@./cover.webp" \
+  -F "portfolioImages=@./event-1.jpg" \
+  -F "portfolioImages=@./event-2.jpg"
+```
+
+Uploading a new profile or cover image replaces the database reference and
+removes the previous asset from Cloudinary. The dedicated portfolio endpoint
+is retained for the existing frontend and accepts files using the `images`
+field:
+
+```bash
+curl -X POST http://localhost:5001/api/vendors/portfolio \
+  -H "Authorization: Bearer <vendor-token>" \
+  -F "images=@./event-1.jpg" \
+  -F "images=@./event-2.jpg"
+```
+
+Delete a portfolio image using its Cloudinary public ID (preferred) or URL:
+
+```bash
+curl -X DELETE http://localhost:5001/api/vendors/portfolio \
+  -H "Authorization: Bearer <vendor-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"publicId":"planzo/vendors/portfolio/example"}'
+```
+
+Deleting a vendor profile also removes its profile, cover, and portfolio
+assets from Cloudinary. If cleanup fails, the profile is kept and the API
+returns a clear `502` response instead of silently orphaning assets.
 
 ### Bookings
 

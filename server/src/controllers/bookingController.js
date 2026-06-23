@@ -13,7 +13,7 @@ const populateBooking = (query) =>
     .populate("customerId", "name email phone")
     .populate(
       "vendorId",
-      "businessName serviceCategory pricing location portfolioImages rating verified userId",
+      "businessName serviceCategory pricing location profileImage coverImage portfolioImages rating verified userId",
     );
 
 const populateBookingDocument = (booking) =>
@@ -22,7 +22,7 @@ const populateBookingDocument = (booking) =>
     {
       path: "vendorId",
       select:
-        "businessName serviceCategory pricing location portfolioImages rating verified userId",
+        "businessName serviceCategory pricing location profileImage coverImage portfolioImages rating verified userId",
     },
   ]);
 

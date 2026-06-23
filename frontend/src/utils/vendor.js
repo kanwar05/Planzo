@@ -14,12 +14,21 @@ const getImageUrl = (image) =>
   typeof image === "string" ? image : image?.url;
 
 export const getVendorImage = (vendor) =>
+  getImageUrl(vendor?.profileImage) ||
   getImageUrl(vendor?.portfolioImages?.[0]) ||
+  getImageUrl(vendor?.coverImage) ||
   FALLBACK_IMAGES[vendor?.serviceCategory] ||
   "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80";
 
 export const getVendorGallery = (vendor) => {
-  const images =
-    vendor?.portfolioImages?.map(getImageUrl).filter(Boolean) || [];
+  const images = [
+    getImageUrl(vendor?.coverImage),
+    ...(vendor?.portfolioImages?.map(getImageUrl) || []),
+    getImageUrl(vendor?.profileImage),
+  ].filter(
+    (image, index, collection) =>
+      image && collection.indexOf(image) === index,
+  );
+
   return images.length ? images : [getVendorImage(vendor)];
 };
