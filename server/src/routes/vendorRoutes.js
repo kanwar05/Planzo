@@ -6,15 +6,25 @@ import {
   getMyVendorProfile,
   getVendorById,
   getVendors,
+  removeCoverImage,
   removePortfolioImage,
+  removeProfileImage,
+  replaceCoverImage,
+  replaceProfileImage,
   requireVendorProfile,
   updateVendorProfile,
+  updateVendorImages,
 } from "../controllers/vendorController.js";
 import {
   authorizeRoles,
   protect,
 } from "../middleware/authMiddleware.js";
-import { uploadPortfolioImages } from "../middleware/upload.js";
+import {
+  uploadCoverImage,
+  uploadPortfolioImages,
+  uploadProfileImage,
+  uploadVendorImages,
+} from "../middleware/upload.js";
 
 const router = Router();
 
@@ -42,6 +52,42 @@ router.delete(
   protect,
   authorizeRoles("vendor"),
   deleteVendorProfile,
+);
+router.post(
+  "/images",
+  protect,
+  authorizeRoles("vendor"),
+  requireVendorProfile,
+  uploadVendorImages,
+  updateVendorImages,
+);
+router.put(
+  "/profile-image",
+  protect,
+  authorizeRoles("vendor"),
+  requireVendorProfile,
+  uploadProfileImage,
+  replaceProfileImage,
+);
+router.delete(
+  "/profile-image",
+  protect,
+  authorizeRoles("vendor"),
+  removeProfileImage,
+);
+router.put(
+  "/cover-image",
+  protect,
+  authorizeRoles("vendor"),
+  requireVendorProfile,
+  uploadCoverImage,
+  replaceCoverImage,
+);
+router.delete(
+  "/cover-image",
+  protect,
+  authorizeRoles("vendor"),
+  removeCoverImage,
 );
 router.post(
   "/portfolio",

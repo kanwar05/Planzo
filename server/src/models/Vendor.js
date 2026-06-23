@@ -10,11 +10,11 @@ export const SERVICE_CATEGORIES = [
   "Rental Services",
 ];
 
-const portfolioImageSchema = new mongoose.Schema(
+const cloudinaryImageSchema = new mongoose.Schema(
   {
     url: {
       type: String,
-      required: [true, "Portfolio image URL is required."],
+      required: [true, "Image URL is required."],
       trim: true,
     },
     publicId: {
@@ -68,8 +68,16 @@ const vendorSchema = new mongoose.Schema(
       trim: true,
       maxlength: [160, "Location cannot exceed 160 characters."],
     },
+    profileImage: {
+      type: cloudinaryImageSchema,
+      default: null,
+    },
+    coverImage: {
+      type: cloudinaryImageSchema,
+      default: null,
+    },
     portfolioImages: {
-      type: [portfolioImageSchema],
+      type: [cloudinaryImageSchema],
       default: [],
       validate: {
         validator: (images) => images.length <= 8,
@@ -107,6 +115,12 @@ vendorSchema.pre("init", function normalizeLegacyPortfolio(data) {
         typeof image === "string" ? { url: image, publicId: "" } : image,
       )
       .filter((image) => image?.url);
+  }
+
+  for (const field of ["profileImage", "coverImage"]) {
+    if (typeof data[field] === "string") {
+      data[field] = { url: data[field], publicId: "" };
+    }
   }
 });
 

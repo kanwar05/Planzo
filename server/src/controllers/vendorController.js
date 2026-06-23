@@ -42,6 +42,48 @@ const destroyCloudinaryImages = async (files = []) => {
   );
 };
 
+const toCloudinaryImage = (file) => ({
+  url: file.path,
+  publicId: file.filename,
+});
+
+const flattenUploadedFiles = (files) =>
+  Array.isArray(files) ? files : Object.values(files || {}).flat();
+
+const destroyCloudinaryAsset = async (publicId, label = "image") => {
+  if (!publicId) return;
+
+  if (!isCloudinaryConfigured()) {
+    throw new ApiError(503, "Cloudinary image uploads are not configured.");
+  }
+
+  let result;
+  try {
+    result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "image",
+      invalidate: true,
+    });
+  } catch {
+    throw new ApiError(502, `Cloudinary could not delete the ${label}.`);
+  }
+
+  if (!["ok", "not found"].includes(result.result)) {
+    throw new ApiError(502, `Cloudinary could not delete the ${label}.`);
+  }
+};
+
+const removeReplacedAssets = async (images) => {
+  const results = await Promise.allSettled(
+    images
+      .filter((image) => image?.publicId)
+      .map((image) => destroyCloudinaryAsset(image.publicId, "old image")),
+  );
+
+  if (results.some((result) => result.status === "rejected")) {
+    console.error("One or more replaced Cloudinary images could not be deleted.");
+  }
+};
+
 export const requireVendorProfile = asyncHandler(async (req, res, next) => {
   const vendor = await Vendor.findOne({ userId: req.user._id });
 
@@ -55,6 +97,118 @@ export const requireVendorProfile = asyncHandler(async (req, res, next) => {
   req.vendorProfile = vendor;
   next();
 });
+
+export const updateVendorImages = asyncHandler(async (req, res) => {
+  const files = req.files || {};
+  const profileFile = files.profileImage?.[0];
+  const coverFile = files.coverImage?.[0];
+  const portfolioFiles = files.portfolioImages || [];
+  const uploadedFiles = flattenUploadedFiles(files);
+
+  if (!uploadedFiles.length) {
+    throw new ApiError(
+      400,
+      "Upload profileImage, coverImage, or portfolioImages.",
+    );
+  }
+
+  const vendor = req.vendorProfile;
+  if (vendor.portfolioImages.length + portfolioFiles.length > 8) {
+    await destroyCloudinaryImages(uploadedFiles);
+    throw new ApiError(400, "A portfolio can contain at most 8 images.");
+  }
+
+  const replacedImages = [];
+  if (profileFile && vendor.profileImage) {
+    replacedImages.push(vendor.profileImage);
+  }
+  if (coverFile && vendor.coverImage) {
+    replacedImages.push(vendor.coverImage);
+  }
+
+  if (profileFile) vendor.profileImage = toCloudinaryImage(profileFile);
+  if (coverFile) vendor.coverImage = toCloudinaryImage(coverFile);
+  if (portfolioFiles.length) {
+    vendor.portfolioImages.push(...portfolioFiles.map(toCloudinaryImage));
+  }
+
+  try {
+    await vendor.save();
+  } catch (error) {
+    await destroyCloudinaryImages(uploadedFiles);
+    throw error;
+  }
+
+  await removeReplacedAssets(replacedImages);
+
+  res.status(200).json({
+    success: true,
+    message: "Vendor images uploaded successfully.",
+    vendor,
+  });
+});
+
+const replaceSingleVendorImage = (field, label) =>
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      throw new ApiError(400, `Upload an image using the "${field}" field.`);
+    }
+
+    const vendor = req.vendorProfile;
+    const oldImage = vendor[field];
+    vendor[field] = toCloudinaryImage(req.file);
+
+    try {
+      await vendor.save();
+    } catch (error) {
+      await destroyCloudinaryImages([req.file]);
+      throw error;
+    }
+
+    await removeReplacedAssets([oldImage]);
+
+    res.status(200).json({
+      success: true,
+      message: `${label} uploaded successfully.`,
+      vendor,
+    });
+  });
+
+export const replaceProfileImage = replaceSingleVendorImage(
+  "profileImage",
+  "Profile image",
+);
+export const replaceCoverImage = replaceSingleVendorImage(
+  "coverImage",
+  "Cover image",
+);
+
+const deleteSingleVendorImage = (field, label) =>
+  asyncHandler(async (req, res) => {
+    const vendor = await Vendor.findOne({ userId: req.user._id });
+
+    if (!vendor) throw new ApiError(404, "Vendor profile not found.");
+    if (!vendor[field]) throw new ApiError(404, `${label} not found.`);
+
+    await destroyCloudinaryAsset(vendor[field].publicId, label.toLowerCase());
+    vendor[field] = null;
+    await vendor.save();
+
+    res.status(200).json({
+      success: true,
+      message: `${label} deleted successfully.`,
+      vendor,
+    });
+  });
+
+export const removeProfileImage = deleteSingleVendorImage(
+  "profileImage",
+  "Profile image",
+);
+export const removeCoverImage = deleteSingleVendorImage(
+  "coverImage",
+  "Cover image",
+);
 
 export const addPortfolioImages = asyncHandler(async (req, res) => {
   const files = req.files || [];
@@ -107,11 +261,13 @@ export const addPortfolioImages = asyncHandler(async (req, res) => {
 });
 
 export const removePortfolioImage = asyncHandler(async (req, res) => {
+  const publicId =
+    typeof req.body.publicId === "string" ? req.body.publicId.trim() : "";
   const imageUrl =
     typeof req.body.imageUrl === "string" ? req.body.imageUrl.trim() : "";
 
-  if (!imageUrl) {
-    throw new ApiError(400, "imageUrl is required.");
+  if (!publicId && !imageUrl) {
+    throw new ApiError(400, "publicId or imageUrl is required.");
   }
 
   const vendor = await Vendor.findOne({ userId: req.user._id });
@@ -120,26 +276,22 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Vendor profile not found.");
   }
 
-  const image = vendor.portfolioImages.find((item) => item.url === imageUrl);
+  const image = vendor.portfolioImages.find(
+    (item) =>
+      (publicId && item.publicId === publicId) ||
+      (imageUrl && item.url === imageUrl),
+  );
 
   if (!image) {
     throw new ApiError(404, "Portfolio image not found.");
   }
 
   if (image.publicId) {
-    if (!isCloudinaryConfigured()) {
-      throw new ApiError(500, "Cloudinary image uploads are not configured.");
-    }
-
-    const result = await cloudinary.uploader.destroy(image.publicId);
-
-    if (!["ok", "not found"].includes(result.result)) {
-      throw new ApiError(502, "Cloudinary could not delete the portfolio image.");
-    }
+    await destroyCloudinaryAsset(image.publicId, "portfolio image");
   }
 
   vendor.portfolioImages = vendor.portfolioImages.filter(
-    (item) => item.url !== imageUrl,
+    (item) => item.url !== image.url,
   );
   await vendor.save({ validateBeforeSave: false });
 
@@ -291,6 +443,34 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
       409,
       "Resolve or cancel active bookings before deleting the vendor profile.",
     );
+  }
+
+  const images = [
+    vendor.profileImage,
+    vendor.coverImage,
+    ...vendor.portfolioImages,
+  ].filter((image) => image?.publicId);
+
+  if (images.length) {
+    if (!isCloudinaryConfigured()) {
+      throw new ApiError(
+        503,
+        "Cloudinary must be configured before deleting this vendor profile.",
+      );
+    }
+
+    const results = await Promise.allSettled(
+      images.map((image) =>
+        destroyCloudinaryAsset(image.publicId, "vendor image"),
+      ),
+    );
+
+    if (results.some((result) => result.status === "rejected")) {
+      throw new ApiError(
+        502,
+        "Vendor profile was not deleted because some Cloudinary images could not be removed.",
+      );
+    }
   }
 
   await vendor.deleteOne();

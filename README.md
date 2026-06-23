@@ -29,4 +29,5 @@ The frontend expects the API at `http://localhost:5001/api`. Override it with
 `VITE_API_URL` in `frontend/.env` when needed.
 
 See [`server/README.md`](server/README.md) for environment variables, API
-routes, authorization rules, and example requests.
+routes, authorization rules, Cloudinary vendor image uploads, and example
+requests.

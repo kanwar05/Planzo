@@ -46,7 +46,19 @@ export function errorHandler(error, req, res, next) {
     error.code === "LIMIT_UNEXPECTED_FILE"
   ) {
     statusCode = 400;
-    message = 'Upload at most 8 images using the "images" field.';
+    message =
+      error.code === "LIMIT_UNEXPECTED_FILE"
+        ? "Unexpected image field or too many files for that field."
+        : "Too many image files were uploaded.";
+  }
+
+  if (
+    ["LIMIT_PART_COUNT", "LIMIT_FIELD_COUNT", "LIMIT_FIELD_KEY"].includes(
+      error.code,
+    )
+  ) {
+    statusCode = 400;
+    message = "The multipart upload contains too many fields.";
   }
 
   const response = {
