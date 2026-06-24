@@ -5,6 +5,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
 import BookingRequestPage from "../pages/BookingRequestPage";
 import CustomerDashboardPage from "../pages/CustomerDashboardPage";
+import CustomerFavoritesPage from "../pages/CustomerFavoritesPage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import NotFoundPage from "../pages/NotFoundPage";
@@ -47,6 +48,10 @@ export const appRoutes = [
           {
             path: "/customer/dashboard",
             element: <CustomerDashboardPage />,
+          },
+          {
+            path: "/customer/favorites",
+            element: <CustomerFavoritesPage />,
           },
         ],
       },

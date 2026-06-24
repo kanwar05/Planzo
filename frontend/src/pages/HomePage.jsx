@@ -5,10 +5,18 @@ import { useEffect, useState } from "react";
 import hero from "../assets/planzo-hero.png";
 import Button from "../components/Button";
 import SectionHeading from "../components/SectionHeading";
+import Toast from "../components/Toast";
 import VendorCard from "../components/VendorCard";
+import { useAuth } from "../context/AuthContext";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import {
+  addFavorite,
+  getFavorites,
+  removeFavorite,
+} from "../services/favoriteService";
 import { getVendors } from "../services/vendorService";
+import { getApiError } from "../utils/apiError";
 
 const testimonials = [
   { name: "Ananya & Veer", event: "Wedding · Jaipur", quote: "We found our decorator, DJ, and planner in one weekend. Every vendor felt vetted, responsive, and genuinely invested.", image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80" },
@@ -18,21 +26,88 @@ const testimonials = [
 export default function HomePage() {
   useDocumentTitle("Plan beautiful events");
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [query, setQuery] = useState("");
   const [popularVendors, setPopularVendors] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState("");
+  const [favoriteMessage, setFavoriteMessage] = useState("");
+  const [favoriteError, setFavoriteError] = useState("");
 
   useEffect(() => {
     getVendors({ limit: 3 })
       .then((data) => setPopularVendors(data.vendors))
       .catch(() => setPopularVendors([]));
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== "customer") {
+      setFavoriteIds(new Set());
+      return;
+    }
+
+    getFavorites()
+      .then((items) =>
+        setFavoriteIds(
+          new Set(items.map((item) => item.vendorId?._id).filter(Boolean)),
+        ),
+      )
+      .catch(() => setFavoriteIds(new Set()));
+  }, [isAuthenticated, user?.role]);
+
   const search = (event) => {
     event.preventDefault();
     navigate(`/vendors?q=${encodeURIComponent(query)}`);
   };
 
+  const toggleFavorite = async (vendorId) => {
+    if (!isAuthenticated || user?.role !== "customer") {
+      navigate("/login");
+      return;
+    }
+
+    const wasFavorited = favoriteIds.has(vendorId);
+    setFavoriteLoadingId(vendorId);
+    setFavoriteError("");
+    setFavoriteMessage("");
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (wasFavorited) next.delete(vendorId);
+      else next.add(vendorId);
+      return next;
+    });
+
+    try {
+      if (wasFavorited) {
+        await removeFavorite(vendorId);
+        setFavoriteMessage("Vendor removed from favorites");
+      } else {
+        await addFavorite(vendorId);
+        setFavoriteMessage("Vendor added to favorites");
+      }
+    } catch (requestError) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (wasFavorited) next.add(vendorId);
+        else next.delete(vendorId);
+        return next;
+      });
+      setFavoriteError(getApiError(requestError, "Unable to update favorites."));
+    } finally {
+      setFavoriteLoadingId("");
+    }
+  };
+
   return (
     <>
+      <Toast
+        message={favoriteError || favoriteMessage}
+        type={favoriteError ? "error" : "success"}
+        onClose={() => {
+          setFavoriteError("");
+          setFavoriteMessage("");
+        }}
+      />
       <section className="container-shell pt-4 sm:pt-7">
         <div className="relative min-h-[680px] overflow-hidden rounded-[2rem] bg-ink sm:rounded-[2.75rem] lg:min-h-[720px]">
           <img src={hero} alt="Event professionals preparing an elegant celebration" className="absolute inset-0 h-full w-full object-cover object-center lg:object-[55%_center]" />
@@ -76,7 +151,17 @@ export default function HomePage() {
 
       <section className="section-pad container-shell">
         <div className="flex items-end justify-between gap-8"><SectionHeading eyebrow="Loved locally" title="Popular vendors" description="Consistently exceptional, highly rated, and ready for your date." /><Button to="/vendors" variant="outline" className="hidden sm:flex">Explore all vendors</Button></div>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">{popularVendors.map((vendor) => <VendorCard key={vendor._id} vendor={vendor} />)}</div>
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {popularVendors.map((vendor) => (
+            <VendorCard
+              key={vendor._id}
+              vendor={vendor}
+              isFavorited={favoriteIds.has(vendor._id)}
+              favoriteLoading={favoriteLoadingId === vendor._id}
+              onToggleFavorite={() => toggleFavorite(vendor._id)}
+            />
+          ))}
+        </div>
       </section>
 
       <section className="bg-plum text-white">

@@ -1,18 +1,27 @@
 import { Filter, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import Toast from "../components/Toast";
 import VendorCard from "../components/VendorCard";
+import { useAuth } from "../context/AuthContext";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import {
+  addFavorite,
+  getFavorites,
+  removeFavorite,
+} from "../services/favoriteService";
 import { getVendors } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
 
 export default function VendorsPage() {
   useDocumentTitle("Find vendors");
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [search, setSearch] = useState(params.get("q") || "");
   const [category, setCategory] = useState(params.get("category") || "");
   const [location, setLocation] = useState("");
@@ -20,8 +29,11 @@ export default function VendorsPage() {
   const [sort, setSort] = useState("recommended");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -47,6 +59,23 @@ export default function VendorsPage() {
 
     return () => clearTimeout(timer);
   }, [search, category, location, sort]);
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== "customer") {
+      setFavoriteIds(new Set());
+      return;
+    }
+
+    getFavorites()
+      .then((items) =>
+        setFavoriteIds(
+          new Set(items.map((item) => item.vendorId?._id).filter(Boolean)),
+        ),
+      )
+      .catch(() => {
+        setFavoriteIds(new Set());
+      });
+  }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
     const next = {};
@@ -87,6 +116,44 @@ export default function VendorsPage() {
     setRating("");
     setSort("recommended");
     setParams({});
+  };
+
+  const toggleFavorite = async (vendorId) => {
+    if (!isAuthenticated || user?.role !== "customer") {
+      navigate("/login");
+      return;
+    }
+
+    const wasFavorited = favoriteIds.has(vendorId);
+    setFavoriteLoadingId(vendorId);
+    setError("");
+    setSuccess("");
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (wasFavorited) next.delete(vendorId);
+      else next.add(vendorId);
+      return next;
+    });
+
+    try {
+      if (wasFavorited) {
+        await removeFavorite(vendorId);
+        setSuccess("Vendor removed from favorites");
+      } else {
+        await addFavorite(vendorId);
+        setSuccess("Vendor added to favorites");
+      }
+    } catch (requestError) {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (wasFavorited) next.add(vendorId);
+        else next.delete(vendorId);
+        return next;
+      });
+      setError(getApiError(requestError, "Unable to update favorites."));
+    } finally {
+      setFavoriteLoadingId("");
+    }
   };
 
   const FilterPanel = () => (
@@ -151,6 +218,14 @@ export default function VendorsPage() {
 
   return (
     <section className="section-pad container-shell !pt-12">
+      <Toast
+        message={error || success}
+        type={error ? "error" : "success"}
+        onClose={() => {
+          setError("");
+          setSuccess("");
+        }}
+      />
       <div className="max-w-2xl">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-coral">
           Curated for you
@@ -211,7 +286,13 @@ export default function VendorsPage() {
           ) : filtered.length ? (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {filtered.map((vendor) => (
-                <VendorCard key={vendor._id} vendor={vendor} />
+                <VendorCard
+                  key={vendor._id}
+                  vendor={vendor}
+                  isFavorited={favoriteIds.has(vendor._id)}
+                  favoriteLoading={favoriteLoadingId === vendor._id}
+                  onToggleFavorite={() => toggleFavorite(vendor._id)}
+                />
               ))}
             </div>
           ) : (

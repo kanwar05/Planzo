@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Heart,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -54,6 +55,11 @@ export default function DashboardLayout({ vendor = false }) {
           label: "My Bookings",
           to: "/customer/dashboard?view=bookings",
           icon: CalendarDays,
+        },
+        {
+          label: "Favorites",
+          to: "/customer/favorites",
+          icon: Heart,
         },
         {
           label: "Booking Status",
