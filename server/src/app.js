@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
+import favoriteRoutes from "./routes/favoriteRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
@@ -41,6 +42,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/favorites", favoriteRoutes);
 app.use("/api/reviews", reviewRoutes);
 
 app.use(notFound);

@@ -71,6 +71,7 @@ should be provisioned directly by a trusted administrator.
 - `GET /api/vendors/me` — current vendor's profile
 - `GET /api/vendors`
 - `GET /api/vendors/:id`
+- `GET /api/vendors/:vendorId/reviews`
 - `PATCH /api/vendors/profile` — profile owner only
 - `DELETE /api/vendors/profile` — profile owner only
 - `POST /api/vendors/images` — upload any combination of vendor images
@@ -208,6 +209,96 @@ curl -X PATCH http://localhost:5001/api/reviews/<review-id>/reply \
   -H "Content-Type: application/json" \
   -d '{"message":"Thank you for choosing us."}'
 ```
+
+### Favorites / saved vendors
+
+- `POST /api/favorites/:vendorId` — customer only
+- `DELETE /api/favorites/:vendorId` — customer only
+- `GET /api/favorites` — customer only
+- `GET /api/favorites/check/:vendorId` — customer only
+
+All favorites routes require a customer JWT:
+
+```text
+Authorization: Bearer <customer-token>
+```
+
+Customers can save a vendor once, remove saved vendors, fetch their own saved
+vendor list, and check whether a specific vendor is saved. Vendors cannot use
+these endpoints. Invalid vendor IDs return `400`, missing vendors return `404`,
+and duplicate saves return `409`.
+
+Save a vendor:
+
+```bash
+curl -X POST http://localhost:5001/api/favorites/<vendor-id> \
+  -H "Authorization: Bearer <customer-token>"
+```
+
+Check saved state:
+
+```bash
+curl http://localhost:5001/api/favorites/check/<vendor-id> \
+  -H "Authorization: Bearer <customer-token>"
+```
+
+Response:
+
+```json
+{
+  "isFavorited": true
+}
+```
+
+Fetch saved vendors:
+
+```bash
+curl http://localhost:5001/api/favorites \
+  -H "Authorization: Bearer <customer-token>"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "count": 1,
+  "favorites": [
+    {
+      "_id": "favorite-id",
+      "createdAt": "2026-06-24T10:00:00.000Z",
+      "vendorId": {
+        "_id": "vendor-id",
+        "businessName": "Celebration Studio",
+        "serviceCategory": "Decoration",
+        "category": "Decoration",
+        "location": "Delhi",
+        "pricing": 50000,
+        "startingPrice": 50000,
+        "rating": 4.8,
+        "averageRating": 4.8,
+        "reviewCount": 12,
+        "profileImage": {
+          "url": "https://res.cloudinary.com/.../image/upload/...",
+          "publicId": "planzo/vendors/profile/example"
+        }
+      }
+    }
+  ]
+}
+```
+
+Remove a saved vendor:
+
+```bash
+curl -X DELETE http://localhost:5001/api/favorites/<vendor-id> \
+  -H "Authorization: Bearer <customer-token>"
+```
+
+Favorites are stored with indexes on `customerId`, `vendorId`, and a unique
+compound index on `{ customerId, vendorId }`. Fetching favorites uses one
+populated query to avoid N+1 lookups. Deleting a vendor profile also removes
+related favorites.
 
 ## Tests
 

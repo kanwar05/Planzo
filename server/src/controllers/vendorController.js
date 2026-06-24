@@ -1,4 +1,5 @@
 import Booking from "../models/Booking.js";
+import Favorite from "../models/Favorite.js";
 import Review from "../models/Review.js";
 import Vendor from "../models/Vendor.js";
 import cloudinary, {
@@ -477,6 +478,7 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
   }
 
   await Promise.all([
+    Favorite.deleteMany({ vendorId: vendor._id }),
     Review.deleteMany({ vendorId: vendor._id }),
     vendor.deleteOne(),
   ]);

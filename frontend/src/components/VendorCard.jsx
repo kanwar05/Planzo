@@ -5,8 +5,16 @@ import { getVendorImage } from "../utils/vendor";
 import Button from "./Button";
 import Card from "./Card";
 
-export default function VendorCard({ vendor }) {
+export default function VendorCard({
+  vendor,
+  isFavorited = false,
+  favoriteLoading = false,
+  onToggleFavorite,
+}) {
   const image = getVendorImage(vendor);
+  const category = vendor.serviceCategory || vendor.category;
+  const price = vendor.pricing ?? vendor.startingPrice;
+  const reviewCount = vendor.reviewCount ?? vendor.reviewsCount ?? 0;
 
   return (
     <motion.div whileHover={{ y: -6 }} transition={{ duration: 0.25 }}>
@@ -19,10 +27,16 @@ export default function VendorCard({ vendor }) {
           />
           <button
             type="button"
-            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/90 shadow-md backdrop-blur"
-            aria-label="Save vendor"
+            disabled={favoriteLoading}
+            onClick={onToggleFavorite}
+            className={`absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/90 shadow-md backdrop-blur transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-60 ${
+              isFavorited ? "text-coral" : "text-ink"
+            }`}
+            aria-label={isFavorited ? "Remove from favorites" : "Save vendor"}
           >
-            <Heart className="h-4 w-4" />
+            <Heart
+              className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`}
+            />
           </button>
           {vendor.verified && (
             <span className="absolute left-4 top-4 rounded-full bg-ink px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
@@ -34,7 +48,7 @@ export default function VendorCard({ vendor }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-coral">
-                {vendor.serviceCategory}
+                {category}
               </p>
               <h3 className="mt-1 text-lg font-extrabold">
                 {vendor.businessName}
@@ -50,10 +64,10 @@ export default function VendorCard({ vendor }) {
             {vendor.location}
             <span className="mx-1">·</span>
             {vendor.experience || 0} yrs exp.
-            {(vendor.reviewCount ?? vendor.reviewsCount ?? 0) > 0 && (
+            {reviewCount > 0 && (
               <>
                 <span className="mx-1">·</span>
-                {vendor.reviewCount ?? vendor.reviewsCount} reviews
+                {reviewCount} reviews
               </>
             )}
           </div>
@@ -61,7 +75,7 @@ export default function VendorCard({ vendor }) {
             <div>
               <p className="text-[11px] text-ink/40">Packages from</p>
               <p className="text-sm font-bold">
-                {formatCurrency(vendor.pricing)}
+                {formatCurrency(price)}
               </p>
             </div>
             <Button

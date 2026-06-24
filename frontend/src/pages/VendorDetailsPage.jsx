@@ -4,17 +4,25 @@ import {
   Check,
   ChevronLeft,
   Clock3,
+  Heart,
   MapPin,
   Share2,
   Star,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ReviewList from "../components/ReviewList";
+import Toast from "../components/Toast";
+import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import {
+  addFavorite,
+  checkFavorite,
+  removeFavorite,
+} from "../services/favoriteService";
 import { getVendorById } from "../services/vendorService";
 import { getVendorReviews } from "../services/reviewService";
 import { getApiError } from "../utils/apiError";
@@ -23,17 +31,27 @@ import { getVendorGallery } from "../utils/vendor";
 
 export default function VendorDetailsPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [vendor, setVendor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsError, setReviewsError] = useState("");
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favoriteSuccess, setFavoriteSuccess] = useState("");
   useDocumentTitle(vendor?.businessName || "Vendor details");
 
   useEffect(() => {
-    Promise.allSettled([getVendorById(id), getVendorReviews(id)])
-      .then(([vendorResult, reviewsResult]) => {
+    const requests = [getVendorById(id), getVendorReviews(id)];
+    if (isAuthenticated && user?.role === "customer") {
+      requests.push(checkFavorite(id));
+    }
+
+    Promise.allSettled(requests)
+      .then(([vendorResult, reviewsResult, favoriteResult]) => {
         if (vendorResult.status === "fulfilled") {
           setVendor(vendorResult.value);
         } else {
@@ -49,12 +67,44 @@ export default function VendorDetailsPage() {
             getApiError(reviewsResult.reason, "Unable to load reviews."),
           );
         }
+
+        if (favoriteResult?.status === "fulfilled") {
+          setIsFavorited(favoriteResult.value);
+        }
       })
       .finally(() => {
         setLoading(false);
         setReviewsLoading(false);
       });
-  }, [id]);
+  }, [id, isAuthenticated, user?.role]);
+
+  const toggleFavorite = async () => {
+    if (!isAuthenticated || user?.role !== "customer") {
+      navigate("/login");
+      return;
+    }
+
+    const nextValue = !isFavorited;
+    setFavoriteLoading(true);
+    setError("");
+    setFavoriteSuccess("");
+    setIsFavorited(nextValue);
+
+    try {
+      if (nextValue) {
+        await addFavorite(id);
+        setFavoriteSuccess("Vendor added to favorites");
+      } else {
+        await removeFavorite(id);
+        setFavoriteSuccess("Vendor removed from favorites");
+      }
+    } catch (requestError) {
+      setIsFavorited(!nextValue);
+      setError(getApiError(requestError, "Unable to update favorites."));
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -79,6 +129,14 @@ export default function VendorDetailsPage() {
 
   return (
     <>
+      <Toast
+        message={error || favoriteSuccess}
+        type={error ? "error" : "success"}
+        onClose={() => {
+          setError("");
+          setFavoriteSuccess("");
+        }}
+      />
       <section className="container-shell py-5">
         <Button to="/vendors" variant="ghost" className="!px-0">
           <ChevronLeft className="h-4 w-4" /> Back to vendors
@@ -128,14 +186,35 @@ export default function VendorDetailsPage() {
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              className="grid h-11 w-11 place-items-center rounded-full border bg-white"
-              onClick={() => navigator.clipboard?.writeText(window.location.href)}
-              aria-label="Copy vendor link"
-            >
-              <Share2 className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={favoriteLoading}
+                className={`grid h-11 w-11 place-items-center rounded-full border bg-white transition hover:border-coral/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  isFavorited ? "text-coral" : "text-ink"
+                }`}
+                onClick={toggleFavorite}
+                aria-label={
+                  isFavorited ? "Remove from favorites" : "Save vendor"
+                }
+              >
+                <Heart
+                  className={`h-4 w-4 ${
+                    isFavorited ? "fill-current" : ""
+                  }`}
+                />
+              </button>
+              <button
+                type="button"
+                className="grid h-11 w-11 place-items-center rounded-full border bg-white"
+                onClick={() =>
+                  navigator.clipboard?.writeText(window.location.href)
+                }
+                aria-label="Copy vendor link"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <div className="my-9 border-t" />
           <h2 className="text-2xl font-extrabold">
@@ -216,6 +295,16 @@ export default function VendorDetailsPage() {
           </div>
           <Button to={`/booking/${vendor._id}`} className="mt-7 w-full">
             <CalendarDays className="h-4 w-4" /> Request to book
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            loading={favoriteLoading}
+            onClick={toggleFavorite}
+            className="mt-3 w-full"
+          >
+            <Heart className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`} />
+            {isFavorited ? "Saved vendor" : "Save vendor"}
           </Button>
           <p className="mt-4 text-center text-xs text-ink/40">
             No payment required to send a request
