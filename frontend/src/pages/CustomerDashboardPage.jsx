@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Edit3,
+  Eye,
   Heart,
   IndianRupee,
   LockKeyhole,
@@ -189,14 +190,14 @@ export default function CustomerDashboardPage() {
   };
 
   const statCards = [
-    [CalendarCheck, "Total bookings", stats.total],
-    [CheckCircle2, "Completed", stats.completed],
-    [CalendarClock, "Pending", stats.pending],
-    [XCircle, "Cancelled", stats.cancelled],
+    [CalendarCheck, "Total bookings", stats.total, "All booking requests"],
+    [CheckCircle2, "Completed", stats.completed, "Finished celebrations"],
+    [CalendarClock, "Pending", stats.pending, "Awaiting vendor reply"],
+    [XCircle, "Cancelled", stats.cancelled, "Closed requests"],
   ];
 
   return (
-    <div className="space-y-8">
+    <div>
       <Toast
         message={error || success}
         type={error ? "error" : "success"}
@@ -206,68 +207,65 @@ export default function CustomerDashboardPage() {
         }}
       />
 
-      <section className="rounded-[2rem] border bg-white p-6 shadow-soft">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
-          <div className="flex items-center gap-5">
-            <span className="grid h-20 w-20 place-items-center rounded-full bg-coral text-2xl font-extrabold text-white shadow-soft">
-              {initials(user?.name)}
-            </span>
-            <div>
-              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-coral">
-                Customer profile
-              </p>
-              <h1 className="mt-1 text-3xl font-extrabold">{user?.name}</h1>
-              <div className="mt-2 flex flex-wrap gap-4 text-sm text-ink/50">
-                <span className="flex items-center gap-1.5">
-                  <Mail className="h-4 w-4" /> {user?.email}
-                </span>
-                <span>
-                  Member since{" "}
-                  {user?.createdAt ? formatDate(user.createdAt) : "recently"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button variant="outline">
-              <Edit3 className="h-4 w-4" /> Edit Profile
-            </Button>
-            <Button variant="outline">
-              <LockKeyhole className="h-4 w-4" /> Change Password
-            </Button>
-          </div>
-        </div>
-      </section>
-
       {loading ? (
         <LoadingSkeleton />
       ) : (
-        <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {statCards.map(([Icon, title, value]) => (
-              <Card key={title} className="p-5">
-                <div className="flex items-center justify-between">
-                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-coral">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <p className="text-3xl font-extrabold">{value}</p>
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <main className="space-y-8">
+            <section className="overflow-hidden rounded-[2rem] border bg-white shadow-soft">
+              <div className="bg-gradient-to-r from-[#fff3eb] via-white to-[#f8efe6] p-6 sm:p-8">
+                <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+                  <div className="flex items-center gap-5">
+                    <span className="grid h-20 w-20 place-items-center rounded-full bg-coral text-2xl font-extrabold text-white shadow-soft">
+                      {initials(user?.name)}
+                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-coral">
+                          Customer account
+                        </p>
+                        <span className="rounded-full bg-sage/15 px-3 py-1 text-[11px] font-extrabold text-sage">
+                          Active
+                        </span>
+                      </div>
+                      <h1 className="mt-2 text-3xl font-extrabold">
+                        {user?.name}
+                      </h1>
+                      <div className="mt-2 flex flex-wrap gap-4 text-sm text-ink/55">
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="h-4 w-4" /> {user?.email}
+                        </span>
+                        <span>
+                          Member since{" "}
+                          {user?.createdAt
+                            ? formatDate(user.createdAt)
+                            : "recently"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="outline">
+                      <Edit3 className="h-4 w-4" /> Edit Profile
+                    </Button>
+                    <Button variant="outline">
+                      <LockKeyhole className="h-4 w-4" /> Change Password
+                    </Button>
+                  </div>
                 </div>
-                <p className="mt-5 text-sm font-bold text-ink/50">{title}</p>
-              </Card>
-            ))}
-          </section>
+              </div>
+            </section>
 
-          <section className="grid gap-8 xl:grid-cols-[1.15fr_0.85fr]">
             <Card className="overflow-hidden">
               <div className="flex items-center justify-between border-b p-6">
                 <div>
                   <h2 className="text-xl font-extrabold">Upcoming bookings</h2>
                   <p className="mt-1 text-sm text-ink/45">
-                    Active and upcoming event requests.
+                    Your active event plans and pending requests.
                   </p>
                 </div>
                 <Button to="/vendors" variant="ghost" className="hidden sm:flex">
-                  Find vendors
+                  Explore vendors
                 </Button>
               </div>
 
@@ -292,27 +290,46 @@ export default function CustomerDashboardPage() {
                           <p className="mt-1 text-sm text-ink/45">
                             {booking.eventType}
                           </p>
-                          <p className="mt-2 text-sm font-semibold text-ink/60">
-                            {formatDate(booking.eventDate)}
+                          <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-ink/60">
+                            <MapPin className="h-4 w-4" />
+                            {booking.eventLocation}
                           </p>
                         </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${
-                            statusClass[booking.status]
-                          }`}
-                        >
-                          {booking.status}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={updatingId === booking._id}
-                          onClick={() => cancelBooking(booking._id)}
-                          className="text-xs font-bold text-red-500 disabled:opacity-50"
-                        >
-                          {updatingId === booking._id ? "Cancelling…" : "Cancel"}
-                        </button>
+                        <div>
+                          <p className="text-sm font-bold">
+                            {formatDate(booking.eventDate)}
+                          </p>
+                          <span
+                            className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                              statusClass[booking.status]
+                            }`}
+                          >
+                            {booking.status}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Button
+                            to={`/vendors/${booking.vendorId?._id}`}
+                            variant="ghost"
+                            className="!px-3 !py-2"
+                          >
+                            <Eye className="h-4 w-4" /> View
+                          </Button>
+                          {["pending", "accepted"].includes(booking.status) && (
+                            <button
+                              type="button"
+                              disabled={updatingId === booking._id}
+                              onClick={() => cancelBooking(booking._id)}
+                              className="text-xs font-bold text-red-500 disabled:opacity-50"
+                            >
+                              {updatingId === booking._id
+                                ? "Cancelling…"
+                                : "Cancel"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -321,8 +338,8 @@ export default function CustomerDashboardPage() {
                 <div className="p-6">
                   <EmptyState
                     title="No upcoming bookings"
-                    description="Browse vendors and send a request when you are ready."
-                    actionLabel="Explore vendors"
+                    description="Browse vendors and send a request when you're ready."
+                    actionLabel="Find vendors"
                     actionTo="/vendors"
                   />
                 </div>
@@ -331,133 +348,137 @@ export default function CustomerDashboardPage() {
 
             <Card className="overflow-hidden">
               <div className="border-b p-6">
-                <h2 className="text-xl font-extrabold">Saved vendors</h2>
-                <p className="mt-1 text-sm text-ink/45">
-                  Vendors you shortlisted.
-                </p>
-              </div>
-              <div className="space-y-3 p-5">
-                {favorites.length ? (
-                  favorites.slice(0, 4).map((favorite) => {
-                    const vendor = favorite.vendorId;
-                    return (
-                      <div
-                        key={favorite._id}
-                        className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3"
-                      >
-                        <img
-                          src={getVendorImage(vendor)}
-                          alt={vendor.businessName}
-                          className="h-14 w-14 rounded-2xl object-cover"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-extrabold">
-                            {vendor.businessName}
-                          </p>
-                          <p className="text-xs text-ink/45">
-                            {vendor.serviceCategory || vendor.category}
-                          </p>
-                        </div>
-                        <Heart className="h-4 w-4 fill-coral text-coral" />
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="rounded-2xl bg-sand/50 p-5 text-sm text-ink/50">
-                    No saved vendors yet.
-                  </p>
-                )}
-                <Button to="/customer/favorites" variant="outline" className="w-full">
-                  View all saved vendors
-                </Button>
-              </div>
-            </Card>
-          </section>
-
-          <section className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-            <Card className="overflow-hidden">
-              <div className="border-b p-6">
                 <h2 className="text-xl font-extrabold">Booking history</h2>
                 <p className="mt-1 text-sm text-ink/45">
-                  All booking requests and review actions.
+                  Desktop table, mobile-friendly rows, and review actions.
                 </p>
               </div>
 
               {bookings.length ? (
-                <div className="divide-y">
-                  {bookings.map((booking) => (
-                    <div
-                      key={booking._id}
-                      className="grid gap-4 p-5 md:grid-cols-[1.2fr_0.7fr_0.7fr_auto] md:items-center"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={getVendorImage(booking.vendorId)}
-                          alt={booking.vendorId?.businessName || "Vendor"}
-                          className="h-12 w-12 rounded-2xl object-cover"
-                        />
-                        <div>
-                          <p className="font-extrabold">
-                            {booking.vendorId?.businessName ||
-                              "Vendor unavailable"}
-                          </p>
-                          <p className="text-xs text-ink/40">
+                <div className="overflow-x-auto">
+                  <table className="hidden min-w-full text-left text-sm md:table">
+                    <thead className="bg-sand/50 text-xs uppercase tracking-wider text-ink/45">
+                      <tr>
+                        <th className="px-5 py-4">Vendor</th>
+                        <th className="px-5 py-4">Event</th>
+                        <th className="px-5 py-4">Date</th>
+                        <th className="px-5 py-4">Budget</th>
+                        <th className="px-5 py-4">Status</th>
+                        <th className="px-5 py-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {bookings.map((booking) => (
+                        <tr key={booking._id}>
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={getVendorImage(booking.vendorId)}
+                                alt={booking.vendorId?.businessName || "Vendor"}
+                                className="h-11 w-11 rounded-2xl object-cover"
+                              />
+                              <span className="font-extrabold">
+                                {booking.vendorId?.businessName ||
+                                  "Vendor unavailable"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-ink/55">
                             {booking.eventType}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="flex items-center gap-2 text-sm text-ink/50">
-                        <MapPin className="h-4 w-4" />{" "}
-                        {formatDate(booking.eventDate)}
-                      </p>
-                      <div>
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${
-                            statusClass[booking.status]
-                          }`}
-                        >
-                          {booking.status}
-                        </span>
-                        <p className="mt-2 flex items-center text-sm font-bold">
-                          <IndianRupee className="h-3.5 w-3.5" />
-                          {formatCurrency(booking.budget).replace("₹", "")}
-                        </p>
-                      </div>
-                      <div className="flex justify-start gap-3 md:justify-end">
-                        {booking.status === "completed" &&
-                          (reviewsByBooking[booking._id] ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setReviewBooking(booking)}
-                                className="flex items-center gap-1 text-xs font-bold text-coral"
-                              >
-                                <Edit3 className="h-3.5 w-3.5" /> Edit
-                              </button>
-                              <button
-                                type="button"
-                                disabled={
-                                  updatingId ===
-                                  reviewsByBooking[booking._id]._id
-                                }
-                                onClick={() => removeReview(booking._id)}
-                                className="flex items-center gap-1 text-xs font-bold text-red-500 disabled:opacity-50"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Delete
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setReviewBooking(booking)}
-                              className="inline-flex items-center gap-1 text-xs font-bold text-coral"
+                          </td>
+                          <td className="px-5 py-4 text-ink/55">
+                            {formatDate(booking.eventDate)}
+                          </td>
+                          <td className="px-5 py-4 font-bold">
+                            {formatCurrency(booking.budget)}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                                statusClass[booking.status]
+                              }`}
                             >
-                              <Star className="h-3.5 w-3.5" /> Review
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  ))}
+                              {booking.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            {booking.status === "completed" &&
+                              (reviewsByBooking[booking._id] ? (
+                                <div className="flex justify-end gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => setReviewBooking(booking)}
+                                    className="text-xs font-bold text-coral"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      updatingId ===
+                                      reviewsByBooking[booking._id]._id
+                                    }
+                                    onClick={() => removeReview(booking._id)}
+                                    className="text-xs font-bold text-red-500 disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setReviewBooking(booking)}
+                                  className="text-xs font-bold text-coral"
+                                >
+                                  Review
+                                </button>
+                              ))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <div className="grid gap-4 p-5 md:hidden">
+                    {bookings.map((booking) => (
+                      <article
+                        key={booking._id}
+                        className="rounded-3xl border border-ink/8 p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={getVendorImage(booking.vendorId)}
+                            alt={booking.vendorId?.businessName || "Vendor"}
+                            className="h-12 w-12 rounded-2xl object-cover"
+                          />
+                          <div>
+                            <p className="font-extrabold">
+                              {booking.vendorId?.businessName ||
+                                "Vendor unavailable"}
+                            </p>
+                            <p className="text-sm text-ink/45">
+                              {booking.eventType}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm">{formatDate(booking.eventDate)}</p>
+                            <p className="mt-1 font-bold">
+                              {formatCurrency(booking.budget)}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                              statusClass[booking.status]
+                            }`}
+                          >
+                            {booking.status}
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="p-6">
@@ -475,10 +496,10 @@ export default function CustomerDashboardPage() {
               <div className="border-b p-6">
                 <h2 className="text-xl font-extrabold">Reviews given</h2>
                 <p className="mt-1 text-sm text-ink/45">
-                  Reviews from completed bookings.
+                  Feedback you shared after completed bookings.
                 </p>
               </div>
-              <div className="space-y-4 p-5">
+              <div className="grid gap-4 p-5 md:grid-cols-2">
                 {reviewsGiven.length ? (
                   reviewsGiven.map((review) => (
                     <article
@@ -505,33 +526,102 @@ export default function CustomerDashboardPage() {
                       <p className="mt-3 text-sm leading-6 text-ink/55">
                         {review.comment}
                       </p>
+                      <p className="mt-3 text-xs text-ink/35">
+                        {formatDate(review.createdAt)}
+                      </p>
                     </article>
                   ))
                 ) : (
-                  <p className="rounded-2xl bg-sand/50 p-5 text-sm text-ink/50">
+                  <p className="rounded-2xl bg-sand/50 p-5 text-sm text-ink/50 md:col-span-2">
                     Reviews you write will appear here.
                   </p>
                 )}
               </div>
             </Card>
-          </section>
+          </main>
 
-          <Card className="overflow-hidden">
-            <div className="border-b p-6">
-              <h2 className="text-xl font-extrabold">Account settings</h2>
-              <p className="mt-1 text-sm text-ink/45">
-                Preferences and account controls.
-              </p>
-            </div>
-            <div className="grid lg:grid-cols-[260px_1fr]">
-              <div className="border-b p-4 lg:border-b-0 lg:border-r">
-                <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-2">
+          <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+            <Card className="p-6">
+              <h2 className="text-xl font-extrabold">Booking stats</h2>
+              <div className="mt-5 grid gap-3">
+                {statCards.map(([Icon, title, value, note]) => (
+                  <div
+                    key={title}
+                    className="flex items-center gap-4 rounded-2xl border border-ink/8 p-4"
+                  >
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-coral">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-xl font-extrabold">{value}</p>
+                      <p className="text-sm font-bold text-ink/55">{title}</p>
+                      <p className="text-xs text-ink/35">{note}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <div className="border-b p-6">
+                <h2 className="text-xl font-extrabold">Saved vendors</h2>
+                <p className="mt-1 text-sm text-ink/45">
+                  Your event shortlist.
+                </p>
+              </div>
+              <div className="space-y-3 p-5">
+                {favorites.length ? (
+                  favorites.slice(0, 4).map((favorite) => {
+                    const vendor = favorite.vendorId;
+                    return (
+                      <Button
+                        key={favorite._id}
+                        to={`/vendors/${vendor._id}`}
+                        variant="ghost"
+                        className="w-full !justify-start rounded-2xl border border-ink/8 !px-3 !py-3"
+                      >
+                        <img
+                          src={getVendorImage(vendor)}
+                          alt={vendor.businessName}
+                          className="h-12 w-12 rounded-2xl object-cover"
+                        />
+                        <span className="min-w-0 text-left">
+                          <span className="block truncate text-sm font-extrabold">
+                            {vendor.businessName}
+                          </span>
+                          <span className="block text-xs text-ink/45">
+                            {vendor.serviceCategory || vendor.category}
+                            {(vendor.averageRating || vendor.rating) && (
+                              <> · ★ {vendor.averageRating || vendor.rating}</>
+                            )}
+                          </span>
+                        </span>
+                      </Button>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-2xl bg-sand/50 p-5 text-sm text-ink/50">
+                    No saved vendors yet.
+                  </p>
+                )}
+                <Button to="/customer/favorites" variant="outline" className="w-full">
+                  <Heart className="h-4 w-4" /> Manage saved vendors
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <div className="border-b p-6">
+                <h2 className="text-xl font-extrabold">Account settings</h2>
+              </div>
+              <div className="p-4">
+                <div className="grid gap-2">
                   {settingsTabs.map(([label, Icon]) => (
                     <button
                       key={label}
                       type="button"
                       onClick={() => setSettingsTab(label)}
-                      className={`flex shrink-0 items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition lg:w-full ${
+                      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
                         settingsTab === label
                           ? "bg-ink text-white"
                           : "text-ink/55 hover:bg-sand/70"
@@ -541,25 +631,19 @@ export default function CustomerDashboardPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div className="p-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    ["Name", user?.name || "Not set"],
-                    ["Email", user?.email || "Not set"],
-                    ["Phone", user?.phone || "Not set"],
-                    ["Current tab", settingsTab],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl border border-ink/8 p-4">
-                      <p className="text-xs font-bold text-ink/40">{label}</p>
-                      <p className="mt-2 font-extrabold">{value}</p>
-                    </div>
-                  ))}
+                <div className="mt-4 rounded-2xl bg-sand/50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                    {settingsTab}
+                  </p>
+                  <p className="mt-2 text-sm text-ink/55">
+                    Manage {settingsTab.toLowerCase()} preferences from your
+                    account workspace.
+                  </p>
                 </div>
               </div>
-            </div>
-          </Card>
-        </>
+            </Card>
+          </aside>
+        </div>
       )}
 
       {reviewBooking && (
