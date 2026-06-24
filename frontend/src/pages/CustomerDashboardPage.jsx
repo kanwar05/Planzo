@@ -3,13 +3,17 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  Edit3,
   IndianRupee,
   MapPin,
+  Star,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
+import ReviewForm from "../components/ReviewForm";
 import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -19,6 +23,12 @@ import {
 } from "../services/bookingService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency, formatDate } from "../utils/format";
+import {
+  createReview,
+  deleteReview,
+  getBookingReview,
+  updateReview,
+} from "../services/reviewService";
 
 const statusClass = {
   accepted: "bg-sage/15 text-sage",
@@ -34,11 +44,31 @@ export default function CustomerDashboardPage() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [updatingId, setUpdatingId] = useState("");
+  const [reviewsByBooking, setReviewsByBooking] = useState({});
+  const [reviewBooking, setReviewBooking] = useState(null);
+  const [savingReview, setSavingReview] = useState(false);
 
   useEffect(() => {
     getMyBookings()
-      .then(setBookings)
+      .then(async (items) => {
+        setBookings(items);
+        const completed = items.filter((item) => item.status === "completed");
+        const reviews = await Promise.allSettled(
+          completed.map((item) => getBookingReview(item._id)),
+        );
+        setReviewsByBooking(
+          Object.fromEntries(
+            completed.map((item, index) => [
+              item._id,
+              reviews[index].status === "fulfilled"
+                ? reviews[index].value
+                : null,
+            ]),
+          ),
+        );
+      })
       .catch((requestError) =>
         setError(getApiError(requestError, "Unable to load your bookings.")),
       )
@@ -72,9 +102,54 @@ export default function CustomerDashboardPage() {
     }
   };
 
+  const saveReview = async (data) => {
+    setSavingReview(true);
+    setError("");
+    try {
+      const existing = reviewsByBooking[reviewBooking._id];
+      const review = existing
+        ? await updateReview(existing._id, data)
+        : await createReview({ ...data, bookingId: reviewBooking._id });
+      setReviewsByBooking((current) => ({
+        ...current,
+        [reviewBooking._id]: review,
+      }));
+      setReviewBooking(null);
+      setSuccess(existing ? "Review updated." : "Review published.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to save your review."));
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  const removeReview = async (bookingId) => {
+    const review = reviewsByBooking[bookingId];
+    if (!review || !window.confirm("Delete this review permanently?")) return;
+
+    setUpdatingId(review._id);
+    setError("");
+    try {
+      await deleteReview(review._id);
+      setReviewsByBooking((current) => ({ ...current, [bookingId]: null }));
+      setSuccess("Review deleted.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to delete your review."));
+    } finally {
+      setUpdatingId("");
+    }
+  };
+
   return (
     <div>
-      <Toast message={error} type="error" onClose={() => setError("")} />
+      <Toast
+        message={error || success}
+        type={error ? "error" : "success"}
+        onClose={() => {
+          setError("");
+          setSuccess("");
+        }}
+      />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-bold text-coral">
@@ -168,6 +243,34 @@ export default function CustomerDashboardPage() {
                         : "Cancel booking"}
                     </button>
                   )}
+                  {booking.status === "completed" &&
+                    (reviewsByBooking[booking._id] ? (
+                      <div className="mt-3 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setReviewBooking(booking)}
+                          className="flex items-center gap-1 text-xs font-bold text-coral"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" /> Edit review
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updatingId === reviewsByBooking[booking._id]._id}
+                          onClick={() => removeReview(booking._id)}
+                          className="flex items-center gap-1 text-xs font-bold text-red-500 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setReviewBooking(booking)}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-coral"
+                      >
+                        <Star className="h-3.5 w-3.5" /> Write Review
+                      </button>
+                    ))}
                 </div>
               </div>
             ))}
@@ -181,6 +284,19 @@ export default function CustomerDashboardPage() {
           </div>
         )}
       </Card>
+      {reviewBooking && (
+        <div className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-ink/45 p-4 backdrop-blur-sm">
+          <div className="my-8 w-full max-w-xl rounded-[2rem] bg-cream p-6 shadow-lift sm:p-8">
+            <ReviewForm
+              initialReview={reviewsByBooking[reviewBooking._id]}
+              vendorName={reviewBooking.vendorId?.businessName || "this vendor"}
+              submitting={savingReview}
+              onSubmit={saveReview}
+              onCancel={() => setReviewBooking(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
