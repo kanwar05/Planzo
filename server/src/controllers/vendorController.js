@@ -1,4 +1,5 @@
 import Booking from "../models/Booking.js";
+import Review from "../models/Review.js";
 import Vendor from "../models/Vendor.js";
 import cloudinary, {
   isCloudinaryConfigured,
@@ -354,7 +355,7 @@ export const getVendors = asyncHandler(async (req, res) => {
       ? { pricing: 1 }
       : req.query.sort === "price_desc"
         ? { pricing: -1 }
-        : { verified: -1, rating: -1, createdAt: -1 };
+        : { verified: -1, averageRating: -1, rating: -1, createdAt: -1 };
 
   const [vendors, total] = await Promise.all([
     Vendor.find(filters)
@@ -445,10 +446,12 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
     );
   }
 
+  const reviews = await Review.find({ vendorId: vendor._id }).select("images");
   const images = [
     vendor.profileImage,
     vendor.coverImage,
     ...vendor.portfolioImages,
+    ...reviews.flatMap((review) => review.images),
   ].filter((image) => image?.publicId);
 
   if (images.length) {
@@ -473,7 +476,10 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
     }
   }
 
-  await vendor.deleteOne();
+  await Promise.all([
+    Review.deleteMany({ vendorId: vendor._id }),
+    vendor.deleteOne(),
+  ]);
 
   res.status(200).json({
     success: true,

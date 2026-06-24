@@ -113,3 +113,14 @@ export const uploadCoverImage = ensureCloudinaryConfigured(
 export const uploadPortfolioImages = ensureCloudinaryConfigured(
   createUploader("planzo/vendors/portfolio", 8).array("images", 8),
 );
+
+const reviewImageUpload = createUploader(
+  "planzo/reviews",
+  4,
+).array("images", 4);
+
+export const uploadReviewImages = (req, res, next) => {
+  if (!req.is("multipart/form-data")) return next();
+
+  return ensureCloudinaryConfigured(reviewImageUpload)(req, res, next);
+};

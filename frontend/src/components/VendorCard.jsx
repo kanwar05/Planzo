@@ -42,7 +42,7 @@ export default function VendorCard({ vendor }) {
             </div>
             <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold">
               <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{" "}
-              {vendor.rating || "New"}
+              {vendor.averageRating || vendor.rating || "New"}
             </span>
           </div>
           <div className="mt-4 flex items-center gap-1.5 text-sm text-ink/50">
@@ -50,6 +50,12 @@ export default function VendorCard({ vendor }) {
             {vendor.location}
             <span className="mx-1">·</span>
             {vendor.experience || 0} yrs exp.
+            {(vendor.reviewCount ?? vendor.reviewsCount ?? 0) > 0 && (
+              <>
+                <span className="mx-1">·</span>
+                {vendor.reviewCount ?? vendor.reviewsCount} reviews
+              </>
+            )}
           </div>
           <div className="mt-5 flex items-center justify-between border-t border-ink/8 pt-4">
             <div>

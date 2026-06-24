@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
+import ReviewList from "../components/ReviewList";
 import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -18,6 +19,10 @@ import {
   updateBookingStatus,
 } from "../services/bookingService";
 import { getMyVendorProfile } from "../services/vendorService";
+import {
+  getVendorReviews,
+  replyToReview,
+} from "../services/reviewService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency, formatDate } from "../utils/format";
 
@@ -30,10 +35,14 @@ export default function VendorDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [replyingId, setReplyingId] = useState("");
 
   useEffect(() => {
     Promise.allSettled([getVendorRequests(), getMyVendorProfile()])
-      .then(([bookingResult, profileResult]) => {
+      .then(async ([bookingResult, profileResult]) => {
         if (bookingResult.status === "fulfilled") {
           setRequests(bookingResult.value);
         } else if (bookingResult.reason.response?.status !== 404) {
@@ -44,9 +53,22 @@ export default function VendorDashboardPage() {
 
         if (profileResult.status === "fulfilled") {
           setProfile(profileResult.value);
+          try {
+            const data = await getVendorReviews(profileResult.value._id, {
+              limit: 50,
+            });
+            setReviews(data.reviews);
+          } catch (requestError) {
+            setError(
+              getApiError(requestError, "Unable to load customer reviews."),
+            );
+          }
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setReviewsLoading(false);
+      });
   }, []);
 
   const visibleRequests = useMemo(() => {
@@ -87,9 +109,32 @@ export default function VendorDashboardPage() {
     }
   };
 
+  const saveReply = async (reviewId, message) => {
+    setReplyingId(reviewId);
+    setError("");
+    try {
+      const updated = await replyToReview(reviewId, message);
+      setReviews((current) =>
+        current.map((review) => (review._id === reviewId ? updated : review)),
+      );
+      setSuccess("Review reply saved.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to save your reply."));
+    } finally {
+      setReplyingId("");
+    }
+  };
+
   return (
     <div>
-      <Toast message={error} type="error" onClose={() => setError("")} />
+      <Toast
+        message={error || success}
+        type={error ? "error" : "success"}
+        onClose={() => {
+          setError("");
+          setSuccess("");
+        }}
+      />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-bold text-coral">
@@ -132,8 +177,8 @@ export default function VendorDashboardPage() {
           [
             Star,
             "Reviews",
-            profile?.rating || "New",
-            `${profile?.reviewsCount || 0} total`,
+            profile?.averageRating || profile?.rating || "New",
+            `${profile?.reviewCount ?? profile?.reviewsCount ?? 0} total`,
           ],
         ].map(([Icon, title, value, note]) => (
           <Card key={title} className="p-6">
@@ -231,6 +276,23 @@ export default function VendorDashboardPage() {
           </div>
         )}
       </Card>
+      {profile && (
+        <Card className="mt-7 p-6">
+          <div className="mb-6">
+            <h2 className="text-xl font-extrabold">Customer reviews</h2>
+            <p className="mt-1 text-xs text-ink/40">
+              Reply publicly and help future customers understand your service.
+            </p>
+          </div>
+          <ReviewList
+            reviews={reviews}
+            loading={reviewsLoading}
+            canReply
+            replyingId={replyingId}
+            onReply={saveReply}
+          />
+        </Card>
+      )}
     </div>
   );
 }

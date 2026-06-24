@@ -25,10 +25,12 @@ import {
   uploadProfileImage,
   uploadVendorImages,
 } from "../middleware/upload.js";
+import { getVendorReviews } from "../controllers/reviewController.js";
 
 const router = Router();
 
 router.get("/", getVendors);
+router.get("/:vendorId/reviews", getVendorReviews);
 router.get(
   "/me",
   protect,

@@ -150,10 +150,77 @@ returns a clear `502` response instead of silently orphaning assets.
 - `GET /api/bookings/my-bookings` — customer only
 - `GET /api/bookings/vendor-requests` — vendor only
 - `PATCH /api/bookings/:id/status`
+- `GET /api/bookings/:bookingId/review` — booking customer, vendor, or admin
 
 Customers can cancel their own bookings. Vendors can accept, reject, or
 complete requests sent to their vendor profile. Invalid status transitions
 are rejected.
+
+### Reviews and ratings
+
+- `POST /api/reviews` — customer only
+- `GET /api/vendors/:vendorId/reviews` — public
+- `GET /api/bookings/:bookingId/review` — booking participant or admin
+- `PATCH /api/reviews/:id` — review owner only
+- `DELETE /api/reviews/:id` — review owner only
+- `PATCH /api/reviews/:id/reply` — reviewed vendor only
+
+Customers can create one review per completed booking. The API verifies the
+booking owner and vendor, so ratings cannot be posted directly against an
+unrelated vendor. Ratings are whole numbers from 1 through 5. Comments are
+required and may contain up to 2,000 characters.
+
+Create a text-only review:
+
+```bash
+curl -X POST http://localhost:5001/api/reviews \
+  -H "Authorization: Bearer <customer-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bookingId": "<completed-booking-id>",
+    "rating": 5,
+    "comment": "Excellent service and communication."
+  }'
+```
+
+To attach up to four optional JPEG, PNG, or WEBP images, send multipart data.
+Each image can be at most 5 MB:
+
+```bash
+curl -X POST http://localhost:5001/api/reviews \
+  -H "Authorization: Bearer <customer-token>" \
+  -F "bookingId=<completed-booking-id>" \
+  -F "rating=5" \
+  -F "comment=Excellent service and communication." \
+  -F "images=@./review-1.jpg"
+```
+
+Review image objects store Cloudinary `url` and `publicId` values. Removed
+images are deleted from Cloudinary. On every review create, rating update, or
+delete, the API recalculates the vendor's `averageRating` and `reviewCount`
+from review records; clients cannot set those fields.
+
+Vendors can publish or update their response:
+
+```bash
+curl -X PATCH http://localhost:5001/api/reviews/<review-id>/reply \
+  -H "Authorization: Bearer <vendor-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Thank you for choosing us."}'
+```
+
+## Tests
+
+```bash
+cd server
+npm test
+
+cd ../frontend
+npm test
+```
+
+The backend integration test uses an isolated in-memory MongoDB instance and
+does not write to the configured development database.
 
 ## Example registration
 

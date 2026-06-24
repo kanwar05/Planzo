@@ -180,7 +180,8 @@ export default function BookingRequestPage() {
           </p>
           <h2 className="mt-1 text-xl font-extrabold">{vendor.businessName}</h2>
           <p className="mt-2 text-sm text-white/50">
-            {vendor.location} · {vendor.rating || "New"} ★
+            {vendor.location} ·{" "}
+            {vendor.averageRating || vendor.rating || "New"} ★
           </p>
           <div className="my-5 border-t border-white/10" />
           <p className="text-xs text-white/40">Starting package</p>

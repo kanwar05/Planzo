@@ -13,8 +13,10 @@ import { useParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import ReviewList from "../components/ReviewList";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getVendorById } from "../services/vendorService";
+import { getVendorReviews } from "../services/reviewService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency } from "../utils/format";
 import { getVendorGallery } from "../utils/vendor";
@@ -24,15 +26,34 @@ export default function VendorDetailsPage() {
   const [vendor, setVendor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState("");
   useDocumentTitle(vendor?.businessName || "Vendor details");
 
   useEffect(() => {
-    getVendorById(id)
-      .then(setVendor)
-      .catch((requestError) =>
-        setError(getApiError(requestError, "Unable to load this vendor.")),
-      )
-      .finally(() => setLoading(false));
+    Promise.allSettled([getVendorById(id), getVendorReviews(id)])
+      .then(([vendorResult, reviewsResult]) => {
+        if (vendorResult.status === "fulfilled") {
+          setVendor(vendorResult.value);
+        } else {
+          setError(
+            getApiError(vendorResult.reason, "Unable to load this vendor."),
+          );
+        }
+
+        if (reviewsResult.status === "fulfilled") {
+          setReviews(reviewsResult.value.reviews);
+        } else {
+          setReviewsError(
+            getApiError(reviewsResult.reason, "Unable to load reviews."),
+          );
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+        setReviewsLoading(false);
+      });
   }, [id]);
 
   if (loading) {
@@ -94,8 +115,10 @@ export default function VendorDetailsPage() {
               <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/55">
                 <span className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                  <strong className="text-ink">{vendor.rating || "New"}</strong>
-                  ({vendor.reviewsCount} reviews)
+                  <strong className="text-ink">
+                    {vendor.averageRating || vendor.rating || "New"}
+                  </strong>
+                  ({vendor.reviewCount ?? vendor.reviewsCount ?? 0} reviews)
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-4 w-4" /> {vendor.location}
@@ -150,6 +173,29 @@ export default function VendorDetailsPage() {
                 }`}
               />
             ))}
+          </div>
+          <div className="my-9 border-t" />
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-coral">
+                Verified experiences
+              </p>
+              <h2 className="mt-2 text-2xl font-extrabold">
+                Customer reviews
+              </h2>
+            </div>
+            <p className="text-sm font-bold text-ink/50">
+              {vendor.reviewCount ?? vendor.reviewsCount ?? 0} total
+            </p>
+          </div>
+          <div className="mt-6">
+            {reviewsError ? (
+              <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-600">
+                {reviewsError}
+              </p>
+            ) : (
+              <ReviewList reviews={reviews} loading={reviewsLoading} />
+            )}
           </div>
         </div>
         <aside className="sticky top-28 rounded-[2rem] border bg-white p-6 shadow-lift">

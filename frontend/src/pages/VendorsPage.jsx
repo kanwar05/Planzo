@@ -57,11 +57,17 @@ export default function VendorsPage() {
 
   const filtered = useMemo(() => {
     const result = vendors.filter(
-      (vendor) => !rating || vendor.rating >= Number(rating),
+      (vendor) =>
+        !rating ||
+        (vendor.averageRating || vendor.rating || 0) >= Number(rating),
     );
 
     if (sort === "rating") {
-      return [...result].sort((a, b) => b.rating - a.rating);
+      return [...result].sort(
+        (a, b) =>
+          (b.averageRating || b.rating || 0) -
+          (a.averageRating || a.rating || 0),
+      );
     }
     if (sort === "experience") {
       return [...result].sort((a, b) => b.experience - a.experience);

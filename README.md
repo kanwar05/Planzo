@@ -31,3 +31,7 @@ The frontend expects the API at `http://localhost:5001/api`. Override it with
 See [`server/README.md`](server/README.md) for environment variables, API
 routes, authorization rules, Cloudinary vendor image uploads, and example
 requests.
+
+Completed bookings support verified customer reviews, optional Cloudinary
+review images, automatic vendor rating calculation, customer edit/delete
+controls, and public vendor replies.
