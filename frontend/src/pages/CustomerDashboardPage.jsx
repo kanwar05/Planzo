@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
@@ -25,6 +26,12 @@ import ReviewForm from "../components/ReviewForm";
 import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import {
+  changePassword,
+  deleteAccount,
+  updateNotificationPreferences,
+  updateProfile,
+} from "../services/authService";
 import {
   getMyBookings,
   updateBookingStatus,
@@ -65,7 +72,8 @@ const initials = (name = "PZ") =>
 
 export default function CustomerDashboardPage() {
   useDocumentTitle("Customer profile");
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +84,17 @@ export default function CustomerDashboardPage() {
   const [reviewBooking, setReviewBooking] = useState(null);
   const [savingReview, setSavingReview] = useState(false);
   const [settingsTab, setSettingsTab] = useState("Personal Information");
+  const [profileForm, setProfileForm] = useState({
+    name: user?.name || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+  });
+  const [notificationForm, setNotificationForm] = useState({
+    bookingUpdates: true,
+    reviewReminders: true,
+    promotions: false,
+  });
+  const [settingsSaving, setSettingsSaving] = useState("");
 
   useEffect(() => {
     Promise.allSettled([getMyBookings(), getFavorites()])
@@ -110,6 +129,19 @@ export default function CustomerDashboardPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setProfileForm({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    });
+    setNotificationForm({
+      bookingUpdates: user?.notificationPreferences?.bookingUpdates ?? true,
+      reviewReminders: user?.notificationPreferences?.reviewReminders ?? true,
+      promotions: user?.notificationPreferences?.promotions ?? false,
+    });
+  }, [user]);
 
   const stats = useMemo(() => {
     const upcoming = bookings.filter(
@@ -189,6 +221,82 @@ export default function CustomerDashboardPage() {
     }
   };
 
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setSettingsSaving("profile");
+    setError("");
+    setSuccess("");
+
+    try {
+      const updatedUser = await updateProfile(profileForm);
+      updateUser(updatedUser);
+      setSuccess("Profile updated.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to update profile."));
+    } finally {
+      setSettingsSaving("");
+    }
+  };
+
+  const savePassword = async (event) => {
+    event.preventDefault();
+    setSettingsSaving("password");
+    setError("");
+    setSuccess("");
+
+    const form = new FormData(event.currentTarget);
+
+    try {
+      await changePassword({
+        currentPassword: form.get("currentPassword"),
+        newPassword: form.get("newPassword"),
+      });
+      updateUser(null);
+      setSuccess("Password changed. Please log in again.");
+      navigate("/login", { replace: true });
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to change password."));
+    } finally {
+      setSettingsSaving("");
+    }
+  };
+
+  const saveNotifications = async (event) => {
+    event.preventDefault();
+    setSettingsSaving("notifications");
+    setError("");
+    setSuccess("");
+
+    try {
+      const updatedUser = await updateNotificationPreferences(notificationForm);
+      updateUser(updatedUser);
+      setSuccess("Notification preferences updated.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to update notifications."));
+    } finally {
+      setSettingsSaving("");
+    }
+  };
+
+  const removeAccount = async (event) => {
+    event.preventDefault();
+    setSettingsSaving("delete");
+    setError("");
+    setSuccess("");
+
+    const form = new FormData(event.currentTarget);
+
+    try {
+      await deleteAccount(form.get("password"));
+      updateUser(null);
+      navigate("/login", { replace: true });
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to delete account."));
+    } finally {
+      setSettingsSaving("");
+    }
+  };
+
   const statCards = [
     [CalendarCheck, "Total bookings", stats.total, "All booking requests"],
     [CheckCircle2, "Completed", stats.completed, "Finished celebrations"],
@@ -245,10 +353,18 @@ export default function CustomerDashboardPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <Button variant="outline">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSettingsTab("Personal Information")}
+                    >
                       <Edit3 className="h-4 w-4" /> Edit Profile
                     </Button>
-                    <Button variant="outline">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSettingsTab("Security")}
+                    >
                       <LockKeyhole className="h-4 w-4" /> Change Password
                     </Button>
                   </div>
@@ -631,15 +747,171 @@ export default function CustomerDashboardPage() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-4 rounded-2xl bg-sand/50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-coral">
-                    {settingsTab}
-                  </p>
-                  <p className="mt-2 text-sm text-ink/55">
-                    Manage {settingsTab.toLowerCase()} preferences from your
-                    account workspace.
-                  </p>
-                </div>
+                {settingsTab === "Personal Information" && (
+                  <form onSubmit={saveProfile} className="mt-4 space-y-4 rounded-2xl bg-sand/50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Personal Information
+                    </p>
+                    <label className="block">
+                      <span className="label">Full name</span>
+                      <input
+                        required
+                        value={profileForm.name}
+                        onChange={(event) =>
+                          setProfileForm((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                        className="field"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="label">Email address</span>
+                      <input
+                        required
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(event) =>
+                          setProfileForm((current) => ({
+                            ...current,
+                            email: event.target.value,
+                          }))
+                        }
+                        className="field"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="label">Phone number</span>
+                      <input
+                        required
+                        type="tel"
+                        value={profileForm.phone}
+                        onChange={(event) =>
+                          setProfileForm((current) => ({
+                            ...current,
+                            phone: event.target.value,
+                          }))
+                        }
+                        className="field"
+                      />
+                    </label>
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "profile"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
+                      Save profile
+                    </Button>
+                  </form>
+                )}
+
+                {settingsTab === "Security" && (
+                  <form onSubmit={savePassword} className="mt-4 space-y-4 rounded-2xl bg-sand/50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Security
+                    </p>
+                    <label className="block">
+                      <span className="label">Current password</span>
+                      <input
+                        required
+                        name="currentPassword"
+                        type="password"
+                        className="field"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="label">New password</span>
+                      <input
+                        required
+                        name="newPassword"
+                        type="password"
+                        minLength="8"
+                        className="field"
+                        placeholder="Uppercase, number, and symbol"
+                      />
+                    </label>
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "password"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
+                      Change password
+                    </Button>
+                  </form>
+                )}
+
+                {settingsTab === "Notifications" && (
+                  <form onSubmit={saveNotifications} className="mt-4 space-y-4 rounded-2xl bg-sand/50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Notifications
+                    </p>
+                    {[
+                      ["bookingUpdates", "Booking updates"],
+                      ["reviewReminders", "Review reminders"],
+                      ["promotions", "Offers and recommendations"],
+                    ].map(([field, label]) => (
+                      <label
+                        key={field}
+                        className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold"
+                      >
+                        <span>{label}</span>
+                        <input
+                          type="checkbox"
+                          checked={notificationForm[field]}
+                          onChange={(event) =>
+                            setNotificationForm((current) => ({
+                              ...current,
+                              [field]: event.target.checked,
+                            }))
+                          }
+                          className="h-4 w-4 accent-coral"
+                        />
+                      </label>
+                    ))}
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "notifications"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
+                      Save preferences
+                    </Button>
+                  </form>
+                )}
+
+                {settingsTab === "Privacy" && (
+                  <form onSubmit={removeAccount} className="mt-4 space-y-4 rounded-2xl bg-red-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+                      Privacy
+                    </p>
+                    <p className="text-sm leading-6 text-ink/60">
+                      Deleting your account removes your saved vendors, reviews,
+                      and closed booking history. Active bookings must be
+                      resolved first.
+                    </p>
+                    <label className="block">
+                      <span className="label">Confirm password</span>
+                      <input
+                        required
+                        name="password"
+                        type="password"
+                        className="field"
+                      />
+                    </label>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      loading={settingsSaving === "delete"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full !border-red-200 !text-red-600 hover:!border-red-300"
+                    >
+                      <Trash2 className="h-4 w-4" /> Delete account
+                    </Button>
+                  </form>
+                )}
               </div>
             </Card>
           </aside>

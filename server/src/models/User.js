@@ -49,6 +49,20 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: undefined,
     },
+    notificationPreferences: {
+      bookingUpdates: {
+        type: Boolean,
+        default: true,
+      },
+      reviewReminders: {
+        type: Boolean,
+        default: true,
+      },
+      promotions: {
+        type: Boolean,
+        default: false,
+      },
+    },
   },
   {
     timestamps: true,

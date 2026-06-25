@@ -25,6 +25,30 @@ export const getMe = async () => {
   return saveUser(response.data.user);
 };
 
+export const updateProfile = async (data) => {
+  const response = await api.patch("/auth/profile", data);
+  return saveUser(response.data.user);
+};
+
+export const changePassword = async (data) => {
+  const response = await api.patch("/auth/password", data);
+  localStorage.removeItem(USER_KEY);
+  return response.data;
+};
+
+export const updateNotificationPreferences = async (data) => {
+  const response = await api.patch("/auth/notification-preferences", data);
+  return saveUser(response.data.user);
+};
+
+export const deleteAccount = async (password) => {
+  const response = await api.delete("/auth/account", {
+    data: { password },
+  });
+  localStorage.removeItem(USER_KEY);
+  return response.data;
+};
+
 export const logout = async () => {
   try {
     await api.post("/auth/logout");
