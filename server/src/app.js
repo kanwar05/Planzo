@@ -84,7 +84,12 @@ app.get("/api/health", (req, res) => {
     message: "Planzo API is running.",
   });
 });
-
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Planzo API is running",
+  });
+});
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth", authRoutes);
