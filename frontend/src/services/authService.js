@@ -1,33 +1,47 @@
-import { api, TOKEN_KEY, USER_KEY } from "./api";
+import { api, USER_KEY } from "./api";
 
-const saveSession = ({ token, user }) => {
-  localStorage.setItem(TOKEN_KEY, token);
+const saveUser = (user) => {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
-  return { token, user };
+  return user;
 };
 
 export const register = async (data) => {
   const response = await api.post("/auth/register", data);
-  return saveSession(response.data);
+  return saveUser(response.data.user);
 };
 
 export const login = async (data) => {
   const response = await api.post("/auth/login", data);
-  return saveSession(response.data);
+  return saveUser(response.data.user);
+};
+
+export const refresh = async () => {
+  const response = await api.post("/auth/refresh");
+  return saveUser(response.data.user);
 };
 
 export const getMe = async () => {
   const response = await api.get("/auth/me");
-  localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
-  return response.data.user;
+  return saveUser(response.data.user);
 };
 
-export const logout = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+export const logout = async () => {
+  try {
+    await api.post("/auth/logout");
+  } finally {
+    localStorage.removeItem(USER_KEY);
+  }
 };
 
-export const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
+export const forgotPassword = async (email) => {
+  const response = await api.post("/auth/forgot-password", { email });
+  return response.data;
+};
+
+export const resetPassword = async ({ token, password }) => {
+  const response = await api.post("/auth/reset-password", { token, password });
+  return response.data;
+};
 
 export const getStoredUser = () => {
   try {
