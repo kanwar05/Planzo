@@ -29,7 +29,10 @@ test("auth endpoints return a clean response when rate limited", async () => {
   let response;
 
   for (let attempt = 0; attempt < 11; attempt += 1) {
-    response = await request(app).post("/api/auth/register").send({});
+    response = await request(app)
+      .post("/api/auth/register")
+      .set("x-enable-rate-limit-test", "true")
+      .send({});
   }
 
   assert.equal(response.status, 429);

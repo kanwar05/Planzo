@@ -6,10 +6,12 @@ import MainLayout from "../layouts/MainLayout";
 import BookingRequestPage from "../pages/BookingRequestPage";
 import CustomerDashboardPage from "../pages/CustomerDashboardPage";
 import CustomerFavoritesPage from "../pages/CustomerFavoritesPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import RegisterPage from "../pages/RegisterPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ServicesPage from "../pages/ServicesPage";
 import VendorDashboardPage from "../pages/VendorDashboardPage";
 import VendorDetailsPage from "../pages/VendorDetailsPage";
@@ -31,6 +33,8 @@ export const appRoutes = [
     children: [
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
+      { path: "/forgot-password", element: <ForgotPasswordPage /> },
+      { path: "/reset-password", element: <ResetPasswordPage /> },
     ],
   },
   {

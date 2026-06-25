@@ -2,18 +2,17 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { ACCESS_COOKIE_NAME } from "../utils/generateToken.js";
 
 export const protect = asyncHandler(async (req, res, next) => {
   const authorization = req.headers.authorization;
-
-  if (!authorization?.startsWith("Bearer ")) {
-    throw new ApiError(401, "Authentication required. Provide a Bearer token.");
-  }
-
-  const token = authorization.slice(7).trim();
+  const bearerToken = authorization?.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : "";
+  const token = req.cookies?.[ACCESS_COOKIE_NAME] || bearerToken;
 
   if (!token) {
-    throw new ApiError(401, "Authentication token is missing.");
+    throw new ApiError(401, "Authentication required.");
   }
 
   if (!process.env.JWT_SECRET) {
@@ -23,6 +22,9 @@ export const protect = asyncHandler(async (req, res, next) => {
   let payload;
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (payload.type && payload.type !== "access") {
+      throw new Error("Invalid token type.");
+    }
   } catch {
     throw new ApiError(401, "Invalid or expired authentication token.");
   }
@@ -31,6 +33,13 @@ export const protect = asyncHandler(async (req, res, next) => {
 
   if (!user) {
     throw new ApiError(401, "The user for this token no longer exists.");
+  }
+
+  if (
+    user.passwordChangedAt &&
+    payload.iat * 1000 < user.passwordChangedAt.getTime()
+  ) {
+    throw new ApiError(401, "Password changed recently. Please log in again.");
   }
 
   req.user = user;

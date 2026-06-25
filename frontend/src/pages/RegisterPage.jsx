@@ -125,9 +125,9 @@ export default function RegisterPage() {
             required
             name="password"
             type="password"
-            minLength="6"
+            minLength="8"
             className="field"
-            placeholder="At least 6 characters"
+            placeholder="Uppercase, number, and symbol"
           />
         </div>
         <label className="flex items-start gap-2 text-xs leading-5 text-ink/50">

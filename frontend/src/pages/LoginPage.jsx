@@ -91,7 +91,9 @@ export default function LoginPage() {
           <label className="flex items-center gap-2 font-semibold text-ink/60">
             <input type="checkbox" className="accent-coral" /> Remember me
           </label>
-          <span className="font-bold text-ink/35">Forgot password?</span>
+          <Link to="/forgot-password" className="font-bold text-coral">
+            Forgot password?
+          </Link>
         </div>
         <Button type="submit" loading={loading} disabled={loading} className="w-full">
           Log in

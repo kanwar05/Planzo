@@ -12,57 +12,45 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(authService.getStoredUser);
-  const [token, setToken] = useState(authService.getStoredToken);
-  const [loading, setLoading] = useState(Boolean(token));
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     authService
       .getMe()
       .then(setUser)
       .catch(() => {
-        authService.logout();
-        setToken(null);
         setUser(null);
       })
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
 
   const login = useCallback(async (credentials) => {
-    const session = await authService.login(credentials);
-    setToken(session.token);
-    setUser(session.user);
-    return session.user;
+    const nextUser = await authService.login(credentials);
+    setUser(nextUser);
+    return nextUser;
   }, []);
 
   const register = useCallback(async (data) => {
-    const session = await authService.register(data);
-    setToken(session.token);
-    setUser(session.user);
-    return session.user;
+    const nextUser = await authService.register(data);
+    setUser(nextUser);
+    return nextUser;
   }, []);
 
-  const logout = useCallback(() => {
-    authService.logout();
-    setToken(null);
+  const logout = useCallback(async () => {
+    await authService.logout();
     setUser(null);
   }, []);
 
   const value = useMemo(
     () => ({
       user,
-      token,
       loading,
-      isAuthenticated: Boolean(token && user),
+      isAuthenticated: Boolean(user),
       login,
       register,
       logout,
     }),
-    [user, token, loading, login, register, logout],
+    [user, loading, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

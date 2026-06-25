@@ -1,4 +1,5 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
@@ -28,11 +29,16 @@ const rateLimitHandler = (req, res) => {
   });
 };
 
+const skipRateLimitInTests = (req) =>
+  process.env.NODE_ENV === "test" &&
+  req.get("x-enable-rate-limit-test") !== "true";
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.RATE_LIMIT_MAX) || 300,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipRateLimitInTests,
   handler: rateLimitHandler,
 });
 
@@ -41,6 +47,7 @@ const authLimiter = rateLimit({
   max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipRateLimitInTests,
   handler: rateLimitHandler,
 });
 
@@ -67,6 +74,7 @@ app.use(
   }),
 );
 app.use(apiLimiter);
+app.use(cookieParser());
 app.use(express.json({ limit: jsonBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: formBodyLimit }));
 

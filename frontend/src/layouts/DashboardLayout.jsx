@@ -68,8 +68,8 @@ export default function DashboardLayout({ vendor = false }) {
         },
       ];
 
-  const signOut = () => {
-    logout();
+  const signOut = async () => {
+    await logout();
     navigate("/login", { replace: true });
   };
 
