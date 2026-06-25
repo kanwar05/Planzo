@@ -99,6 +99,84 @@ test("login, refresh, and logout manage cookie sessions", async () => {
   assert.equal(afterLogoutResponse.status, 401);
 });
 
+test("profile update validates and returns the updated user", async () => {
+  await User.create([
+    {
+      name: "Customer One",
+      email: "customer@example.com",
+      phone: "9999999991",
+      password: strongPassword,
+      role: "customer",
+    },
+    {
+      name: "Customer Two",
+      email: "taken@example.com",
+      phone: "9999999992",
+      password: strongPassword,
+      role: "customer",
+    },
+  ]);
+
+  const agent = request.agent(app);
+  await agent.post("/api/auth/login").send({
+    email: "customer@example.com",
+    password: strongPassword,
+  });
+
+  const updateResponse = await agent.patch("/api/auth/profile").send({
+    name: "Updated Customer",
+    email: "updated@example.com",
+    phone: "9999999999",
+  });
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updateResponse.body.user.name, "Updated Customer");
+  assert.equal(updateResponse.body.user.email, "updated@example.com");
+
+  const duplicateResponse = await agent.patch("/api/auth/profile").send({
+    name: "Updated Customer",
+    email: "taken@example.com",
+    phone: "9999999999",
+  });
+  assert.equal(duplicateResponse.status, 409);
+});
+
+test("password change requires current password and invalidates session", async () => {
+  await User.create({
+    name: "Customer One",
+    email: "customer@example.com",
+    phone: "9999999991",
+    password: strongPassword,
+    role: "customer",
+  });
+
+  const agent = request.agent(app);
+  await agent.post("/api/auth/login").send({
+    email: "customer@example.com",
+    password: strongPassword,
+  });
+
+  const wrongPasswordResponse = await agent.patch("/api/auth/password").send({
+    currentPassword: "Wrong@123",
+    newPassword: "NextPass@123",
+  });
+  assert.equal(wrongPasswordResponse.status, 401);
+
+  const changeResponse = await agent.patch("/api/auth/password").send({
+    currentPassword: strongPassword,
+    newPassword: "NextPass@123",
+  });
+  assert.equal(changeResponse.status, 200);
+
+  const oldSessionResponse = await agent.get("/api/auth/me");
+  assert.equal(oldSessionResponse.status, 401);
+
+  const newLoginResponse = await request(app).post("/api/auth/login").send({
+    email: "customer@example.com",
+    password: "NextPass@123",
+  });
+  assert.equal(newLoginResponse.status, 200);
+});
+
 test("forgot and reset password invalidate existing refresh tokens", async () => {
   await User.create({
     name: "Customer One",
