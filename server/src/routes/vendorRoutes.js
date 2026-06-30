@@ -1,5 +1,11 @@
 import { Router } from "express";
 import {
+  createAvailability,
+  deleteAvailability,
+  getAvailability,
+  updateAvailability,
+} from "../controllers/availabilityController.js";
+import {
   addPortfolioImages,
   createVendorProfile,
   deleteVendorProfile,
@@ -30,6 +36,25 @@ import { getVendorReviews } from "../controllers/reviewController.js";
 const router = Router();
 
 router.get("/", getVendors);
+router.get("/:id/availability", getAvailability);
+router.post(
+  "/availability",
+  protect,
+  authorizeRoles("vendor"),
+  createAvailability,
+);
+router.put(
+  "/availability",
+  protect,
+  authorizeRoles("vendor"),
+  updateAvailability,
+);
+router.delete(
+  "/availability",
+  protect,
+  authorizeRoles("vendor"),
+  deleteAvailability,
+);
 router.get("/:vendorId/reviews", getVendorReviews);
 router.get(
   "/me",

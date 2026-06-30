@@ -1,4 +1,5 @@
 import RefreshToken from "../models/RefreshToken.js";
+import Availability from "../models/Availability.js";
 import Booking from "../models/Booking.js";
 import Favorite from "../models/Favorite.js";
 import Review from "../models/Review.js";
@@ -384,6 +385,7 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     Favorite.deleteMany({ customerId: user._id }),
     Review.deleteMany({ customerId: user._id }),
     Booking.deleteMany({ customerId: user._id, status: { $nin: ["pending", "accepted"] } }),
+    vendor ? Availability.deleteOne({ vendorId: vendor._id }) : Promise.resolve(),
     revokeAllUserRefreshTokens(user._id),
   ]);
 

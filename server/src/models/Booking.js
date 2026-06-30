@@ -32,6 +32,24 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       required: [true, "Event date is required."],
     },
+    eventDateOnly: {
+      type: String,
+      match: [/^\d{4}-\d{2}-\d{2}$/, "Event date must use YYYY-MM-DD format."],
+      index: true,
+    },
+    eventStartTime: {
+      type: String,
+      match: [/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must use HH:mm format."],
+    },
+    eventEndTime: {
+      type: String,
+      match: [/^([01]\d|2[0-3]):[0-5]\d$/, "End time must use HH:mm format."],
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      default: "Asia/Kolkata",
+    },
     eventLocation: {
       type: String,
       required: [true, "Event location is required."],
@@ -67,5 +85,6 @@ const bookingSchema = new mongoose.Schema(
 
 bookingSchema.index({ vendorId: 1, createdAt: -1 });
 bookingSchema.index({ customerId: 1, createdAt: -1 });
+bookingSchema.index({ vendorId: 1, eventDateOnly: 1, status: 1 });
 
 export default mongoose.model("Booking", bookingSchema);

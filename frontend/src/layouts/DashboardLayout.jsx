@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  CalendarRange,
   Heart,
   LayoutDashboard,
   LogOut,
@@ -33,6 +34,11 @@ export default function DashboardLayout({ vendor = false }) {
           label: "Accepted Bookings",
           to: "/vendor/dashboard?view=accepted",
           icon: CalendarDays,
+        },
+        {
+          label: "Availability",
+          to: "/vendor/availability",
+          icon: CalendarRange,
         },
         {
           label: "Profile",

@@ -70,6 +70,11 @@ const initials = (name = "PZ") =>
     .slice(0, 2)
     .toUpperCase();
 
+const bookingTime = (booking) =>
+  booking.eventStartTime && booking.eventEndTime
+    ? ` · ${booking.eventStartTime}-${booking.eventEndTime}`
+    : "";
+
 export default function CustomerDashboardPage() {
   useDocumentTitle("Customer profile");
   const navigate = useNavigate();
@@ -416,6 +421,7 @@ export default function CustomerDashboardPage() {
                         <div>
                           <p className="text-sm font-bold">
                             {formatDate(booking.eventDate)}
+                            {bookingTime(booking)}
                           </p>
                           <span
                             className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${
@@ -504,6 +510,7 @@ export default function CustomerDashboardPage() {
                           </td>
                           <td className="px-5 py-4 text-ink/55">
                             {formatDate(booking.eventDate)}
+                            {bookingTime(booking)}
                           </td>
                           <td className="px-5 py-4 font-bold">
                             {formatCurrency(booking.budget)}
@@ -579,7 +586,10 @@ export default function CustomerDashboardPage() {
                         </div>
                         <div className="mt-4 flex items-center justify-between">
                           <div>
-                            <p className="text-sm">{formatDate(booking.eventDate)}</p>
+                            <p className="text-sm">
+                              {formatDate(booking.eventDate)}
+                              {bookingTime(booking)}
+                            </p>
                             <p className="mt-1 font-bold">
                               {formatCurrency(booking.budget)}
                             </p>

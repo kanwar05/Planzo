@@ -1,6 +1,11 @@
 import Booking, { BOOKING_STATUSES } from "../models/Booking.js";
 import Vendor from "../models/Vendor.js";
 import ApiError from "../utils/ApiError.js";
+import {
+  assertTimeRange,
+  assertVendorAvailable,
+  normalizeDateOnly,
+} from "../utils/availability.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
   requireFields,
@@ -31,6 +36,8 @@ export const createBooking = asyncHandler(async (req, res) => {
     "vendorId",
     "eventType",
     "eventDate",
+    "eventStartTime",
+    "eventEndTime",
     "eventLocation",
     "budget",
   ]);
@@ -43,19 +50,35 @@ export const createBooking = asyncHandler(async (req, res) => {
     throw new ApiError(400, "You cannot book your own vendor profile.");
   }
 
-  const eventDate = new Date(req.body.eventDate);
+  const eventDateOnly = normalizeDateOnly(req.body.eventDate, "event date");
+  const eventDate = new Date(`${eventDateOnly}T00:00:00.000Z`);
   if (Number.isNaN(eventDate.getTime())) {
     throw new ApiError(400, "Please provide a valid event date.");
   }
-  if (eventDate < new Date()) {
+  if (eventDate < new Date(new Date().toISOString().slice(0, 10))) {
     throw new ApiError(400, "Event date cannot be in the past.");
   }
+  const { startTime, endTime } = assertTimeRange(
+    String(req.body.eventStartTime),
+    String(req.body.eventEndTime),
+  );
+
+  await assertVendorAvailable({
+    vendorId: vendor._id,
+    dateOnly: eventDateOnly,
+    startTime,
+    endTime,
+  });
 
   const booking = await Booking.create({
     customerId: req.user._id,
     vendorId: vendor._id,
     eventType: req.body.eventType,
     eventDate,
+    eventDateOnly,
+    eventStartTime: startTime,
+    eventEndTime: endTime,
+    timezone: req.body.timezone || "Asia/Kolkata",
     eventLocation: req.body.eventLocation,
     budget: toNonNegativeNumber(req.body.budget, "Budget"),
     specialRequirements: req.body.specialRequirements || "",

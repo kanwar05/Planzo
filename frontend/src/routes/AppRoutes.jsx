@@ -14,6 +14,7 @@ import RegisterPage from "../pages/RegisterPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import ServicesPage from "../pages/ServicesPage";
 import VendorDashboardPage from "../pages/VendorDashboardPage";
+import VendorAvailabilityPage from "../pages/VendorAvailabilityPage";
 import VendorDetailsPage from "../pages/VendorDetailsPage";
 import VendorProfilePage from "../pages/VendorProfilePage";
 import VendorsPage from "../pages/VendorsPage";
@@ -68,6 +69,7 @@ export const appRoutes = [
         element: <DashboardLayout vendor />,
         children: [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
+          { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },
         ],
       },

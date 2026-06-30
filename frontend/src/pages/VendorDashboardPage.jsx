@@ -70,6 +70,11 @@ const initials = (name = "PZ") =>
     .slice(0, 2)
     .toUpperCase();
 
+const bookingTime = (booking) =>
+  booking.eventStartTime && booking.eventEndTime
+    ? ` · ${booking.eventStartTime}-${booking.eventEndTime}`
+    : "";
+
 const Stars = ({ value = 0 }) => (
   <span className="flex gap-0.5 text-amber-400">
     {[1, 2, 3, 4, 5].map((item) => (
@@ -377,6 +382,7 @@ export default function VendorDashboardPage() {
                               <span className="flex items-center gap-2">
                                 <CalendarCheck className="h-4 w-4" />
                                 {formatDate(request.eventDate)}
+                                {bookingTime(request)}
                               </span>
                               <span className="flex items-center gap-2">
                                 <MapPin className="h-4 w-4" />

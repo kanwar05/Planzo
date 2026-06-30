@@ -71,7 +71,11 @@ should be provisioned directly by a trusted administrator.
 - `GET /api/vendors/me` — current vendor's profile
 - `GET /api/vendors`
 - `GET /api/vendors/:id`
+- `GET /api/vendors/:id/availability`
 - `GET /api/vendors/:vendorId/reviews`
+- `POST /api/vendors/availability` — vendor only
+- `PUT /api/vendors/availability` — vendor only
+- `DELETE /api/vendors/availability` — vendor only
 - `PATCH /api/vendors/profile` — profile owner only
 - `DELETE /api/vendors/profile` — profile owner only
 - `POST /api/vendors/images` — upload any combination of vendor images
@@ -84,6 +88,55 @@ should be provisioned directly by a trusted administrator.
 
 Vendor listing supports `category`, `location`, `search`, `verified`, `page`,
 `limit`, and `sort=price_asc|price_desc` query parameters.
+
+The availability routes are also exposed at `/api/vendor/...` for clients that
+prefer the singular route shape, for example `GET /api/vendor/:id/availability`.
+
+### Vendor availability
+
+Vendor availability supports recurring weekly business hours, blocked full
+dates, holiday dates, blocked time slots, vacations, timezone, and slot
+duration. Customers can read public availability for a vendor; only the vendor
+who owns the profile can create, update, or delete their settings.
+
+Fetch availability and generated slots for a date:
+
+```bash
+curl "http://localhost:5001/api/vendors/<vendor-id>/availability?date=2026-08-20"
+```
+
+Create or replace availability settings:
+
+```bash
+curl -X PUT http://localhost:5001/api/vendors/availability \
+  -H "Authorization: Bearer <vendor-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "timezone": "Asia/Kolkata",
+    "slotDurationMinutes": 60,
+    "businessHours": [
+      { "dayOfWeek": 1, "isOpen": true, "startTime": "10:00", "endTime": "18:00" }
+    ],
+    "blockedDates": [
+      { "date": "2026-08-15", "type": "holiday", "reason": "Holiday" }
+    ],
+    "blockedTimeSlots": [
+      { "date": "2026-08-20", "startTime": "13:00", "endTime": "14:00" }
+    ],
+    "vacations": [
+      { "startDate": "2026-09-01", "endDate": "2026-09-05", "reason": "Vacation" }
+    ]
+  }'
+```
+
+Delete one availability item:
+
+```bash
+curl -X DELETE http://localhost:5001/api/vendors/availability \
+  -H "Authorization: Bearer <vendor-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"blockedTimeSlot","id":"<item-id>"}'
+```
 
 All image mutation routes require a vendor JWT:
 
@@ -156,6 +209,10 @@ returns a clear `502` response instead of silently orphaning assets.
 Customers can cancel their own bookings. Vendors can accept, reject, or
 complete requests sent to their vendor profile. Invalid status transitions
 are rejected.
+
+New booking requests must include `eventStartTime` and `eventEndTime` in
+`HH:mm` format. The API rejects unavailable dates, blocked slots, vacation
+dates, times outside business hours, and overlapping active bookings.
 
 ### Reviews and ratings
 
