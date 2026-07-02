@@ -26,6 +26,29 @@ const cloudinaryImageSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const packageSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, "Package name is required."],
+      trim: true,
+      maxlength: [50, "Package name cannot exceed 50 characters."],
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [300, "Package description cannot exceed 300 characters."],
+      default: "",
+    },
+    price: {
+      type: Number,
+      required: [true, "Package price is required."],
+      min: [0, "Package price cannot be negative."],
+    },
+  },
+  { _id: false },
+);
+
 const vendorSchema = new mongoose.Schema(
   {
     userId: {
@@ -61,6 +84,14 @@ const vendorSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Pricing is required."],
       min: [0, "Pricing cannot be negative."],
+    },
+    packages: {
+      type: [packageSchema],
+      default: [],
+      validate: {
+        validator: (packages) => packages.length <= 10,
+        message: "A vendor can have at most 10 packages.",
+      },
     },
     location: {
       type: String,
@@ -109,6 +140,15 @@ const vendorSchema = new mongoose.Schema(
     verified: {
       type: Boolean,
       default: false,
+    },
+    reported: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    reportReasons: {
+      type: [String],
+      default: [],
     },
   },
   {

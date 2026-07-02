@@ -4,9 +4,11 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import morgan from "morgan";
+import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import favoriteRoutes from "./routes/favoriteRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
@@ -93,10 +95,12 @@ app.get("/", (req, res) => {
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/vendor", vendorRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/favorites", favoriteRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/reviews", reviewRoutes);
 
 app.use(notFound);

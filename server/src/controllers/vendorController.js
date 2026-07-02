@@ -21,6 +21,7 @@ const EDITABLE_FIELDS = [
   "description",
   "experience",
   "pricing",
+  "packages",
   "location",
 ];
 
@@ -32,6 +33,28 @@ function normalizeVendorInput(body) {
   }
   if (data.pricing !== undefined) {
     data.pricing = toNonNegativeNumber(data.pricing, "Pricing");
+  }
+  if (data.packages !== undefined) {
+    if (!Array.isArray(data.packages)) {
+      throw new ApiError(400, "Packages must be an array.");
+    }
+    if (data.packages.length > 10) {
+      throw new ApiError(400, "A vendor can have at most 10 packages.");
+    }
+    data.packages = data.packages.map((pkg) => {
+      if (!pkg.name || typeof pkg.name !== "string") {
+        throw new ApiError(400, "Each package must have a valid name.");
+      }
+      if (pkg.price === undefined || pkg.price === null) {
+        throw new ApiError(400, "Each package must have a price.");
+      }
+      const price = toNonNegativeNumber(pkg.price, "Package price");
+      return {
+        name: pkg.name.trim(),
+        description: pkg.description ? String(pkg.description).trim() : "",
+        price,
+      };
+    });
   }
   return data;
 }
@@ -340,7 +363,7 @@ export const getVendors = asyncHandler(async (req, res) => {
     Math.max(Number.parseInt(req.query.limit, 10) || 12, 1),
     50,
   );
-  const filters = {};
+  const filters = { reported: false };
 
   if (req.query.category) filters.serviceCategory = req.query.category;
   if (req.query.verified === "true") filters.verified = true;
@@ -352,12 +375,49 @@ export const getVendors = asyncHandler(async (req, res) => {
   }
   if (req.query.search) filters.$text = { $search: req.query.search };
 
+  // Add minimum rating filter
+  if (req.query.minRating) {
+    const minRating = Number.parseFloat(req.query.minRating);
+    if (!Number.isNaN(minRating) && minRating >= 0 && minRating <= 5) {
+      filters.averageRating = { $gte: minRating };
+    }
+  }
+
+  // Add minimum experience filter
+  if (req.query.minExperience) {
+    const minExp = Number.parseInt(req.query.minExperience, 10);
+    if (!Number.isNaN(minExp) && minExp >= 0) {
+      filters.experience = { $gte: minExp };
+    }
+  }
+
+  // Add price range filter
+  if (req.query.minPrice || req.query.maxPrice) {
+    filters.pricing = {};
+    if (req.query.minPrice) {
+      const minPrice = Number.parseFloat(req.query.minPrice);
+      if (!Number.isNaN(minPrice) && minPrice >= 0) {
+        filters.pricing.$gte = minPrice;
+      }
+    }
+    if (req.query.maxPrice) {
+      const maxPrice = Number.parseFloat(req.query.maxPrice);
+      if (!Number.isNaN(maxPrice) && maxPrice >= 0) {
+        filters.pricing.$lte = maxPrice;
+      }
+    }
+  }
+
   const sort =
     req.query.sort === "price_asc"
       ? { pricing: 1 }
       : req.query.sort === "price_desc"
         ? { pricing: -1 }
-        : { verified: -1, averageRating: -1, rating: -1, createdAt: -1 };
+        : req.query.sort === "rating"
+          ? { averageRating: -1, verified: -1, createdAt: -1 }
+          : req.query.sort === "experience"
+            ? { experience: -1, verified: -1, createdAt: -1 }
+            : { verified: -1, averageRating: -1, rating: -1, createdAt: -1 };
 
   const [vendors, total] = await Promise.all([
     Vendor.find(filters)
