@@ -80,6 +80,22 @@ const reviewSchema = new mongoose.Schema(
       type: vendorReplySchema,
       default: null,
     },
+    status: {
+      type: String,
+      enum: ["active", "flagged", "hidden"],
+      default: "active",
+      index: true,
+    },
+    flaggedAt: {
+      type: Date,
+      default: null,
+    },
+    moderationReason: {
+      type: String,
+      trim: true,
+      maxlength: [500, "Moderation reason cannot exceed 500 characters."],
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -150,6 +150,15 @@ const vendorSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    suspended: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

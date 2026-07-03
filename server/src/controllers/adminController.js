@@ -4,7 +4,7 @@ import Booking from "../models/Booking.js";
 import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import { validateObjectId } from "../utils/validation.js";
+import { requireFields, validateObjectId } from "../utils/validation.js";
 
 // Verify vendor
 export const verifyVendor = asyncHandler(async (req, res) => {
@@ -109,6 +109,7 @@ export const deleteReview = asyncHandler(async (req, res) => {
 // Flag review for inappropriate content
 export const flagReview = asyncHandler(async (req, res) => {
   validateObjectId(req.params.reviewId, "review id");
+  requireFields(req.body, ["moderationReason"]);
 
   const review = await Review.findById(req.params.reviewId);
 
@@ -116,11 +117,14 @@ export const flagReview = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Review not found.");
   }
 
-  // In a real app, you'd have a flag field on the review model
-  // For now, we're just returning a success message
+  review.status = "flagged";
+  review.flaggedAt = new Date();
+  review.moderationReason = String(req.body.moderationReason).trim();
+  await review.save();
+
   res.status(200).json({
     success: true,
-    message: "Review flagged for review.",
+    message: "Review flagged for moderation.",
     review,
   });
 });
@@ -270,7 +274,8 @@ export const resolveVendorReport = asyncHandler(async (req, res) => {
     vendor.reported = false;
     vendor.reportReasons = [];
   } else if (action === "suspend") {
-    // In a real app, you'd have a suspended field on the vendor model
+    vendor.suspended = true;
+    vendor.suspendedAt = new Date();
     vendor.verified = false;
     vendor.reported = false;
     vendor.reportReasons = [];
