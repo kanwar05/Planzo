@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 
 export const NOTIFICATION_TYPES = [
+  "booking_created",
+  "booking_accepted",
+  "booking_rejected",
+  "booking_completed",
+  "review_created",
+  "vendor_replied",
   "booking_update",
   "review_reminder",
   "vendor_reply",

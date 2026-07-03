@@ -9,6 +9,7 @@ import {
   requireFields,
   validateObjectId,
 } from "../utils/validation.js";
+import { createNotification } from "./notificationController.js";
 
 const MAX_REVIEW_IMAGES = 4;
 
@@ -110,6 +111,15 @@ export const createReview = asyncHandler(async (req, res) => {
     }
     throw error;
   }
+
+  // Notify vendor of new review
+  await createNotification(
+    vendor.userId,
+    "review_created",
+    "New Review Received",
+    `You received a new review from a customer with ${parseRating(req.body.rating)} stars.`,
+    { reviewId: review._id, vendorId: booking.vendorId },
+  );
 
   await recalculateVendorRating(review.vendorId);
   await populateReview(review);
@@ -283,6 +293,15 @@ export const replyToReview = asyncHandler(async (req, res) => {
   };
   await review.save();
   await populateReview(review);
+
+  // Notify customer that vendor replied to their review
+  await createNotification(
+    review.customerId,
+    "vendor_replied",
+    "Vendor Replied to Your Review",
+    `The vendor has replied to your review.`,
+    { reviewId: review._id, vendorId: review.vendorId },
+  );
 
   res.status(200).json({
     success: true,
