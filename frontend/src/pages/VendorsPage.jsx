@@ -24,11 +24,15 @@ export default function VendorsPage() {
   const { user, isAuthenticated } = useAuth();
   const [search, setSearch] = useState(params.get("q") || "");
   const [category, setCategory] = useState(params.get("category") || "");
-  const [location, setLocation] = useState("");
-  const [rating, setRating] = useState("");
-  const [sort, setSort] = useState("recommended");
+  const [location, setLocation] = useState(params.get("location") || "");
+  const [minRating, setMinRating] = useState(params.get("minRating") || "");
+  const [minExperience, setMinExperience] = useState(params.get("minExperience") || "");
+  const [minPrice, setMinPrice] = useState(params.get("minPrice") || "");
+  const [maxPrice, setMaxPrice] = useState(params.get("maxPrice") || "");
+  const [sort, setSort] = useState(params.get("sort") || "recommended");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1 });
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
   const [favoriteLoadingId, setFavoriteLoadingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,11 +49,16 @@ export default function VendorsPage() {
           search: search || undefined,
           category: category || undefined,
           location: location || undefined,
-          limit: 50,
-          sort:
-            sort === "price_asc" || sort === "price_desc" ? sort : undefined,
+          minRating: minRating || undefined,
+          minExperience: minExperience || undefined,
+          minPrice: minPrice || undefined,
+          maxPrice: maxPrice || undefined,
+          sort: sort !== "recommended" ? sort : undefined,
+          limit: 12,
+          page: 1,
         });
         setVendors(data.vendors);
+        setPagination(data.pagination);
       } catch (requestError) {
         setError(getApiError(requestError, "Unable to load vendors."));
       } finally {
@@ -58,7 +67,7 @@ export default function VendorsPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [search, category, location, sort]);
+  }, [search, category, location, minRating, minExperience, minPrice, maxPrice, sort]);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== "customer") {
@@ -81,39 +90,23 @@ export default function VendorsPage() {
     const next = {};
     if (search) next.q = search;
     if (category) next.category = category;
+    if (location) next.location = location;
+    if (minRating) next.minRating = minRating;
+    if (minExperience) next.minExperience = minExperience;
+    if (minPrice) next.minPrice = minPrice;
+    if (maxPrice) next.maxPrice = maxPrice;
+    if (sort && sort !== "recommended") next.sort = sort;
     setParams(next, { replace: true });
-  }, [search, category, setParams]);
-
-  const filtered = useMemo(() => {
-    const result = vendors.filter(
-      (vendor) =>
-        !rating ||
-        (vendor.averageRating || vendor.rating || 0) >= Number(rating),
-    );
-
-    if (sort === "rating") {
-      return [...result].sort(
-        (a, b) =>
-          (b.averageRating || b.rating || 0) -
-          (a.averageRating || a.rating || 0),
-      );
-    }
-    if (sort === "experience") {
-      return [...result].sort((a, b) => b.experience - a.experience);
-    }
-    return result;
-  }, [vendors, rating, sort]);
-
-  const locations = useMemo(
-    () => [...new Set(vendors.map((vendor) => vendor.location))].sort(),
-    [vendors],
-  );
+  }, [search, category, location, minRating, minExperience, minPrice, maxPrice, sort, setParams]);
 
   const clear = () => {
     setSearch("");
     setCategory("");
     setLocation("");
-    setRating("");
+    setMinRating("");
+    setMinExperience("");
+    setMinPrice("");
+    setMaxPrice("");
     setSort("recommended");
     setParams({});
   };
@@ -183,16 +176,12 @@ export default function VendorsPage() {
       </div>
       <div>
         <label className="label">Location</label>
-        <select
+        <input
           value={location}
           onChange={(event) => setLocation(event.target.value)}
           className="field"
-        >
-          <option value="">All locations</option>
-          {locations.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
+          placeholder="Search location..."
+        />
       </div>
       <div>
         <label className="label">Minimum rating</label>
@@ -201,9 +190,9 @@ export default function VendorsPage() {
             <button
               type="button"
               key={item}
-              onClick={() => setRating(rating === item ? "" : item)}
+              onClick={() => setMinRating(minRating === item ? "" : item)}
               className={`rounded-xl border px-3 py-2 text-xs font-bold ${
-                rating === item
+                minRating === item
                   ? "border-coral bg-coral/10 text-coral"
                   : "bg-white"
               }`}
@@ -211,6 +200,38 @@ export default function VendorsPage() {
               {item}+ ★
             </button>
           ))}
+        </div>
+      </div>
+      <div>
+        <label className="label">Minimum experience (years)</label>
+        <input
+          type="number"
+          min="0"
+          value={minExperience}
+          onChange={(event) => setMinExperience(event.target.value)}
+          className="field"
+          placeholder="e.g., 5"
+        />
+      </div>
+      <div>
+        <label className="label">Price range</label>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="0"
+            value={minPrice}
+            onChange={(event) => setMinPrice(event.target.value)}
+            className="field flex-1"
+            placeholder="Min"
+          />
+          <input
+            type="number"
+            min="0"
+            value={maxPrice}
+            onChange={(event) => setMaxPrice(event.target.value)}
+            className="field flex-1"
+            placeholder="Max"
+          />
         </div>
       </div>
     </div>
@@ -264,8 +285,11 @@ export default function VendorsPage() {
         <div>
           <div className="mb-5 flex items-center justify-between">
             <p className="text-sm text-ink/50">
-              <strong className="text-ink">{filtered.length}</strong> trusted
+              <strong className="text-ink">{vendors.length}</strong> trusted
               vendors
+              {pagination.pages > 1 && (
+                <span> (Page {pagination.page} of {pagination.pages})</span>
+              )}
             </p>
             <select
               value={sort}
@@ -283,9 +307,9 @@ export default function VendorsPage() {
             <LoadingSkeleton />
           ) : error ? (
             <EmptyState title="Could not load vendors" description={error} />
-          ) : filtered.length ? (
+          ) : vendors.length ? (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((vendor) => (
+              {vendors.map((vendor) => (
                 <VendorCard
                   key={vendor._id}
                   vendor={vendor}

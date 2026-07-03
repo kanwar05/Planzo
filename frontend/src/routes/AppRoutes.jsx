@@ -3,6 +3,11 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import AuthLayout from "../layouts/AuthLayout";
 import DashboardLayout from "../layouts/DashboardLayout";
 import MainLayout from "../layouts/MainLayout";
+import AdminDashboardPage from "../pages/AdminDashboardPage";
+import AdminBookingsPage from "../pages/AdminBookingsPage";
+import AdminReportedVendorsPage from "../pages/AdminReportedVendorsPage";
+import AdminReviewsPage from "../pages/AdminReviewsPage";
+import AdminVerifyVendorsPage from "../pages/AdminVerifyVendorsPage";
 import BookingRequestPage from "../pages/BookingRequestPage";
 import CustomerDashboardPage from "../pages/CustomerDashboardPage";
 import CustomerFavoritesPage from "../pages/CustomerFavoritesPage";
@@ -71,6 +76,21 @@ export const appRoutes = [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
           { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },
+        ],
+      },
+    ],
+  },
+  {
+    element: <ProtectedRoute allowedRoles={["admin"]} />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [
+          { path: "/admin", element: <AdminDashboardPage /> },
+          { path: "/admin/vendors/unverified", element: <AdminVerifyVendorsPage /> },
+          { path: "/admin/vendors/reported", element: <AdminReportedVendorsPage /> },
+          { path: "/admin/reviews", element: <AdminReviewsPage /> },
+          { path: "/admin/bookings", element: <AdminBookingsPage /> },
         ],
       },
     ],
