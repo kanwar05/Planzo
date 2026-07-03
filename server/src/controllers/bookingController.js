@@ -12,6 +12,7 @@ import {
   toNonNegativeNumber,
   validateObjectId,
 } from "../utils/validation.js";
+import { createNotification } from "./notificationController.js";
 
 const populateBooking = (query) =>
   query
@@ -83,6 +84,15 @@ export const createBooking = asyncHandler(async (req, res) => {
     budget: toNonNegativeNumber(req.body.budget, "Budget"),
     specialRequirements: req.body.specialRequirements || "",
   });
+
+  // Notify vendor of new booking request
+  await createNotification(
+    vendor.userId,
+    "booking_created",
+    "New Booking Request",
+    `You received a new booking request for ${req.body.eventType}.`,
+    { bookingId: booking._id, vendorId: vendor._id },
+  );
 
   await populateBookingDocument(booking);
 
@@ -176,9 +186,44 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     );
   }
 
+  const oldStatus = booking.status;
   booking.status = status;
   await booking.save();
   await populateBookingDocument(booking);
+
+  // Notify customer when vendor accepts, rejects, or completes booking
+  if (isVendor || isAdmin) {
+    let notificationType = "booking_update";
+    let title = "Booking Update";
+    let message = "";
+
+    if (status === "accepted") {
+      notificationType = "booking_accepted";
+      title = "Booking Accepted";
+      message = `Your booking request has been accepted. The vendor will contact you soon.`;
+    } else if (status === "rejected") {
+      notificationType = "booking_rejected";
+      title = "Booking Rejected";
+      message = `Your booking request has been rejected by the vendor.`;
+    } else if (status === "completed") {
+      notificationType = "booking_completed";
+      title = "Booking Completed";
+      message = `Your booking has been completed. Please leave a review!`;
+    } else if (status === "cancelled") {
+      title = "Booking Cancelled";
+      message = `Your booking has been cancelled.`;
+    }
+
+    if (message) {
+      await createNotification(
+        booking.customerId,
+        notificationType,
+        title,
+        message,
+        { bookingId: booking._id, vendorId: booking.vendorId },
+      );
+    }
+  }
 
   res.status(200).json({
     success: true,

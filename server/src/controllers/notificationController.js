@@ -124,18 +124,23 @@ export const deleteAllNotifications = asyncHandler(async (req, res) => {
 });
 
 // Internal function to create notifications (called from booking/review controllers)
-export const createNotification = asyncHandler(
-  async (userId, type, title, message, relatedIds = {}) => {
-    const notification = await Notification.create({
-      userId,
-      type,
-      title,
-      message,
-      bookingId: relatedIds.bookingId || null,
-      reviewId: relatedIds.reviewId || null,
-      vendorId: relatedIds.vendorId || null,
-      actionUrl: relatedIds.actionUrl || null,
-    });
-    return notification;
-  },
-);
+// NOT wrapped with asyncHandler - this is a helper function, not a route handler
+export const createNotification = async (
+  userId,
+  type,
+  title,
+  message,
+  relatedIds = {},
+) => {
+  const notification = await Notification.create({
+    userId,
+    type,
+    title,
+    message,
+    bookingId: relatedIds.bookingId || null,
+    reviewId: relatedIds.reviewId || null,
+    vendorId: relatedIds.vendorId || null,
+    actionUrl: relatedIds.actionUrl || null,
+  });
+  return notification;
+};
