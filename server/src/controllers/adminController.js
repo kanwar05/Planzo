@@ -1,6 +1,6 @@
 import Vendor from "../models/Vendor.js";
 import Review from "../models/Review.js";
-import Booking from "../models/Booking.js";
+import Booking, { BOOKING_STATUSES } from "../models/Booking.js";
 import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -169,7 +169,16 @@ export const getBookingsForAdmin = asyncHandler(async (req, res) => {
   );
   const filters = {};
 
-  if (req.query.status) filters.status = req.query.status;
+  if (req.query.status) {
+    const status = String(req.query.status).toLowerCase();
+    if (!BOOKING_STATUSES.includes(status)) {
+      throw new ApiError(
+        400,
+        `Invalid status. Must be one of: ${BOOKING_STATUSES.join(", ")}.`,
+      );
+    }
+    filters.status = status;
+  }
 
   const [bookings, total] = await Promise.all([
     Booking.find(filters)
