@@ -2,6 +2,7 @@ import RefreshToken from "../models/RefreshToken.js";
 import Availability from "../models/Availability.js";
 import Booking from "../models/Booking.js";
 import Favorite from "../models/Favorite.js";
+import Notification from "../models/Notification.js";
 import Review from "../models/Review.js";
 import User from "../models/User.js";
 import Vendor from "../models/Vendor.js";
@@ -381,14 +382,39 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     ...new Set(reviews.map((review) => String(review.vendorId))),
   ];
 
-  await Promise.all([
+  // Cleanup operations
+  const cleanupPromises = [
+    // Delete customer's favorites
     Favorite.deleteMany({ customerId: user._id }),
+    // Delete customer's reviews
     Review.deleteMany({ customerId: user._id }),
+    // Delete customer's bookings (non-active)
     Booking.deleteMany({ customerId: user._id, status: { $nin: ["pending", "accepted"] } }),
-    vendor ? Availability.deleteOne({ vendorId: vendor._id }) : Promise.resolve(),
+    // Delete notifications for this user
+    Notification.deleteMany({ userId: user._id }),
+    // Revoke all refresh tokens
     revokeAllUserRefreshTokens(user._id),
-  ]);
+  ];
 
+  // If user is a vendor, add vendor-specific cleanup
+  if (vendor) {
+    cleanupPromises.push(
+      // Delete vendor profile
+      vendor.deleteOne(),
+      // Delete bookings to this vendor (from other customers)
+      Booking.deleteMany({ vendorId: vendor._id, status: { $nin: ["pending", "accepted"] } }),
+      // Delete favorites pointing to this vendor
+      Favorite.deleteMany({ vendorId: vendor._id }),
+      // Delete reviews of this vendor
+      Review.deleteMany({ vendorId: vendor._id }),
+      // Delete vendor availability
+      Availability.deleteOne({ vendorId: vendor._id }),
+    );
+  }
+
+  await Promise.all(cleanupPromises);
+
+  // Recalculate ratings for vendors affected by customer's deleted reviews
   await Promise.all(
     affectedVendorIds.map((vendorId) => recalculateVendorRating(vendorId)),
   );
