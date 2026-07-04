@@ -19,7 +19,11 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
 
   if (allowedRoles.length && !allowedRoles.includes(user.role)) {
     const destination =
-      user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+      user.role === "admin"
+        ? "/admin"
+        : user.role === "vendor"
+          ? "/vendor/dashboard"
+          : "/customer/dashboard";
     return <Navigate to={destination} replace />;
   }
 
