@@ -49,6 +49,36 @@ const packageSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const verificationDocumentSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      required: [true, "Document URL is required."],
+      trim: true,
+    },
+    publicId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    originalName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    mimeType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
 const vendorSchema = new mongoose.Schema(
   {
     userId: {
@@ -141,6 +171,25 @@ const vendorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+      index: true,
+    },
+    verificationDocuments: {
+      type: [verificationDocumentSchema],
+      default: [],
+    },
+    verificationRejectionReason: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    verificationSubmittedAt: {
+      type: Date,
+      default: null,
+    },
     reported: {
       type: Boolean,
       default: false,
@@ -182,6 +231,25 @@ vendorSchema.pre("init", function normalizeLegacyPortfolio(data) {
       data[field] = { url: data[field], publicId: "" };
     }
   }
+});
+
+vendorSchema.pre("save", function syncVerificationState(next) {
+  if (!this.verificationStatus) {
+    this.verificationStatus = this.verified ? "approved" : "pending";
+  }
+
+  if (this.verificationStatus === "approved") {
+    this.verified = true;
+    this.verificationRejectionReason = "";
+  } else {
+    this.verified = false;
+  }
+
+  if (!this.verificationRejectionReason) {
+    this.verificationRejectionReason = "";
+  }
+
+  next();
 });
 
 vendorSchema.index({

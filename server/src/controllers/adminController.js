@@ -6,19 +6,32 @@ import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
 
-// Verify vendor
-export const verifyVendor = asyncHandler(async (req, res) => {
-  validateObjectId(req.params.vendorId, "vendor id");
-
-  const vendor = await Vendor.findByIdAndUpdate(
-    req.params.vendorId,
-    { verified: true },
-    { new: true },
-  );
+const updateVendorVerification = async (vendorId, status, reason = "") => {
+  const vendor = await Vendor.findById(vendorId);
 
   if (!vendor) {
     throw new ApiError(404, "Vendor not found.");
   }
+
+  if (status === "approved" && !vendor.verificationDocuments?.length) {
+    throw new ApiError(
+      400,
+      "Vendor must submit verification documents before approval.",
+    );
+  }
+
+  vendor.verificationStatus = status;
+  vendor.verificationRejectionReason = status === "rejected" ? reason.trim() : "";
+  vendor.verified = status === "approved";
+  await vendor.save();
+  return vendor;
+};
+
+// Verify vendor
+export const verifyVendor = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.vendorId, "vendor id");
+
+  const vendor = await updateVendorVerification(req.params.vendorId, "approved");
 
   res.status(200).json({
     success: true,
@@ -27,23 +40,39 @@ export const verifyVendor = asyncHandler(async (req, res) => {
   });
 });
 
+// Reject vendor
+export const rejectVendor = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.vendorId, "vendor id");
+
+  const reason =
+    typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+
+  const vendor = await updateVendorVerification(
+    req.params.vendorId,
+    "rejected",
+    reason || "No reason provided.",
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Vendor rejected successfully.",
+    vendor,
+  });
+});
+
 // Unverify vendor
 export const unverifyVendor = asyncHandler(async (req, res) => {
   validateObjectId(req.params.vendorId, "vendor id");
 
-  const vendor = await Vendor.findByIdAndUpdate(
+  const vendor = await updateVendorVerification(
     req.params.vendorId,
-    { verified: false },
-    { new: true },
+    "rejected",
+    "No reason provided.",
   );
-
-  if (!vendor) {
-    throw new ApiError(404, "Vendor not found.");
-  }
 
   res.status(200).json({
     success: true,
-    message: "Vendor unverified.",
+    message: "Vendor rejected successfully.",
     vendor,
   });
 });
@@ -57,12 +86,12 @@ export const getUnverifiedVendors = asyncHandler(async (req, res) => {
   );
 
   const [vendors, total] = await Promise.all([
-    Vendor.find({ verified: false })
+    Vendor.find({ verificationStatus: "pending" })
       .populate("userId", "name email phone")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
-    Vendor.countDocuments({ verified: false }),
+    Vendor.countDocuments({ verificationStatus: "pending" }),
   ]);
 
   res.status(200).json({

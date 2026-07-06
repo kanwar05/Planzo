@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, X } from "lucide-react";
+import { Check, FileText, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import EmptyState from "../components/EmptyState";
@@ -61,10 +61,13 @@ export default function AdminUnverifiedVendorsPage() {
   };
 
   const handleReject = async (vendorId) => {
+    const reason = window.prompt("Add a rejection reason for this vendor (optional):");
     setVerifyingId(vendorId);
     setError("");
     try {
-      await api.patch(`/admin/vendors/${vendorId}/unverify`);
+      await api.patch(`/admin/vendors/${vendorId}/reject`, {
+        reason: reason || "",
+      });
       setVendors((prev) => prev.filter((v) => v._id !== vendorId));
       setSuccess("Vendor rejected");
     } catch (err) {
@@ -161,6 +164,45 @@ export default function AdminUnverifiedVendorsPage() {
                         <p className="text-sm text-ink/60">
                           {vendor.userId?.email}
                         </p>
+                      </div>
+                      <div className="mt-4 rounded-2xl border border-ink/8 bg-sand/40 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold text-ink/60">Verification</p>
+                          <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${
+                            vendor.verificationStatus === "approved"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : vendor.verificationStatus === "rejected"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-white text-ink/60"
+                          }`}>
+                            {vendor.verificationStatus || "pending"}
+                          </span>
+                        </div>
+                        {vendor.verificationRejectionReason ? (
+                          <p className="mt-3 text-sm text-red-600">
+                            {vendor.verificationRejectionReason}
+                          </p>
+                        ) : null}
+                        {Array.isArray(vendor.verificationDocuments) && vendor.verificationDocuments.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {vendor.verificationDocuments.map((document, index) => (
+                              <a
+                                key={`${document.url}-${index}`}
+                                href={document.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 text-sm font-semibold text-coral"
+                              >
+                                <FileText className="h-4 w-4" />
+                                {document.originalName || `Document ${index + 1}`}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm text-ink/60">
+                            No documents uploaded yet.
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col gap-3">

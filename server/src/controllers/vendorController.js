@@ -68,6 +68,20 @@ const destroyCloudinaryImages = async (files = []) => {
   );
 };
 
+const destroyCloudinaryDocuments = async (documents = []) => {
+  await Promise.allSettled(
+    documents
+      .map((document) => document?.publicId)
+      .filter(Boolean)
+      .map((publicId) =>
+        cloudinary.uploader.destroy(publicId, {
+          resource_type: "raw",
+          invalidate: true,
+        }),
+      ),
+  );
+};
+
 const toCloudinaryImage = (file) => ({
   url: file.path,
   publicId: file.filename,
@@ -75,6 +89,30 @@ const toCloudinaryImage = (file) => ({
 
 const flattenUploadedFiles = (files) =>
   Array.isArray(files) ? files : Object.values(files || {}).flat();
+
+const normalizeVerificationDocuments = (documents = []) => {
+  if (Array.isArray(documents)) {
+    return documents
+      .filter((doc) => doc?.url)
+      .map((doc) => ({
+        url: doc.url,
+        publicId: doc.publicId || "",
+        originalName: doc.originalName || "",
+        mimeType: doc.mimeType || "",
+        uploadedAt: doc.uploadedAt || new Date(),
+      }));
+  }
+
+  if (typeof documents === "string") {
+    try {
+      return normalizeVerificationDocuments(JSON.parse(documents));
+    } catch {
+      throw new ApiError(400, "Verification documents must be valid JSON.");
+    }
+  }
+
+  return [];
+};
 
 const destroyCloudinaryAsset = async (publicId, label = "image") => {
   if (!publicId) return;
@@ -236,6 +274,48 @@ export const removeCoverImage = deleteSingleVendorImage(
   "Cover image",
 );
 
+export const submitVerificationDocuments = asyncHandler(async (req, res) => {
+  const files = req.files || [];
+  const rawDocuments = req.body?.documents;
+  const uploadedDocuments = files.length
+    ? files.map((file) => ({
+        url: file.path,
+        publicId: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+      }))
+    : normalizeVerificationDocuments(rawDocuments);
+
+  if (!uploadedDocuments.length) {
+    throw new ApiError(400, "Upload at least one verification document.");
+  }
+
+  const vendor = req.vendorProfile;
+  const replacedDocuments = [...(vendor.verificationDocuments || [])];
+  vendor.verificationDocuments = uploadedDocuments;
+  vendor.verificationStatus = "pending";
+  vendor.verificationRejectionReason = "";
+  vendor.verificationSubmittedAt = new Date();
+  vendor.verified = false;
+
+  try {
+    await vendor.save();
+  } catch (error) {
+    if (files.length) {
+      await destroyCloudinaryDocuments(uploadedDocuments);
+    }
+    throw error;
+  }
+
+  await destroyCloudinaryDocuments(replacedDocuments);
+
+  res.status(200).json({
+    success: true,
+    message: "Verification documents submitted successfully.",
+    vendor,
+  });
+});
+
 export const addPortfolioImages = asyncHandler(async (req, res) => {
   const files = req.files || [];
 
@@ -366,7 +446,7 @@ export const getVendors = asyncHandler(async (req, res) => {
   const filters = { reported: false };
 
   if (req.query.category) filters.serviceCategory = req.query.category;
-  if (req.query.verified === "true") filters.verified = true;
+  if (req.query.verified === "true") filters.verificationStatus = "approved";
   if (req.query.location) {
     filters.location = {
       $regex: String(req.query.location).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
