@@ -18,6 +18,7 @@ import {
   replaceCoverImage,
   replaceProfileImage,
   requireVendorProfile,
+  submitVerificationDocuments,
   updateVendorProfile,
   updateVendorImages,
 } from "../controllers/vendorController.js";
@@ -29,6 +30,7 @@ import {
   uploadCoverImage,
   uploadPortfolioImages,
   uploadProfileImage,
+  uploadVerificationDocuments,
   uploadVendorImages,
 } from "../middleware/upload.js";
 import { getVendorReviews } from "../controllers/reviewController.js";
@@ -79,6 +81,14 @@ router.delete(
   protect,
   authorizeRoles("vendor"),
   deleteVendorProfile,
+);
+router.post(
+  "/verification-documents",
+  protect,
+  authorizeRoles("vendor"),
+  requireVendorProfile,
+  uploadVerificationDocuments,
+  submitVerificationDocuments,
 );
 router.post(
   "/images",

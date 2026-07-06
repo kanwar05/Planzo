@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   verifyVendor,
+  rejectVendor,
   unverifyVendor,
   getUnverifiedVendors,
   deleteReview,
@@ -25,6 +26,7 @@ router.get("/stats", getAdminStats);
 // Vendor management
 router.get("/vendors/unverified", getUnverifiedVendors);
 router.patch("/vendors/:vendorId/verify", verifyVendor);
+router.patch("/vendors/:vendorId/reject", rejectVendor);
 router.patch("/vendors/:vendorId/unverify", unverifyVendor);
 
 // Reported vendors

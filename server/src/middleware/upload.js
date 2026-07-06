@@ -6,22 +6,34 @@ import cloudinary, {
 } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 
-const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-const ALLOWED_MIME_TYPES = new Set([
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
 ]);
+const DOCUMENT_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ".pdf"]);
+const DOCUMENT_MIME_TYPES = new Set([
+  ...IMAGE_MIME_TYPES,
+  "application/pdf",
+]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
-const createStorage = (folder) =>
+const getCloudinaryResourceType = (file) => {
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  return extension === ".pdf" ? "raw" : "image";
+};
+
+const createStorage = (folder, options = {}) =>
   new CloudinaryStorage({
     cloudinary,
     params: async (req, file) => ({
       folder: typeof folder === "function" ? folder(file) : folder,
-      resource_type: "image",
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      transformation: [{ quality: "auto", fetch_format: "auto" }],
+      resource_type: options.resourceType || "image",
+      allowed_formats: options.allowedFormats || ["jpg", "jpeg", "png", "webp"],
+      ...(options.resourceType === "image"
+        ? { transformation: [{ quality: "auto", fetch_format: "auto" }] }
+        : {}),
     }),
   });
 
@@ -29,8 +41,8 @@ const imageFileFilter = (req, file, callback) => {
   const extension = path.extname(file.originalname).toLowerCase();
 
   if (
-    !ALLOWED_EXTENSIONS.has(extension) ||
-    !ALLOWED_MIME_TYPES.has(file.mimetype)
+    !IMAGE_EXTENSIONS.has(extension) ||
+    !IMAGE_MIME_TYPES.has(file.mimetype)
   ) {
     return callback(
       new ApiError(400, "Only JPG, JPEG, PNG, and WEBP images are allowed."),
@@ -40,16 +52,31 @@ const imageFileFilter = (req, file, callback) => {
   return callback(null, true);
 };
 
-const createUploader = (folder, files) =>
+const documentFileFilter = (req, file, callback) => {
+  const extension = path.extname(file.originalname).toLowerCase();
+
+  if (
+    !DOCUMENT_EXTENSIONS.has(extension) ||
+    !DOCUMENT_MIME_TYPES.has(file.mimetype)
+  ) {
+    return callback(
+      new ApiError(400, "Only JPG, JPEG, PNG, WEBP, and PDF files are allowed."),
+    );
+  }
+
+  return callback(null, true);
+};
+
+const createUploader = (folder, files, fileFilter = imageFileFilter, options = {}) =>
   multer({
-    storage: createStorage(folder),
+    storage: createStorage(folder, options),
     limits: {
       fileSize: MAX_IMAGE_SIZE,
       files,
       fields: 10,
       parts: files + 10,
     },
-    fileFilter: imageFileFilter,
+    fileFilter,
   });
 
 const cleanupRequestUploads = async (req) => {
@@ -62,11 +89,11 @@ const cleanupRequestUploads = async (req) => {
 
   await Promise.allSettled(
     files
-      .map((file) => file.filename)
-      .filter(Boolean)
-      .map((publicId) =>
-        cloudinary.uploader.destroy(publicId, {
-          resource_type: "image",
+      .map((file) => ({ publicId: file.filename, resourceType: getCloudinaryResourceType(file) }))
+      .filter((file) => file.publicId)
+      .map((file) =>
+        cloudinary.uploader.destroy(file.publicId, {
+          resource_type: file.resourceType,
           invalidate: true,
         }),
       ),
@@ -113,6 +140,19 @@ export const uploadCoverImage = ensureCloudinaryConfigured(
 export const uploadPortfolioImages = ensureCloudinaryConfigured(
   createUploader("planzo/vendors/portfolio", 8).array("images", 8),
 );
+
+export const uploadVerificationDocuments = (req, res, next) => {
+  if (!req.is("multipart/form-data")) return next();
+
+  return ensureCloudinaryConfigured(
+    createUploader(
+      "planzo/vendors/verification",
+      5,
+      documentFileFilter,
+      { resourceType: "raw", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
+    ).array("documents", 5),
+  )(req, res, next);
+};
 
 const reviewImageUpload = createUploader(
   "planzo/reviews",

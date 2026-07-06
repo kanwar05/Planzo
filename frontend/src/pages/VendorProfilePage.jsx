@@ -2,12 +2,16 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   Building2,
+  CheckCircle2,
+  Clock3,
+  FileText,
   ImagePlus,
   IndianRupee,
   Layers3,
   MapPin,
   Save,
   Sparkles,
+  ShieldAlert,
   Trash2,
   Upload,
   X,
@@ -28,6 +32,7 @@ import {
 import {
   deletePortfolioImage,
   uploadPortfolioImages,
+  uploadVerificationDocuments,
 } from "../services/uploadService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency } from "../utils/format";
@@ -46,6 +51,12 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
+const ALLOWED_DOCUMENT_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_PORTFOLIO_IMAGES = 8;
 
@@ -55,6 +66,16 @@ const normalizePortfolioImages = (images = []) =>
       typeof image === "string" ? { url: image, publicId: "" } : image,
     )
     .filter((image) => image?.url);
+
+const normalizeVerificationDocuments = (documents = []) =>
+  (documents || [])
+    .filter((doc) => doc?.url)
+    .map((doc) => ({
+      url: doc.url,
+      publicId: doc.publicId || "",
+      originalName: doc.originalName || doc.url.split("/").pop() || "Document",
+      mimeType: doc.mimeType || "",
+    }));
 
 export default function VendorProfilePage() {
   useDocumentTitle("Vendor profile setup");
@@ -68,9 +89,14 @@ export default function VendorProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [portfolioImages, setPortfolioImages] = useState([]);
+  const [verificationDocuments, setVerificationDocuments] = useState([]);
+  const [verificationStatus, setVerificationStatus] = useState("pending");
+  const [verificationReason, setVerificationReason] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [selectedVerificationFiles, setSelectedVerificationFiles] = useState([]);
   const selectedFilesRef = useRef([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVerification, setUploadingVerification] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState("");
   const [toast, setToast] = useState({ message: "", type: "success" });
 
@@ -87,6 +113,11 @@ export default function VendorProfilePage() {
           location: profile.location,
         });
         setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
+        setVerificationDocuments(
+          normalizeVerificationDocuments(profile.verificationDocuments),
+        );
+        setVerificationStatus(profile.verificationStatus || "pending");
+        setVerificationReason(profile.verificationRejectionReason || "");
       })
       .catch((error) => {
         if (error.response?.status !== 404) {
@@ -153,6 +184,11 @@ export default function VendorProfilePage() {
         type: "success",
       });
       setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
+      setVerificationDocuments(
+        normalizeVerificationDocuments(profile.verificationDocuments),
+      );
+      setVerificationStatus(profile.verificationStatus || "pending");
+      setVerificationReason(profile.verificationRejectionReason || "");
     } catch (error) {
       setToast({
         message: getApiError(error, "Unable to save your vendor profile."),
@@ -216,6 +252,43 @@ export default function VendorProfilePage() {
     );
   };
 
+  const selectVerificationDocuments = (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+
+    if (!files.length) return;
+
+    const invalidType = files.find(
+      (file) =>
+        !ALLOWED_DOCUMENT_TYPES.has(file.type) &&
+        !file.name.toLowerCase().endsWith(".pdf"),
+    );
+    if (invalidType) {
+      setToast({
+        message: "Only PDF, JPG, PNG, and WEBP files are allowed.",
+        type: "error",
+      });
+      return;
+    }
+
+    const oversized = files.find((file) => file.size > MAX_IMAGE_SIZE);
+    if (oversized) {
+      setToast({
+        message: "Each document must be 5MB or smaller.",
+        type: "error",
+      });
+      return;
+    }
+
+    setSelectedVerificationFiles((current) => [...current, ...files]);
+  };
+
+  const removeSelectedVerificationFile = (fileName) => {
+    setSelectedVerificationFiles((current) =>
+      current.filter((file) => file.name !== fileName),
+    );
+  };
+
   const uploadImages = async () => {
     if (!profileExists) {
       setToast({
@@ -255,6 +328,50 @@ export default function VendorProfilePage() {
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const uploadVerificationDocs = async () => {
+    if (!profileExists) {
+      setToast({
+        message: "Please create your vendor profile before uploading verification documents.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (!selectedVerificationFiles.length) {
+      setToast({
+        message: "Select at least one document to upload.",
+        type: "error",
+      });
+      return;
+    }
+
+    setUploadingVerification(true);
+    setToast({ message: "", type: "success" });
+
+    try {
+      const profile = await uploadVerificationDocuments(
+        selectedVerificationFiles,
+      );
+      setSelectedVerificationFiles([]);
+      setVerificationDocuments(
+        normalizeVerificationDocuments(profile.verificationDocuments),
+      );
+      setVerificationStatus(profile.verificationStatus || "pending");
+      setVerificationReason(profile.verificationRejectionReason || "");
+      setToast({
+        message: "Verification documents uploaded successfully.",
+        type: "success",
+      });
+    } catch (error) {
+      setToast({
+        message: getApiError(error, "Unable to upload verification documents."),
+        type: "error",
+      });
+    } finally {
+      setUploadingVerification(false);
     }
   };
 
@@ -452,6 +569,133 @@ export default function VendorProfilePage() {
                 className="field min-h-44 resize-none"
               />
             </label>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-plum/10 text-plum">
+                  <FileText className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-extrabold">Verification documents</h2>
+                  <p className="mt-1 text-sm text-ink/45">
+                    Upload ID or business proof so admins can verify your account.
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-extrabold ${
+                  verificationStatus === "approved"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : verificationStatus === "rejected"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-sand text-ink/60"
+                }`}
+              >
+                {verificationStatus === "approved" ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : verificationStatus === "rejected" ? (
+                  <ShieldAlert className="h-4 w-4" />
+                ) : (
+                  <Clock3 className="h-4 w-4" />
+                )}
+                {verificationStatus === "approved"
+                  ? "Approved"
+                  : verificationStatus === "rejected"
+                    ? "Rejected"
+                    : "Pending review"}
+              </span>
+            </div>
+
+            <div className="mt-6 rounded-[1.5rem] border border-ink/8 bg-sand/40 p-4 text-sm text-ink/60">
+              {verificationStatus === "rejected" && verificationReason ? (
+                <p className="font-semibold text-red-600">
+                  Admin feedback: {verificationReason}
+                </p>
+              ) : (
+                <p>
+                  {verificationDocuments.length
+                    ? "Your latest documents are waiting for admin review."
+                    : "Upload a government ID, business registration document, or any proof of your business."}
+                </p>
+              )}
+            </div>
+
+            {verificationDocuments.length > 0 && (
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
+                  Uploaded documents
+                </p>
+                <div className="mt-3 space-y-2">
+                  {verificationDocuments.map((document, index) => (
+                    <a
+                      key={`${document.url}-${index}`}
+                      href={document.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-2xl border border-ink/8 bg-white p-3 text-sm font-semibold text-coral"
+                    >
+                      <FileText className="h-4 w-4" />
+                      {document.originalName}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <label className="mt-6 flex cursor-pointer flex-col items-center justify-center rounded-[2rem] border border-dashed border-plum/40 bg-plum/5 p-6 text-center transition hover:bg-plum/10">
+              <Upload className="h-7 w-7 text-plum" />
+              <p className="mt-3 font-extrabold">Upload verification documents</p>
+              <p className="mt-1 text-sm text-ink/45">
+                PDF, JPG, PNG, or WEBP. Each file can be up to 5MB.
+              </p>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                multiple
+                onChange={selectVerificationDocuments}
+                disabled={uploadingVerification}
+                className="sr-only"
+              />
+            </label>
+
+            {selectedVerificationFiles.length > 0 && (
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
+                  Ready to upload
+                </p>
+                <div className="mt-3 space-y-2">
+                  {selectedVerificationFiles.map((file) => (
+                    <div
+                      key={file.name}
+                      className="flex items-center justify-between rounded-2xl border border-ink/8 bg-white px-4 py-3 text-sm"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-plum" />
+                        {file.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedVerificationFile(file.name)}
+                        className="text-ink/45 hover:text-red-500"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  onClick={uploadVerificationDocs}
+                  loading={uploadingVerification}
+                  disabled={uploadingVerification || !selectedVerificationFiles.length}
+                  className="mt-5"
+                >
+                  <Upload className="h-4 w-4" /> Upload documents
+                </Button>
+              </div>
+            )}
           </Card>
 
           <Card id="portfolio" className="p-6">
