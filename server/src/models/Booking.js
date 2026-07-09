@@ -76,6 +76,26 @@ const bookingSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
+    bookingReminderDueAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    bookingReminderSentAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    reviewReminderDueAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    reviewReminderSentAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -86,5 +106,7 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.index({ vendorId: 1, createdAt: -1 });
 bookingSchema.index({ customerId: 1, createdAt: -1 });
 bookingSchema.index({ vendorId: 1, eventDateOnly: 1, status: 1 });
+bookingSchema.index({ bookingReminderDueAt: 1, bookingReminderSentAt: 1 });
+bookingSchema.index({ reviewReminderDueAt: 1, reviewReminderSentAt: 1 });
 
 export default mongoose.model("Booking", bookingSchema);

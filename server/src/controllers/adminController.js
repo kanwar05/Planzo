@@ -5,9 +5,14 @@ import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
+import { sendVendorVerificationUpdateNotification } from "../services/transactionalNotificationService.js";
+import { safeCreateNotification } from "./notificationController.js";
 
 const updateVendorVerification = async (vendorId, status, reason = "") => {
-  const vendor = await Vendor.findById(vendorId);
+  const vendor = await Vendor.findById(vendorId).populate(
+    "userId",
+    "name email phone notificationPreferences",
+  );
 
   if (!vendor) {
     throw new ApiError(404, "Vendor not found.");
@@ -24,6 +29,26 @@ const updateVendorVerification = async (vendorId, status, reason = "") => {
   vendor.verificationRejectionReason = status === "rejected" ? reason.trim() : "";
   vendor.verified = status === "approved";
   await vendor.save();
+
+  await safeCreateNotification(
+    vendor.userId._id,
+    status === "approved"
+      ? "vendor_verification_approved"
+      : "vendor_verification_rejected",
+    status === "approved" ? "Vendor Approved" : "Vendor Rejected",
+    status === "approved"
+      ? `Your vendor profile for ${vendor.businessName} was approved.`
+      : `Your vendor profile for ${vendor.businessName} was rejected.${vendor.verificationRejectionReason ? ` Reason: ${vendor.verificationRejectionReason}` : ""}`,
+    { vendorId: vendor._id },
+  );
+
+  await sendVendorVerificationUpdateNotification({
+    vendorUser: vendor.userId,
+    vendorName: vendor.businessName,
+    status,
+    reason: vendor.verificationRejectionReason,
+  });
+
   return vendor;
 };
 

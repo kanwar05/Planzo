@@ -9,7 +9,7 @@ import {
   requireFields,
   validateObjectId,
 } from "../utils/validation.js";
-import { createNotification } from "./notificationController.js";
+import { safeCreateNotification } from "./notificationController.js";
 
 const MAX_REVIEW_IMAGES = 4;
 
@@ -113,7 +113,7 @@ export const createReview = asyncHandler(async (req, res) => {
   }
 
   // Notify vendor of new review
-  await createNotification(
+  await safeCreateNotification(
     vendor.userId,
     "review_created",
     "New Review Received",
@@ -295,7 +295,7 @@ export const replyToReview = asyncHandler(async (req, res) => {
   await populateReview(review);
 
   // Notify customer that vendor replied to their review
-  await createNotification(
+  await safeCreateNotification(
     review.customerId,
     "vendor_replied",
     "Vendor Replied to Your Review",

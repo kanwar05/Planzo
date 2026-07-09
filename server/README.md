@@ -41,10 +41,28 @@ curl http://localhost:5001/api/health
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary account cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret; never expose it in the frontend |
+| `SMTP_HOST` | SMTP server host for transactional email |
+| `SMTP_PORT` | SMTP server port; defaults to 587 |
+| `SMTP_USER` | SMTP username, if your provider requires auth |
+| `SMTP_PASS` | SMTP password, if your provider requires auth |
+| `SMTP_FROM` | Sender address used for email notifications |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID for transactional SMS |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token for transactional SMS |
+| `TWILIO_PHONE_NUMBER` | Verified Twilio phone number used as the SMS sender |
+| `BOOKING_REMINDER_HOURS` | How long before a booking to send the reminder; defaults to 24 |
+| `ENABLE_EMAIL` | Set to `false` to disable email delivery |
+| `ENABLE_SMS` | Set to `true` to enable SMS delivery |
+| `NOTIFICATION_JOB_INTERVAL_MS` | How often reminder jobs run in the background; defaults to 1 hour |
+
+Legacy aliases `SMTP_SECURE`, `TWILIO_FROM_NUMBER`, `BOOKING_REMINDER_LEAD_MS`, and `REVIEW_REMINDER_DELAY_MS` remain supported for existing deployments.
 
 Vendor image uploads are sent directly from the API to Cloudinary. Keep all
 Cloudinary credentials in `server/.env`; only committed placeholders belong in
 `.env.example`.
+
+Transactional email and SMS are also optional but recommended. If SMTP or
+Twilio is not configured, the API keeps working and skips those delivery
+channels.
 
 ## Authentication
 
