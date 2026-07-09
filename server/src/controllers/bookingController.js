@@ -12,15 +12,26 @@ import {
   toNonNegativeNumber,
   validateObjectId,
 } from "../utils/validation.js";
-import { createNotification } from "./notificationController.js";
+import { safeCreateNotification } from "./notificationController.js";
+import {
+  ONE_DAY_MS,
+  getNotificationTimings,
+  sendBookingCreatedNotification,
+  sendBookingStatusNotification,
+} from "../services/transactionalNotificationService.js";
 
 const populateBooking = (query) =>
   query
     .populate("customerId", "name email phone")
-    .populate(
-      "vendorId",
-      "businessName serviceCategory pricing location profileImage coverImage portfolioImages averageRating reviewCount rating reviewsCount verified userId",
-    );
+    .populate({
+      path: "vendorId",
+      select:
+        "businessName serviceCategory pricing location profileImage coverImage portfolioImages averageRating reviewCount rating reviewsCount verified userId",
+      populate: {
+        path: "userId",
+        select: "name email phone notificationPreferences",
+      },
+    });
 
 const populateBookingDocument = (booking) =>
   booking.populate([
@@ -29,6 +40,10 @@ const populateBookingDocument = (booking) =>
       path: "vendorId",
       select:
         "businessName serviceCategory pricing location profileImage coverImage portfolioImages averageRating reviewCount rating reviewsCount verified userId",
+      populate: {
+        path: "userId",
+        select: "name email phone notificationPreferences",
+      },
     },
   ]);
 
@@ -44,10 +59,13 @@ export const createBooking = asyncHandler(async (req, res) => {
   ]);
   validateObjectId(req.body.vendorId, "vendor id");
 
-  const vendor = await Vendor.findById(req.body.vendorId);
+  const vendor = await Vendor.findById(req.body.vendorId).populate(
+    "userId",
+    "name email phone notificationPreferences",
+  );
   if (!vendor) throw new ApiError(404, "Vendor not found.");
 
-  if (String(vendor.userId) === String(req.user._id)) {
+  if (String(vendor.userId?._id || vendor.userId) === String(req.user._id)) {
     throw new ApiError(400, "You cannot book your own vendor profile.");
   }
 
@@ -71,6 +89,8 @@ export const createBooking = asyncHandler(async (req, res) => {
     endTime,
   });
 
+  const { bookingReminderLeadMs } = getNotificationTimings();
+
   const booking = await Booking.create({
     customerId: req.user._id,
     vendorId: vendor._id,
@@ -83,16 +103,27 @@ export const createBooking = asyncHandler(async (req, res) => {
     eventLocation: req.body.eventLocation,
     budget: toNonNegativeNumber(req.body.budget, "Budget"),
     specialRequirements: req.body.specialRequirements || "",
+    bookingReminderDueAt: new Date(eventDate.getTime() - bookingReminderLeadMs),
+    bookingReminderSentAt: null,
+    reviewReminderDueAt: null,
+    reviewReminderSentAt: null,
   });
 
   // Notify vendor of new booking request
-  await createNotification(
-    vendor.userId,
+  await safeCreateNotification(
+    vendor.userId._id,
     "booking_created",
     "New Booking Request",
     `You received a new booking request for ${req.body.eventType}.`,
     { bookingId: booking._id, vendorId: vendor._id },
   );
+
+  await sendBookingCreatedNotification({
+    customer: req.user,
+    vendorUser: vendor.userId,
+    vendorName: vendor.businessName,
+    booking,
+  });
 
   await populateBookingDocument(booking);
 
@@ -137,6 +168,10 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   requireFields(req.body, ["status"]);
 
   const status = String(req.body.status).toLowerCase();
+  const rejectionReason =
+    status === "rejected" && typeof req.body.reason === "string"
+      ? req.body.reason.trim()
+      : "";
   if (!BOOKING_STATUSES.includes(status)) {
     throw new ApiError(
       400,
@@ -144,12 +179,18 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     );
   }
 
-  const booking = await Booking.findById(req.params.id);
+  const booking = await Booking.findById(req.params.id).populate(
+    "customerId",
+    "name email phone notificationPreferences",
+  );
   if (!booking) throw new ApiError(404, "Booking not found.");
 
   const isCustomer = String(booking.customerId) === String(req.user._id);
-  const vendor = await Vendor.findById(booking.vendorId).select("userId");
-  const isVendor = vendor && String(vendor.userId) === String(req.user._id);
+  const vendor = await Vendor.findById(booking.vendorId).populate(
+    "userId",
+    "name email phone notificationPreferences",
+  );
+  const isVendor = vendor && String(vendor.userId?._id || vendor.userId) === String(req.user._id);
   const isAdmin = req.user.role === "admin";
 
   if (!isCustomer && !isVendor && !isAdmin) {
@@ -188,8 +229,15 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
   const oldStatus = booking.status;
   booking.status = status;
+
+  if (status === "completed") {
+    booking.reviewReminderDueAt = new Date(Date.now() + 3 * ONE_DAY_MS);
+    booking.reviewReminderSentAt = null;
+  }
   await booking.save();
   await populateBookingDocument(booking);
+
+  const vendorOwnerId = vendor?.userId?._id || vendor?.userId;
 
   // Notify customer when vendor accepts, rejects, or completes booking
   if (isVendor || isAdmin) {
@@ -200,11 +248,11 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     if (status === "accepted") {
       notificationType = "booking_accepted";
       title = "Booking Accepted";
-      message = `Your booking request has been accepted. The vendor will contact you soon.`;
+      message = `Your booking request for ${booking.eventType} has been accepted by ${vendor?.businessName || "the vendor"} on ${booking.eventDateOnly || booking.eventDate}. Booking ID: ${booking._id}.`;
     } else if (status === "rejected") {
       notificationType = "booking_rejected";
       title = "Booking Rejected";
-      message = `Your booking request has been rejected by the vendor.`;
+      message = `Your booking request for ${booking.eventType} was rejected by ${vendor?.businessName || "the vendor"}. Booking ID: ${booking._id}.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`;
     } else if (status === "completed") {
       notificationType = "booking_completed";
       title = "Booking Completed";
@@ -215,13 +263,21 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     }
 
     if (message) {
-      await createNotification(
+      await safeCreateNotification(
         booking.customerId,
         notificationType,
         title,
         message,
         { bookingId: booking._id, vendorId: booking.vendorId },
       );
+
+      await sendBookingStatusNotification({
+        customer: booking.customerId,
+        vendorName: vendor?.businessName || "your vendor",
+        booking,
+        status,
+        reason: rejectionReason,
+      });
     }
   }
 

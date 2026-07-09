@@ -22,6 +22,10 @@ import {
   requireFields,
   validateEmail,
 } from "../utils/validation.js";
+import {
+  sendPasswordResetConfirmation,
+  sendPasswordResetNotification,
+} from "../services/transactionalNotificationService.js";
 
 function serializeUser(user) {
   return {
@@ -201,7 +205,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   validateEmail(email);
 
   const user = await User.findOne({ email }).select(
-    "+passwordResetTokenHash +passwordResetExpiresAt",
+    "+passwordResetTokenHash +passwordResetExpiresAt name email phone notificationPreferences",
   );
 
   const response = {
@@ -222,6 +226,8 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   if (process.env.NODE_ENV !== "production") {
     response.resetToken = resetToken;
   }
+
+  await sendPasswordResetNotification({ user, resetToken });
 
   return res.status(200).json(response);
 });
@@ -252,6 +258,8 @@ export const resetPassword = asyncHandler(async (req, res) => {
     { revokedAt: new Date() },
   );
   clearAuthCookies(res);
+
+  await sendPasswordResetConfirmation({ user });
 
   res.status(200).json({
     success: true,
@@ -316,6 +324,8 @@ export const changePassword = asyncHandler(async (req, res) => {
 
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
+
+  await sendPasswordResetConfirmation({ user });
 
   res.status(200).json({
     success: true,

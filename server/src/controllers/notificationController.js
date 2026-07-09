@@ -144,3 +144,12 @@ export const createNotification = async (
   });
   return notification;
 };
+
+export const safeCreateNotification = async (...args) => {
+  try {
+    return await createNotification(...args);
+  } catch (error) {
+    console.error(`Notification creation failed: ${error.message}`);
+    return null;
+  }
+};
