@@ -42,6 +42,7 @@ import {
   getVendorRequests,
   updateBookingStatus,
 } from "../services/bookingService";
+import { getVendorDashboard } from "../services/dashboardService";
 import { getVendorReviews, replyToReview } from "../services/reviewService";
 import { getMyVendorProfile } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
@@ -279,6 +280,7 @@ export default function VendorDashboardPage() {
   const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [profile, setProfile] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
   const [error, setError] = useState("");
@@ -290,8 +292,12 @@ export default function VendorDashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
-    Promise.allSettled([getVendorRequests(), getMyVendorProfile()])
-      .then(async ([bookingResult, profileResult]) => {
+    Promise.allSettled([
+      getVendorRequests(),
+      getMyVendorProfile(),
+      getVendorDashboard({ limit: 8 }),
+    ])
+      .then(async ([bookingResult, profileResult, dashboardResult]) => {
         if (bookingResult.status === "fulfilled") {
           setRequests(bookingResult.value);
         } else if (bookingResult.reason.response?.status !== 404) {
@@ -313,6 +319,20 @@ export default function VendorDashboardPage() {
             );
           }
         }
+
+        if (dashboardResult.status === "fulfilled") {
+          setDashboard(dashboardResult.value);
+          if (profileResult.status !== "fulfilled" && dashboardResult.value.profile) {
+            setProfile(dashboardResult.value.profile);
+          }
+        } else if (!error) {
+          setError(
+            getApiError(
+              dashboardResult.reason,
+              "Unable to load dashboard analytics.",
+            ),
+          );
+        }
       })
       .finally(() => {
         setLoading(false);
@@ -320,9 +340,26 @@ export default function VendorDashboardPage() {
       });
   }, []);
 
+  const profileStrength = useMemo(() => {
+    const checks = [
+      profile?.businessName,
+      profile?.serviceCategory,
+      profile?.location,
+      profile?.description,
+      profile?.pricing,
+      profile?.portfolioImages?.length,
+      profile?.verificationStatus === "approved" || profile?.verified,
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [profile]);
+
   const stats = useMemo(() => {
-    const pending = requests.filter((item) => item.status === "pending").length;
-    const accepted = requests.filter((item) => item.status === "accepted").length;
+    const pending =
+      dashboard?.summary?.pendingRequests ??
+      requests.filter((item) => item.status === "pending").length;
+    const accepted =
+      dashboard?.summary?.acceptedBookings ??
+      requests.filter((item) => item.status === "accepted").length;
     const completed = requests.filter((item) => item.status === "completed").length;
     const cancelled = requests.filter((item) => ["rejected", "cancelled"].includes(item.status)).length;
     const completedRevenue = requests
@@ -341,6 +378,7 @@ export default function VendorDashboardPage() {
     const averageRating = profile?.averageRating || profile?.rating || 0;
 
     return {
+      totalBookings: dashboard?.summary?.totalBookings ?? requests.length,
       pending,
       accepted,
       completed,
@@ -349,60 +387,37 @@ export default function VendorDashboardPage() {
       bookedRevenue,
       todayBookings,
       monthBookings,
-      monthlyRevenue: monthBookings
+      monthlyRevenue: dashboard?.summary?.monthlyRevenue ?? monthBookings
         .filter((item) => ["accepted", "completed"].includes(item.status))
         .reduce((total, item) => total + (Number(item.budget) || 0), 0),
       completionRate: completionBase ? Math.round((completed / completionBase) * 100) : 0,
-      averageRating,
-      reviewCount: profile?.reviewCount ?? profile?.reviewsCount ?? reviews.length,
-      profileViews: Math.max(128, requests.length * 37 + reviews.length * 18 + (profile?.portfolioImages?.length || 0) * 24),
+      averageRating: dashboard?.summary?.averageRating ?? averageRating,
+      reviewCount:
+        dashboard?.summary?.reviewCount ??
+        profile?.reviewCount ??
+        profile?.reviewsCount ??
+        reviews.length,
+      totalEarnings: dashboard?.summary?.totalEarnings ?? completedRevenue,
+      profileCompletion:
+        dashboard?.summary?.profileCompletionPercentage ?? profileStrength,
+      verificationStatus:
+        dashboard?.summary?.verificationStatus ??
+        profile?.verificationStatus ??
+        (profile?.verified ? "approved" : "pending"),
     };
-  }, [requests, profile, reviews.length]);
-
-  const profileStrength = useMemo(() => {
-    const checks = [
-      profile?.businessName,
-      profile?.serviceCategory,
-      profile?.location,
-      profile?.description,
-      profile?.pricing,
-      profile?.portfolioImages?.length,
-      profile?.verificationStatus === "approved" || profile?.verified,
-    ];
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [profile]);
+  }, [requests, profile, reviews.length, dashboard, profileStrength]);
 
   const monthlyData = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-      const revenue = requests
-        .filter((item) => {
-          const event = new Date(item.eventDate);
-          return (
-            ["accepted", "completed"].includes(item.status) &&
-            event.getMonth() === date.getMonth() &&
-            event.getFullYear() === date.getFullYear()
-          );
-        })
-        .reduce((total, item) => total + (Number(item.budget) || 0), 0);
-      return {
-        label: date.toLocaleDateString("en-IN", { month: "short" }),
-        revenue,
-        bookings: requests.filter((item) => {
-          const event = new Date(item.eventDate);
-          return event.getMonth() === date.getMonth() && event.getFullYear() === date.getFullYear();
-        }).length,
-      };
-    });
-  }, [requests]);
+    if (dashboard?.monthlyStats?.length) return dashboard.monthlyStats;
+    return [];
+  }, [dashboard]);
 
   const upcomingEvents = useMemo(
     () =>
-      requests
+      (dashboard?.upcomingEvents?.length ? dashboard.upcomingEvents : requests)
         .filter((item) => ["accepted", "pending"].includes(item.status) && new Date(item.eventDate) >= new Date())
         .sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate)),
-    [requests],
+    [requests, dashboard],
   );
 
   const pendingRequests = requests.filter((item) => item.status === "pending");
@@ -466,12 +481,12 @@ export default function VendorDashboardPage() {
   };
 
   const analyticsCards = [
-    [Banknote, "Today's Revenue", stats.todayBookings.reduce((total, item) => total + (Number(item.budget) || 0), 0), "+8.4%", "#16a34a"],
-    [WalletCards, "Monthly Revenue", stats.monthlyRevenue, "+14.2%", "#ef6f61"],
-    [CalendarCheck, "Bookings", requests.length, "+6.1%", "#2563eb"],
-    [CheckCircle2, "Completion Rate", `${stats.completionRate}%`, "+3.2%", "#16a34a"],
-    [Star, "Average Rating", stats.averageRating || "New", "+0.3", "#f59e0b"],
-    [Eye, "Profile Views", stats.profileViews, "+21%", "#57214f"],
+    [Banknote, "Total Earnings", stats.totalEarnings, "", "#16a34a"],
+    [WalletCards, "Monthly Revenue", stats.monthlyRevenue, "", "#ef6f61"],
+    [CalendarCheck, "Total Bookings", stats.totalBookings, "", "#2563eb"],
+    [CheckCircle2, "Profile Complete", `${stats.profileCompletion}%`, "", "#16a34a"],
+    [Star, "Average Rating", stats.averageRating || "New", "", "#f59e0b"],
+    [MessageSquare, "Recent Messages", dashboard?.recentMessages?.length || 0, "", "#57214f"],
   ];
 
   const statusCards = [
@@ -579,9 +594,11 @@ export default function VendorDashboardPage() {
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-ink/[0.04] text-coral">
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
-                  <TrendingUp className="h-3 w-3" /> {growth}
-                </span>
+                {growth ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
+                    <TrendingUp className="h-3 w-3" /> {growth}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-5 truncate text-2xl font-extrabold">{typeof value === "number" && title.includes("Revenue") ? formatCurrency(value) : value}</p>
               <p className="mt-1 text-sm font-bold text-ink/45">{title}</p>
@@ -881,9 +898,9 @@ export default function VendorDashboardPage() {
               <h2 className="text-xl font-extrabold">Payment Overview</h2>
               <div className="mt-5 grid gap-3">
                 {[
-                  ["Total Revenue", stats.bookedRevenue],
-                  ["Pending Payments", Math.max(stats.bookedRevenue - stats.completedRevenue, 0)],
-                  ["Completed Payments", stats.completedRevenue],
+                  ["Total Earnings", stats.totalEarnings],
+                  ["Pending Payments", Math.max(stats.bookedRevenue - stats.totalEarnings, 0)],
+                  ["Completed Payments", stats.totalEarnings],
                   ["Refunds", 0],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
@@ -947,7 +964,7 @@ export default function VendorDashboardPage() {
                 <RadialProgress label="Reviews" value={stats.averageRating ? Math.round((stats.averageRating / 5) * 100) : 0} icon={Star} />
               </div>
               <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm font-bold text-ink/55">
-                Verification Status: {profile?.verificationStatus || (profile?.verified ? "approved" : "pending")}
+                Verification Status: {stats.verificationStatus}
               </div>
             </PremiumCard>
 
