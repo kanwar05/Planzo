@@ -25,7 +25,6 @@ export default function Navbar() {
         ? "/vendor/dashboard"
         : "/customer/dashboard";
 
-
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -49,7 +48,7 @@ export default function Navbar() {
     if (isAuthenticated) {
       getNotificationStats()
         .then((stats) => setUnreadCount(stats.unreadCount || 0))
-        .catch(() => { });
+        .catch(() => {});
     }
   };
 
@@ -59,7 +58,13 @@ export default function Navbar() {
         <Logo />
         <nav className="hidden items-center gap-8 md:flex">
           {links.map((link) => (
-            <NavLink key={link.label} to={link.to} className={({ isActive }) => `text-sm font-semibold transition hover:text-coral ${isActive ? "text-coral" : "text-ink/65"}`}>
+            <NavLink
+              key={link.label}
+              to={link.to}
+              className={({ isActive }) =>
+                `text-sm font-semibold transition hover:text-coral ${isActive ? "text-coral" : "text-ink/65"}`
+              }
+            >
               {link.label}
             </NavLink>
           ))}
@@ -85,19 +90,34 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Button to="/login" variant="ghost">Log in</Button>
+              <Button to="/login" variant="ghost">
+                Log in
+              </Button>
               <Button to="/register">Join PLANZO</Button>
             </>
           )}
         </div>
-        <button onClick={() => setOpen(!open)} className="grid h-11 w-11 place-items-center rounded-full bg-white shadow-sm md:hidden" aria-label="Toggle navigation">
+        <button
+          onClick={() => setOpen(!open)}
+          className="grid h-11 w-11 place-items-center rounded-full bg-white shadow-sm md:hidden"
+          aria-label="Toggle navigation"
+        >
           {open ? <X /> : <Menu />}
         </button>
       </div>
       {open && (
         <div className="container-shell border-t border-ink/5 py-5 md:hidden">
           <div className="flex flex-col gap-2">
-            {links.map((link) => <NavLink key={link.label} onClick={() => setOpen(false)} to={link.to} className="rounded-xl px-3 py-3 font-semibold text-ink/70 hover:bg-white">{link.label}</NavLink>)}
+            {links.map((link) => (
+              <NavLink
+                key={link.label}
+                onClick={() => setOpen(false)}
+                to={link.to}
+                className="rounded-xl px-3 py-3 font-semibold text-ink/70 hover:bg-white"
+              >
+                {link.label}
+              </NavLink>
+            ))}
             <div className="mt-3 grid grid-cols-2 gap-3">
               {isAuthenticated ? (
                 <>
@@ -110,13 +130,19 @@ export default function Navbar() {
                   >
                     <Bell className="h-4 w-4" />
                     Notifications
-                    {unreadCount > 0 && <span className="text-xs">({unreadCount})</span>}
+                    {unreadCount > 0 && (
+                      <span className="text-xs">({unreadCount})</span>
+                    )}
                   </button>
-                  <Button to={dashboard} className="col-span-2">Dashboard</Button>
+                  <Button to={dashboard} className="col-span-2">
+                    Dashboard
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Button to="/login" variant="outline">Log in</Button>
+                  <Button to="/login" variant="outline">
+                    Log in
+                  </Button>
                   <Button to="/register">Join PLANZO</Button>
                 </>
               )}
@@ -124,7 +150,10 @@ export default function Navbar() {
           </div>
         </div>
       )}
-      <NotificationsCenter isOpen={notificationsOpen} onClose={handleNotificationsClose} />
+      <NotificationsCenter
+        isOpen={notificationsOpen}
+        onClose={handleNotificationsClose}
+      />
     </header>
   );
 }

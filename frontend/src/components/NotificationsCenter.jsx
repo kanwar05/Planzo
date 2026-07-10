@@ -117,7 +117,7 @@ export default function NotificationsCenter({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-end ">
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/20"
