@@ -1,11 +1,11 @@
 import Vendor from "../models/Vendor.js";
 import Review from "../models/Review.js";
 import Booking, { BOOKING_STATUSES } from "../models/Booking.js";
-import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
 import { sendVendorVerificationUpdateNotification } from "../services/transactionalNotificationService.js";
+import { getAdminDashboardAnalytics } from "../services/analyticsService.js";
 import { safeCreateNotification } from "./notificationController.js";
 
 const updateVendorVerification = async (vendorId, status, reason = "") => {
@@ -355,31 +355,19 @@ export const resolveVendorReport = asyncHandler(async (req, res) => {
 
 // Get admin dashboard stats
 export const getAdminStats = asyncHandler(async (req, res) => {
-  const [
-    totalVendors,
-    unverifiedVendors,
-    reportedVendors,
-    totalBookings,
-    totalReviews,
-    totalUsers,
-  ] = await Promise.all([
-    Vendor.countDocuments(),
-    Vendor.countDocuments({ verified: false }),
-    Vendor.countDocuments({ reported: true }),
-    Booking.countDocuments(),
-    Review.countDocuments(),
-    User.countDocuments(),
-  ]);
+  const dashboard = await getAdminDashboardAnalytics(req.query);
+  const totalReviews = await Review.countDocuments();
 
   res.status(200).json({
     success: true,
     stats: {
-      totalVendors,
-      unverifiedVendors,
-      reportedVendors,
-      totalBookings,
+      totalVendors: dashboard.summary.vendors,
+      unverifiedVendors: dashboard.summary.pendingVerification,
+      reportedVendors: dashboard.recentReports.pagination.total,
       totalReviews,
-      totalUsers,
+      totalUsers: dashboard.summary.totalUsers,
+      ...dashboard.summary,
     },
+    dashboard,
   });
 });

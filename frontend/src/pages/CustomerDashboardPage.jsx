@@ -38,10 +38,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "../services/authService";
-import {
-  getMyBookings,
-  updateBookingStatus,
-} from "../services/bookingService";
+import { getMyBookings, updateBookingStatus } from "../services/bookingService";
 import { getFavorites } from "../services/favoriteService";
 import {
   createReview,
@@ -49,6 +46,7 @@ import {
   getBookingReview,
   updateReview,
 } from "../services/reviewService";
+import { getCustomerDashboard } from "../services/dashboardService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency, formatDate } from "../utils/format";
 import { getVendorImage } from "../utils/vendor";
@@ -89,7 +87,8 @@ const bookingTime = (booking) =>
     : "Time pending";
 
 const daysUntil = (date) => {
-  const diff = new Date(date).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  const diff =
+    new Date(date).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
   const days = Math.ceil(diff / 86400000);
   if (days < 0) return "Past";
   if (days === 0) return "Today";
@@ -113,7 +112,8 @@ function PremiumCard({ children, className = "", delay = 0 }) {
 }
 
 function Sparkline({ tone = "coral" }) {
-  const stroke = tone === "green" ? "#16a34a" : tone === "blue" ? "#2563eb" : "#ef6f61";
+  const stroke =
+    tone === "green" ? "#16a34a" : tone === "blue" ? "#2563eb" : "#ef6f61";
   return (
     <svg viewBox="0 0 92 28" className="h-8 w-24" aria-hidden="true">
       <path
@@ -141,7 +141,10 @@ function MiniCalendar({ bookings }) {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-extrabold">
-          {today.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+          {today.toLocaleDateString("en-IN", {
+            month: "long",
+            year: "numeric",
+          })}
         </h3>
         <CalendarDays className="h-5 w-5 text-coral" />
       </div>
@@ -184,6 +187,7 @@ export default function CustomerDashboardPage() {
   const { user, updateUser } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -205,8 +209,12 @@ export default function CustomerDashboardPage() {
   const [settingsSaving, setSettingsSaving] = useState("");
 
   useEffect(() => {
-    Promise.allSettled([getMyBookings(), getFavorites()])
-      .then(async ([bookingsResult, favoritesResult]) => {
+    Promise.allSettled([
+      getMyBookings(),
+      getFavorites(),
+      getCustomerDashboard({ limit: 8 }),
+    ])
+      .then(async ([bookingsResult, favoritesResult, dashboardResult]) => {
         if (bookingsResult.status === "fulfilled") {
           const items = bookingsResult.value;
           setBookings(items);
@@ -234,6 +242,17 @@ export default function CustomerDashboardPage() {
         if (favoritesResult.status === "fulfilled") {
           setFavorites(favoritesResult.value);
         }
+
+        if (dashboardResult.status === "fulfilled") {
+          setDashboard(dashboardResult.value);
+        } else if (!error) {
+          setError(
+            getApiError(
+              dashboardResult.reason,
+              "Unable to load dashboard analytics.",
+            ),
+          );
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -252,7 +271,10 @@ export default function CustomerDashboardPage() {
   }, [user]);
 
   const stats = useMemo(() => {
-    const upcoming = bookings
+    const upcoming = (dashboard?.bookingTimeline?.length
+      ? dashboard.bookingTimeline
+      : bookings
+    )
       .filter(
         (booking) =>
           ["pending", "accepted"].includes(booking.status) &&
@@ -261,17 +283,30 @@ export default function CustomerDashboardPage() {
       .sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
 
     return {
-      active: bookings.filter((booking) => ["pending", "accepted"].includes(booking.status)).length,
+      active: bookings.filter((booking) =>
+        ["pending", "accepted"].includes(booking.status),
+      ).length,
+      total: dashboard?.summary?.totalBookings ?? bookings.length,
       upcoming,
-      completed: bookings.filter((booking) => booking.status === "completed").length,
-      pending: bookings.filter((booking) => booking.status === "pending").length,
-      cancelled: bookings.filter((booking) => booking.status === "cancelled").length,
-      totalBudget: bookings.reduce((sum, booking) => sum + (Number(booking.budget) || 0), 0),
+      completed:
+        dashboard?.summary?.completedBookings ??
+        bookings.filter((booking) => booking.status === "completed").length,
+      pending: bookings.filter((booking) => booking.status === "pending")
+        .length,
+      cancelled:
+        dashboard?.summary?.cancelledBookings ??
+        bookings.filter((booking) => booking.status === "cancelled").length,
+      favoriteVendors: dashboard?.summary?.favoriteVendors ?? favorites.length,
+      pendingPayments: dashboard?.summary?.pendingPayments ?? 0,
+      totalBudget: bookings.reduce(
+        (sum, booking) => sum + (Number(booking.budget) || 0),
+        0,
+      ),
       spent: bookings
         .filter((booking) => ["accepted", "completed"].includes(booking.status))
         .reduce((sum, booking) => sum + (Number(booking.budget) || 0), 0),
     };
-  }, [bookings]);
+  }, [bookings, dashboard, favorites.length]);
 
   const reviewsGiven = useMemo(
     () => Object.values(reviewsByBooking).filter(Boolean),
@@ -287,16 +322,20 @@ export default function CustomerDashboardPage() {
     const booked = bookings.map((booking) => booking.vendorId).filter(Boolean);
     const combined = [...favoriteVendors, ...booked];
     return combined.filter(
-      (vendor, index, list) => vendor?._id && list.findIndex((item) => item?._id === vendor._id) === index,
+      (vendor, index, list) =>
+        vendor?._id &&
+        list.findIndex((item) => item?._id === vendor._id) === index,
     );
   }, [bookings, favoriteVendors]);
 
   const nextBooking = stats.upcoming[0] || bookings[0];
-  const totalBudget = stats.totalBudget || 250000;
-  const spent = stats.spent || Math.round(totalBudget * 0.42);
+  const totalBudget = stats.totalBudget;
+  const spent = stats.spent;
   const remaining = Math.max(totalBudget - spent, 0);
-  const savings = Math.max(Math.round(totalBudget * 0.08), 0);
-  const budgetPercent = Math.min(Math.round((spent / Math.max(totalBudget, 1)) * 100), 100);
+  const budgetPercent = Math.min(
+    Math.round((spent / Math.max(totalBudget, 1)) * 100),
+    100,
+  );
 
   const cancelBooking = async (id) => {
     setUpdatingId(id);
@@ -429,24 +468,25 @@ export default function CustomerDashboardPage() {
   };
 
   const statCards = [
-    [CalendarCheck, "Active Bookings", stats.active, "+12%", "green"],
-    [CalendarClock, "Upcoming Events", stats.upcoming.length, "+8%", "blue"],
-    [Heart, "Favorite Vendors", favorites.length, "+18%", "coral"],
-    [Star, "Reviews Given", reviewsGiven.length, "+5%", "green"],
+    [CalendarCheck, "Total Bookings", stats.total, "", "green"],
+    [CalendarClock, "Upcoming Events", stats.upcoming.length, "", "blue"],
+    [Check, "Completed", stats.completed, "", "green"],
+    [Trash2, "Cancelled", stats.cancelled, "", "coral"],
   ];
 
-  const activity = [
-    bookings.find((booking) => booking.status === "accepted") && `Booked ${bookings.find((booking) => booking.status === "accepted")?.vendorId?.businessName || "a vendor"}`,
-    reviewsGiven[0] && `Reviewed ${reviewsGiven[0]?.vendorId?.businessName || "a vendor"}`,
-    favoriteVendors[0] && `Saved ${favoriteVendors[0]?.businessName || "a vendor"}`,
-    bookings.find((booking) => booking.status === "cancelled") && "Cancelled Booking",
-  ].filter(Boolean);
+  const activity = (dashboard?.recentNotifications || []).map(
+    (notification) => notification.title,
+  );
 
-  const messages = recommendedVendors.slice(0, 4).map((vendor, index) => ({
-    vendor,
-    message: index === 0 ? "We can customize a package for your date." : "Thanks for shortlisting us. Happy to help.",
-    unread: index === 0 ? 2 : index === 1 ? 1 : 0,
-  }));
+  const messages = dashboard?.recentChats || [];
+  const bookingProgressPercent =
+    nextBooking?.status === "completed"
+      ? 100
+      : nextBooking?.status === "accepted"
+        ? 68
+        : nextBooking?.status === "pending"
+          ? 34
+          : 0;
 
   if (loading) {
     return <LoadingSkeleton />;
@@ -484,7 +524,8 @@ export default function CustomerDashboardPage() {
                 Plan your next celebration with every detail in view.
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-7 text-ink/55">
-                Track bookings, vendors, budgets, messages, reviews, and reminders from one polished command center.
+                Track bookings, vendors, budgets, messages, reviews, and
+                reminders from one polished command center.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Button to="/vendors">
@@ -502,7 +543,7 @@ export default function CustomerDashboardPage() {
               {[
                 ["Upcoming Events", stats.upcoming.length, CalendarDays],
                 ["Active Bookings", stats.active, CalendarCheck],
-                ["Favorite Vendors", favorites.length, Heart],
+                ["Favorite Vendors", stats.favoriteVendors, Heart],
                 ["Quick Actions", 5, Sparkles],
               ].map(([label, value, Icon]) => (
                 <motion.div
@@ -526,9 +567,11 @@ export default function CustomerDashboardPage() {
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-ink/[0.04] text-coral">
                   <Icon className="h-5 w-5" />
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
-                  <TrendingUp className="h-3 w-3" /> {trend}
-                </span>
+                {trend ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-extrabold text-emerald-700">
+                    <TrendingUp className="h-3 w-3" /> {trend}
+                  </span>
+                ) : null}
               </div>
               <div className="mt-5 flex items-end justify-between gap-4">
                 <div>
@@ -547,7 +590,9 @@ export default function CustomerDashboardPage() {
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/8 p-6">
                 <div>
                   <h2 className="text-2xl font-extrabold">Upcoming Events</h2>
-                  <p className="mt-1 text-sm text-ink/45">Timeline of active bookings and event dates.</p>
+                  <p className="mt-1 text-sm text-ink/45">
+                    Timeline of active bookings and event dates.
+                  </p>
                 </div>
                 <Button to="/vendors" variant="outline">
                   <Search className="h-4 w-4" /> Explore vendors
@@ -557,27 +602,40 @@ export default function CustomerDashboardPage() {
                 <div className="p-6">
                   <div className="relative space-y-4 before:absolute before:bottom-4 before:left-5 before:top-4 before:w-px before:bg-ink/10">
                     {stats.upcoming.slice(0, 5).map((booking) => (
-                      <article key={booking._id} className="relative flex gap-4 rounded-2xl border border-ink/8 bg-white p-4 shadow-[0_12px_34px_rgba(36,23,42,0.05)]">
+                      <article
+                        key={booking._id}
+                        className="relative flex gap-4 rounded-2xl border border-ink/8 bg-white p-4 shadow-[0_12px_34px_rgba(36,23,42,0.05)]"
+                      >
                         <span className="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink text-white">
                           <CalendarCheck className="h-5 w-5" />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <h3 className="font-extrabold">{booking.eventType || "Event"}</h3>
+                              <h3 className="font-extrabold">
+                                {booking.eventType || "Event"}
+                              </h3>
                               <p className="mt-1 text-sm font-semibold text-ink/55">
-                                {booking.vendorId?.businessName || "Vendor unavailable"}
+                                {booking.vendorId?.businessName ||
+                                  "Vendor unavailable"}
                               </p>
                             </div>
-                            <span className={`rounded-full px-3 py-1 text-xs font-extrabold capitalize ${statusClass[booking.status] || statusClass.pending}`}>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-extrabold capitalize ${statusClass[booking.status] || statusClass.pending}`}
+                            >
                               {booking.status}
                             </span>
                           </div>
                           <div className="mt-4 grid gap-3 text-sm text-ink/55 sm:grid-cols-4">
                             <span>{formatDate(booking.eventDate)}</span>
                             <span>{bookingTime(booking)}</span>
-                            <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {booking.eventLocation || "Venue pending"}</span>
-                            <span className="font-extrabold text-coral">{daysUntil(booking.eventDate)}</span>
+                            <span className="flex items-center gap-1.5">
+                              <MapPin className="h-4 w-4" />{" "}
+                              {booking.eventLocation || "Venue pending"}
+                            </span>
+                            <span className="font-extrabold text-coral">
+                              {daysUntil(booking.eventDate)}
+                            </span>
                           </div>
                         </div>
                       </article>
@@ -600,27 +658,44 @@ export default function CustomerDashboardPage() {
               <PremiumCard className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-extrabold">Booking Progress</h2>
-                    <p className="mt-1 text-sm text-ink/45">{nextBooking?.eventType || "Wedding"} planning flow</p>
+                    <h2 className="text-2xl font-extrabold">
+                      Booking Progress
+                    </h2>
+                    <p className="mt-1 text-sm text-ink/45">
+                      {nextBooking?.eventType || "Wedding"} planning flow
+                    </p>
                   </div>
-                  <span className="rounded-full bg-coral/10 px-3 py-1 text-xs font-extrabold text-coral">68%</span>
+                  <span className="rounded-full bg-coral/10 px-3 py-1 text-xs font-extrabold text-coral">
+                    {bookingProgressPercent}%
+                  </span>
                 </div>
                 <div className="mt-6 h-3 overflow-hidden rounded-full bg-ink/6">
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: "68%" }}
+                    animate={{ width: `${bookingProgressPercent}%` }}
                     transition={{ duration: 0.8 }}
                     className="h-full rounded-full bg-gradient-to-r from-coral to-plum"
                   />
                 </div>
                 <div className="mt-6 grid gap-3">
                   {eventSteps.map((step, index) => {
-                    const done = index < 2 || ["accepted", "completed"].includes(nextBooking?.status);
+                    const done =
+                      index < 2 ||
+                      ["accepted", "completed"].includes(nextBooking?.status);
                     return (
-                      <div key={step} className="flex items-center justify-between rounded-2xl border border-ink/8 p-3">
+                      <div
+                        key={step}
+                        className="flex items-center justify-between rounded-2xl border border-ink/8 p-3"
+                      >
                         <span className="font-bold">{step}</span>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold ${done ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {done ? <Check className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-extrabold ${done ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}
+                        >
+                          {done ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <Clock3 className="h-3 w-3" />
+                          )}
                           {done ? "Done" : "Pending"}
                         </span>
                       </div>
@@ -643,8 +718,12 @@ export default function CustomerDashboardPage() {
                   >
                     <div className="grid h-28 w-28 place-items-center rounded-full bg-white text-center shadow-inner">
                       <span>
-                        <span className="block text-3xl font-extrabold">{budgetPercent}%</span>
-                        <span className="text-xs font-bold text-ink/40">spent</span>
+                        <span className="block text-3xl font-extrabold">
+                          {budgetPercent}%
+                        </span>
+                        <span className="text-xs font-bold text-ink/40">
+                          spent
+                        </span>
                       </span>
                     </div>
                   </motion.div>
@@ -653,11 +732,18 @@ export default function CustomerDashboardPage() {
                       ["Budget", totalBudget, "text-ink"],
                       ["Spent", spent, "text-coral"],
                       ["Remaining", remaining, "text-emerald-700"],
-                      ["Savings", savings, "text-blue-700"],
+                      ["Pending Payments", stats.pendingPayments, "text-blue-700"],
                     ].map(([label, value, color]) => (
-                      <div key={label} className="flex items-center justify-between rounded-2xl bg-ink/[0.03] px-4 py-3">
-                        <span className="text-sm font-bold text-ink/45">{label}</span>
-                        <span className={`font-extrabold ${color}`}>{formatCurrency(value)}</span>
+                      <div
+                        key={label}
+                        className="flex items-center justify-between rounded-2xl bg-ink/[0.03] px-4 py-3"
+                      >
+                        <span className="text-sm font-bold text-ink/45">
+                          {label}
+                        </span>
+                        <span className={`font-extrabold ${color}`}>
+                          {formatCurrency(value)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -668,10 +754,18 @@ export default function CustomerDashboardPage() {
             <PremiumCard className="overflow-hidden">
               <div className="flex items-center justify-between gap-4 p-6">
                 <div>
-                  <h2 className="text-2xl font-extrabold">Recommended Vendors</h2>
-                  <p className="mt-1 text-sm text-ink/45">Personalized from your favorites and booking history.</p>
+                  <h2 className="text-2xl font-extrabold">
+                    Recommended Vendors
+                  </h2>
+                  <p className="mt-1 text-sm text-ink/45">
+                    Personalized from your favorites and booking history.
+                  </p>
                 </div>
-                <Button to="/vendors" variant="ghost" className="hidden sm:inline-flex">
+                <Button
+                  to="/vendors"
+                  variant="ghost"
+                  className="hidden sm:inline-flex"
+                >
                   View all <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -684,8 +778,15 @@ export default function CustomerDashboardPage() {
                       className="w-72 shrink-0 overflow-hidden rounded-2xl border border-ink/8 bg-white shadow-[0_14px_40px_rgba(36,23,42,0.07)]"
                     >
                       <div className="relative h-40">
-                        <img src={getVendorImage(vendor)} alt={vendor.businessName} className="h-full w-full object-cover" />
-                        <button className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-coral shadow-soft backdrop-blur" aria-label="Save vendor">
+                        <img
+                          src={getVendorImage(vendor)}
+                          alt={vendor.businessName}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-coral shadow-soft backdrop-blur"
+                          aria-label="Save vendor"
+                        >
                           <Heart className="h-4 w-4 fill-current" />
                         </button>
                         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-extrabold text-emerald-700 backdrop-blur">
@@ -695,8 +796,14 @@ export default function CustomerDashboardPage() {
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <h3 className="truncate font-extrabold">{vendor.businessName}</h3>
-                            <p className="mt-1 text-sm text-ink/45">{vendor.serviceCategory || vendor.category || "Event vendor"}</p>
+                            <h3 className="truncate font-extrabold">
+                              {vendor.businessName}
+                            </h3>
+                            <p className="mt-1 text-sm text-ink/45">
+                              {vendor.serviceCategory ||
+                                vendor.category ||
+                                "Event vendor"}
+                            </p>
                           </div>
                           <span className="inline-flex items-center gap-1 text-sm font-extrabold">
                             <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
@@ -704,11 +811,19 @@ export default function CustomerDashboardPage() {
                           </span>
                         </div>
                         <p className="mt-3 flex items-center gap-1.5 text-sm text-ink/50">
-                          <MapPin className="h-4 w-4" /> {vendor.location || "Location flexible"}
+                          <MapPin className="h-4 w-4" />{" "}
+                          {vendor.location || "Location flexible"}
                         </p>
                         <div className="mt-4 flex items-center justify-between">
-                          <span className="text-sm font-extrabold">{formatCurrency(vendor.pricing ?? vendor.startingPrice ?? 0)}</span>
-                          <Button to={`/booking/${vendor._id}`} className="!px-4 !py-2">
+                          <span className="text-sm font-extrabold">
+                            {formatCurrency(
+                              vendor.pricing ?? vendor.startingPrice ?? 0,
+                            )}
+                          </span>
+                          <Button
+                            to={`/booking/${vendor._id}`}
+                            className="!px-4 !py-2"
+                          >
                             Book Now
                           </Button>
                         </div>
@@ -731,7 +846,10 @@ export default function CustomerDashboardPage() {
             <PremiumCard className="overflow-hidden">
               <div className="border-b border-ink/8 p-6">
                 <h2 className="text-2xl font-extrabold">Booking History</h2>
-                <p className="mt-1 text-sm text-ink/45">All requests, statuses, cancellation controls, and review actions.</p>
+                <p className="mt-1 text-sm text-ink/45">
+                  All requests, statuses, cancellation controls, and review
+                  actions.
+                </p>
               </div>
               {bookings.length ? (
                 <div className="overflow-x-auto">
@@ -751,44 +869,74 @@ export default function CustomerDashboardPage() {
                         <tr key={booking._id} className="hover:bg-slate-50/70">
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
-                              <img src={getVendorImage(booking.vendorId)} alt={booking.vendorId?.businessName || "Vendor"} className="h-11 w-11 rounded-2xl object-cover" />
-                              <span className="font-extrabold">{booking.vendorId?.businessName || "Vendor unavailable"}</span>
+                              <img
+                                src={getVendorImage(booking.vendorId)}
+                                alt={booking.vendorId?.businessName || "Vendor"}
+                                className="h-11 w-11 rounded-2xl object-cover"
+                              />
+                              <span className="font-extrabold">
+                                {booking.vendorId?.businessName ||
+                                  "Vendor unavailable"}
+                              </span>
                             </div>
                           </td>
-                          <td className="px-5 py-4 text-ink/55">{booking.eventType}</td>
-                          <td className="px-5 py-4 text-ink/55">{formatDate(booking.eventDate)} · {bookingTime(booking)}</td>
-                          <td className="px-5 py-4 font-bold">{formatCurrency(booking.budget || 0)}</td>
+                          <td className="px-5 py-4 text-ink/55">
+                            {booking.eventType}
+                          </td>
+                          <td className="px-5 py-4 text-ink/55">
+                            {formatDate(booking.eventDate)} ·{" "}
+                            {bookingTime(booking)}
+                          </td>
+                          <td className="px-5 py-4 font-bold">
+                            {formatCurrency(booking.budget || 0)}
+                          </td>
                           <td className="px-5 py-4">
-                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass[booking.status] || statusClass.pending}`}>
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass[booking.status] || statusClass.pending}`}
+                            >
                               {booking.status}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-right">
                             <div className="flex justify-end gap-3">
                               {booking.vendorId?._id && (
-                                <Link to={`/vendors/${booking.vendorId._id}`} className="text-xs font-extrabold text-ink/50 hover:text-coral">
+                                <Link
+                                  to={`/vendors/${booking.vendorId._id}`}
+                                  className="text-xs font-extrabold text-ink/50 hover:text-coral"
+                                >
                                   View
                                 </Link>
                               )}
-                              {["pending", "accepted"].includes(booking.status) && (
+                              {["pending", "accepted"].includes(
+                                booking.status,
+                              ) && (
                                 <button
                                   type="button"
                                   disabled={updatingId === booking._id}
                                   onClick={() => cancelBooking(booking._id)}
                                   className="text-xs font-extrabold text-red-500 disabled:opacity-50"
                                 >
-                                  {updatingId === booking._id ? "Cancelling" : "Cancel"}
+                                  {updatingId === booking._id
+                                    ? "Cancelling"
+                                    : "Cancel"}
                                 </button>
                               )}
                               {booking.status === "completed" &&
                                 (reviewsByBooking[booking._id] ? (
                                   <>
-                                    <button type="button" onClick={() => setReviewBooking(booking)} className="text-xs font-extrabold text-coral">
+                                    <button
+                                      type="button"
+                                      onClick={() => setReviewBooking(booking)}
+                                      className="text-xs font-extrabold text-coral"
+                                    >
                                       Edit
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={updatingId === reviewsByBooking[booking._id]._id}
+                                      disabled={
+                                        updatingId ===
+                                        reviewsByBooking[booking._id]._id
+                                      }
                                       onClick={() => removeReview(booking._id)}
                                       className="text-xs font-extrabold text-red-500 disabled:opacity-50"
                                     >
@@ -796,7 +944,11 @@ export default function CustomerDashboardPage() {
                                     </button>
                                   </>
                                 ) : (
-                                  <button type="button" onClick={() => setReviewBooking(booking)} className="text-xs font-extrabold text-coral">
+                                  <button
+                                    type="button"
+                                    onClick={() => setReviewBooking(booking)}
+                                    className="text-xs font-extrabold text-coral"
+                                  >
                                     Review
                                   </button>
                                 ))}
@@ -808,20 +960,38 @@ export default function CustomerDashboardPage() {
                   </table>
                   <div className="grid gap-4 p-5 md:hidden">
                     {bookings.map((booking) => (
-                      <article key={booking._id} className="rounded-2xl border border-ink/8 p-4">
+                      <article
+                        key={booking._id}
+                        className="rounded-2xl border border-ink/8 p-4"
+                      >
                         <div className="flex items-center gap-3">
-                          <img src={getVendorImage(booking.vendorId)} alt={booking.vendorId?.businessName || "Vendor"} className="h-12 w-12 rounded-2xl object-cover" />
+                          <img
+                            src={getVendorImage(booking.vendorId)}
+                            alt={booking.vendorId?.businessName || "Vendor"}
+                            className="h-12 w-12 rounded-2xl object-cover"
+                          />
                           <div className="min-w-0">
-                            <p className="truncate font-extrabold">{booking.vendorId?.businessName || "Vendor unavailable"}</p>
-                            <p className="text-sm text-ink/45">{booking.eventType}</p>
+                            <p className="truncate font-extrabold">
+                              {booking.vendorId?.businessName ||
+                                "Vendor unavailable"}
+                            </p>
+                            <p className="text-sm text-ink/45">
+                              {booking.eventType}
+                            </p>
                           </div>
                         </div>
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm">{formatDate(booking.eventDate)}</p>
-                            <p className="font-bold">{formatCurrency(booking.budget || 0)}</p>
+                            <p className="text-sm">
+                              {formatDate(booking.eventDate)}
+                            </p>
+                            <p className="font-bold">
+                              {formatCurrency(booking.budget || 0)}
+                            </p>
                           </div>
-                          <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass[booking.status] || statusClass.pending}`}>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusClass[booking.status] || statusClass.pending}`}
+                          >
                             {booking.status}
                           </span>
                         </div>
@@ -850,20 +1020,32 @@ export default function CustomerDashboardPage() {
                 <div className="mt-5 space-y-3">
                   {reviewsGiven.length ? (
                     reviewsGiven.slice(0, 3).map((review) => (
-                      <article key={review._id} className="rounded-2xl border border-ink/8 p-4">
+                      <article
+                        key={review._id}
+                        className="rounded-2xl border border-ink/8 p-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-extrabold">{review.vendorId?.businessName || "Vendor"}</p>
+                          <p className="font-extrabold">
+                            {review.vendorId?.businessName || "Vendor"}
+                          </p>
                           <span className="flex gap-0.5 text-amber-400">
                             {[1, 2, 3, 4, 5].map((item) => (
-                              <Star key={item} className={`h-4 w-4 ${item <= review.rating ? "fill-current" : "text-ink/15"}`} />
+                              <Star
+                                key={item}
+                                className={`h-4 w-4 ${item <= review.rating ? "fill-current" : "text-ink/15"}`}
+                              />
                             ))}
                           </span>
                         </div>
-                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink/55">{review.comment}</p>
+                        <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink/55">
+                          {review.comment}
+                        </p>
                       </article>
                     ))
                   ) : (
-                    <p className="rounded-2xl bg-slate-50 p-5 text-sm text-ink/50">Reviews you write will appear here.</p>
+                    <p className="rounded-2xl bg-slate-50 p-5 text-sm text-ink/50">
+                      Reviews you write will appear here.
+                    </p>
                   )}
                 </div>
               </PremiumCard>
@@ -874,11 +1056,23 @@ export default function CustomerDashboardPage() {
                   {[
                     ["Book Vendor", "/vendors", CalendarPlus],
                     ["Browse Categories", "/services", Store],
-                    ["View Calendar", "/customer/dashboard?view=calendar", CalendarDays],
-                    ["Open Messages", "/customer/dashboard?view=messages", MessageCircle],
+                    [
+                      "View Calendar",
+                      "/customer/dashboard?view=calendar",
+                      CalendarDays,
+                    ],
+                    [
+                      "Open Messages",
+                      "/customer/dashboard?view=messages",
+                      MessageCircle,
+                    ],
                     ["Contact Support", "/contact", Mail],
                   ].map(([label, to, Icon]) => (
-                    <Link key={label} to={to} className="flex items-center gap-3 rounded-2xl border border-ink/8 bg-white p-4 font-extrabold text-ink transition hover:-translate-y-0.5 hover:border-coral/30 hover:text-coral hover:shadow-soft">
+                    <Link
+                      key={label}
+                      to={to}
+                      className="flex items-center gap-3 rounded-2xl border border-ink/8 bg-white p-4 font-extrabold text-ink transition hover:-translate-y-0.5 hover:border-coral/30 hover:text-coral hover:shadow-soft"
+                    >
                       <span className="grid h-10 w-10 place-items-center rounded-2xl bg-coral/10 text-coral">
                         <Icon className="h-5 w-5" />
                       </span>
@@ -894,22 +1088,44 @@ export default function CustomerDashboardPage() {
             <PremiumCard className="p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-extrabold">Favorites Preview</h2>
-                <Button to="/customer/favorites" variant="ghost" className="!px-3 !py-2">View All</Button>
+                <Button
+                  to="/customer/favorites"
+                  variant="ghost"
+                  className="!px-3 !py-2"
+                >
+                  View All
+                </Button>
               </div>
               <div className="mt-5 space-y-3">
                 {favoriteVendors.length ? (
                   favoriteVendors.slice(0, 4).map((vendor) => (
-                    <Link key={vendor._id} to={`/vendors/${vendor._id}`} className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3 transition hover:bg-slate-50">
-                      <img src={getVendorImage(vendor)} alt={vendor.businessName} className="h-12 w-12 rounded-2xl object-cover" />
+                    <Link
+                      key={vendor._id}
+                      to={`/vendors/${vendor._id}`}
+                      className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3 transition hover:bg-slate-50"
+                    >
+                      <img
+                        src={getVendorImage(vendor)}
+                        alt={vendor.businessName}
+                        className="h-12 w-12 rounded-2xl object-cover"
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-extrabold">{vendor.businessName}</span>
-                        <span className="block truncate text-xs text-ink/45">{vendor.serviceCategory || vendor.category || "Vendor"}</span>
+                        <span className="block truncate text-sm font-extrabold">
+                          {vendor.businessName}
+                        </span>
+                        <span className="block truncate text-xs text-ink/45">
+                          {vendor.serviceCategory ||
+                            vendor.category ||
+                            "Vendor"}
+                        </span>
                       </span>
                       <Heart className="h-4 w-4 fill-coral text-coral" />
                     </Link>
                   ))
                 ) : (
-                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-ink/50">No saved vendors yet.</p>
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-ink/50">
+                    No saved vendors yet.
+                  </p>
                 )}
               </div>
             </PremiumCard>
@@ -919,17 +1135,34 @@ export default function CustomerDashboardPage() {
               <div className="mt-5 space-y-3">
                 {messages.length ? (
                   messages.map(({ vendor, message, unread }) => (
-                    <div key={vendor._id} className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3">
-                      <img src={getVendorImage(vendor)} alt={vendor.businessName} className="h-12 w-12 rounded-full object-cover" />
+                    <div
+                      key={vendor._id}
+                      className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3"
+                    >
+                      <img
+                        src={getVendorImage(vendor)}
+                        alt={vendor.businessName}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-extrabold">{vendor.businessName}</p>
-                        <p className="truncate text-xs text-ink/45">{message}</p>
+                        <p className="truncate text-sm font-extrabold">
+                          {vendor.businessName}
+                        </p>
+                        <p className="truncate text-xs text-ink/45">
+                          {message}
+                        </p>
                       </div>
-                      {unread > 0 && <span className="grid h-6 w-6 place-items-center rounded-full bg-coral text-xs font-extrabold text-white">{unread}</span>}
+                      {unread > 0 && (
+                        <span className="grid h-6 w-6 place-items-center rounded-full bg-coral text-xs font-extrabold text-white">
+                          {unread}
+                        </span>
+                      )}
                     </div>
                   ))
                 ) : (
-                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-ink/50">Vendor conversations will appear here.</p>
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-ink/50">
+                    Vendor conversations will appear here.
+                  </p>
                 )}
               </div>
             </PremiumCard>
@@ -950,10 +1183,15 @@ export default function CustomerDashboardPage() {
               </div>
               <div className="mt-5 space-y-3 text-sm leading-6 text-ink/60">
                 <p className="rounded-2xl bg-gradient-to-br from-coral/10 to-white p-4">
-                  Based on your {nextBooking?.eventType || "event"} budget near {nextBooking?.eventLocation || favoriteVendors[0]?.location || "your selected location"}, prioritize verified vendors with ratings above 4.5.
+                  Based on your {nextBooking?.eventType || "event"} budget near{" "}
+                  {nextBooking?.eventLocation ||
+                    favoriteVendors[0]?.location ||
+                    "your selected location"}
+                  , prioritize verified vendors with ratings above 4.5.
                 </p>
                 <p className="rounded-2xl bg-slate-50 p-4">
-                  Your current spend leaves {formatCurrency(remaining)} for add-ons and contingency.
+                  Your current spend leaves {formatCurrency(remaining)} for
+                  add-ons and contingency.
                 </p>
               </div>
             </PremiumCard>
@@ -961,7 +1199,13 @@ export default function CustomerDashboardPage() {
             <PremiumCard className="p-6">
               <h2 className="text-xl font-extrabold">Activity Feed</h2>
               <div className="mt-5 space-y-3">
-                {(activity.length ? activity : ["Saved vendors will appear here", "Bookings update in real time"]).map((item, index) => (
+                {(activity.length
+                  ? activity
+                  : [
+                      "Saved vendors will appear here",
+                      "Bookings update in real time",
+                    ]
+                ).map((item, index) => (
                   <div key={`${item}-${index}`} className="flex gap-3">
                     <span className="mt-1 h-2.5 w-2.5 rounded-full bg-coral" />
                     <p className="text-sm font-semibold text-ink/60">{item}</p>
@@ -993,15 +1237,23 @@ export default function CustomerDashboardPage() {
                 </div>
 
                 {settingsTab === "Personal Information" && (
-                  <form onSubmit={saveProfile} className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-coral">Personal Information</p>
+                  <form
+                    onSubmit={saveProfile}
+                    className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Personal Information
+                    </p>
                     <label className="block">
                       <span className="label">Full name</span>
                       <input
                         required
                         value={profileForm.name}
                         onChange={(event) =>
-                          setProfileForm((current) => ({ ...current, name: event.target.value }))
+                          setProfileForm((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
                         }
                         className="field"
                       />
@@ -1013,7 +1265,10 @@ export default function CustomerDashboardPage() {
                         type="email"
                         value={profileForm.email}
                         onChange={(event) =>
-                          setProfileForm((current) => ({ ...current, email: event.target.value }))
+                          setProfileForm((current) => ({
+                            ...current,
+                            email: event.target.value,
+                          }))
                         }
                         className="field"
                       />
@@ -1025,71 +1280,135 @@ export default function CustomerDashboardPage() {
                         type="tel"
                         value={profileForm.phone}
                         onChange={(event) =>
-                          setProfileForm((current) => ({ ...current, phone: event.target.value }))
+                          setProfileForm((current) => ({
+                            ...current,
+                            phone: event.target.value,
+                          }))
                         }
                         className="field"
                       />
                     </label>
-                    <Button type="submit" loading={settingsSaving === "profile"} disabled={Boolean(settingsSaving)} className="w-full">
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "profile"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
                       Save profile
                     </Button>
                   </form>
                 )}
 
                 {settingsTab === "Security" && (
-                  <form onSubmit={savePassword} className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-coral">Security</p>
+                  <form
+                    onSubmit={savePassword}
+                    className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Security
+                    </p>
                     <label className="block">
                       <span className="label">Current password</span>
-                      <input required name="currentPassword" type="password" className="field" />
+                      <input
+                        required
+                        name="currentPassword"
+                        type="password"
+                        className="field"
+                      />
                     </label>
                     <label className="block">
                       <span className="label">New password</span>
-                      <input required name="newPassword" type="password" minLength="8" className="field" placeholder="Uppercase, number, and symbol" />
+                      <input
+                        required
+                        name="newPassword"
+                        type="password"
+                        minLength="8"
+                        className="field"
+                        placeholder="Uppercase, number, and symbol"
+                      />
                     </label>
-                    <Button type="submit" loading={settingsSaving === "password"} disabled={Boolean(settingsSaving)} className="w-full">
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "password"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
                       Change password
                     </Button>
                   </form>
                 )}
 
                 {settingsTab === "Notifications" && (
-                  <form onSubmit={saveNotifications} className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-coral">Notifications</p>
+                  <form
+                    onSubmit={saveNotifications}
+                    className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider text-coral">
+                      Notifications
+                    </p>
                     {[
                       ["bookingUpdates", "Booking updates"],
                       ["reviewReminders", "Review reminders"],
                       ["promotions", "Offers and recommendations"],
                     ].map(([field, label]) => (
-                      <label key={field} className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold">
+                      <label
+                        key={field}
+                        className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold"
+                      >
                         <span>{label}</span>
                         <input
                           type="checkbox"
                           checked={notificationForm[field]}
                           onChange={(event) =>
-                            setNotificationForm((current) => ({ ...current, [field]: event.target.checked }))
+                            setNotificationForm((current) => ({
+                              ...current,
+                              [field]: event.target.checked,
+                            }))
                           }
                           className="h-4 w-4 accent-coral"
                         />
                       </label>
                     ))}
-                    <Button type="submit" loading={settingsSaving === "notifications"} disabled={Boolean(settingsSaving)} className="w-full">
+                    <Button
+                      type="submit"
+                      loading={settingsSaving === "notifications"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full"
+                    >
                       Save preferences
                     </Button>
                   </form>
                 )}
 
                 {settingsTab === "Privacy" && (
-                  <form onSubmit={removeAccount} className="mt-4 space-y-4 rounded-2xl bg-red-50 p-4">
-                    <p className="text-xs font-bold uppercase tracking-wider text-red-600">Privacy</p>
+                  <form
+                    onSubmit={removeAccount}
+                    className="mt-4 space-y-4 rounded-2xl bg-red-50 p-4"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-wider text-red-600">
+                      Privacy
+                    </p>
                     <p className="text-sm leading-6 text-ink/60">
-                      Deleting your account removes your saved vendors, reviews, and closed booking history. Active bookings must be resolved first.
+                      Deleting your account removes your saved vendors, reviews,
+                      and closed booking history. Active bookings must be
+                      resolved first.
                     </p>
                     <label className="block">
                       <span className="label">Confirm password</span>
-                      <input required name="password" type="password" className="field" />
+                      <input
+                        required
+                        name="password"
+                        type="password"
+                        className="field"
+                      />
                     </label>
-                    <Button type="submit" variant="outline" loading={settingsSaving === "delete"} disabled={Boolean(settingsSaving)} className="w-full !border-red-200 !text-red-600 hover:!border-red-300">
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      loading={settingsSaving === "delete"}
+                      disabled={Boolean(settingsSaving)}
+                      className="w-full !border-red-200 !text-red-600 hover:!border-red-300"
+                    >
                       <Trash2 className="h-4 w-4" /> Delete account
                     </Button>
                   </form>
@@ -1099,20 +1418,31 @@ export default function CustomerDashboardPage() {
           </aside>
         </div>
 
-        <motion.footer variants={fadeUp} className="grid gap-4 rounded-2xl border border-ink/8 bg-ink p-6 text-white shadow-lift lg:grid-cols-3">
+        <motion.footer
+          variants={fadeUp}
+          className="grid gap-4 rounded-2xl border border-ink/8 bg-ink p-6 text-white shadow-lift lg:grid-cols-3"
+        >
           <div>
             <h2 className="text-xl font-extrabold">Helpful tips</h2>
-            <p className="mt-2 text-sm leading-6 text-white/60">Confirm venue availability before final vendor payments and keep a 10% contingency buffer.</p>
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Confirm venue availability before final vendor payments and keep a
+              10% contingency buffer.
+            </p>
           </div>
           <div className="rounded-2xl bg-white/8 p-4">
             <p className="text-sm font-extrabold">Upcoming reminder</p>
             <p className="mt-1 text-sm text-white/60">
-              {nextBooking ? `${nextBooking.eventType} with ${nextBooking.vendorId?.businessName || "your vendor"} on ${formatDate(nextBooking.eventDate)}` : "Create your first booking to unlock reminders."}
+              {nextBooking
+                ? `${nextBooking.eventType} with ${nextBooking.vendorId?.businessName || "your vendor"} on ${formatDate(nextBooking.eventDate)}`
+                : "Create your first booking to unlock reminders."}
             </p>
           </div>
           <div className="rounded-2xl bg-white/8 p-4">
             <p className="text-sm font-extrabold">Budget cue</p>
-            <p className="mt-1 text-sm text-white/60">You have {formatCurrency(remaining)} remaining across active plans.</p>
+            <p className="mt-1 text-sm text-white/60">
+              You have {formatCurrency(remaining)} remaining across active
+              plans.
+            </p>
           </div>
         </motion.footer>
       </motion.div>
