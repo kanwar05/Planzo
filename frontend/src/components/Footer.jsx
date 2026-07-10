@@ -22,8 +22,8 @@ export default function Footer() {
         <div>
           <h3 className="font-bold">Contact</h3>
           <div className="mt-5 space-y-4 text-sm text-white/55">
-            <p className="flex gap-2"><Mail className="h-4 w-4 shrink-0" /> hello@planzo.events</p>
-            <p className="flex gap-2"><MapPin className="h-4 w-4 shrink-0" /> New Delhi, India</p>
+            <p className="flex gap-2"><Mail className="h-4 w-4 shrink-0" /> planzo.event@gmail.com</p>
+            <p className="flex gap-2"><MapPin className="h-4 w-4 shrink-0" /> Chandigarh, India</p>
           </div>
         </div>
       </div>
