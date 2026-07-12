@@ -12,6 +12,10 @@ import favoriteRoutes from "./routes/favoriteRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import paymentAdminRoutes from "./routes/paymentAdminRoutes.js";
+import vendorPaymentRoutes from "./routes/vendorPaymentRoutes.js";
+import { razorpayWebhook } from "./controllers/webhookController.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
@@ -78,6 +82,7 @@ app.use(
 );
 app.use(apiLimiter);
 app.use(cookieParser());
+app.post("/api/payments/webhooks/razorpay", express.raw({ type: "application/json", limit: "1mb" }), razorpayWebhook);
 app.use(express.json({ limit: jsonBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: formBodyLimit }));
 
@@ -98,8 +103,11 @@ app.use("/api/auth/register", authLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin", paymentAdminRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/vendor", vendorRoutes);
+app.use("/api/vendor/payments", vendorPaymentRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/notifications", notificationRoutes);

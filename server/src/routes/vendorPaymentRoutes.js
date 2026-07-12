@@ -1,0 +1,2 @@
+import { Router } from "express"; import { protect, authorizeRoles } from "../middleware/authMiddleware.js"; import { vendorEarnings } from "../controllers/paymentAdminController.js";
+const router = Router(); router.use(protect, authorizeRoles("vendor")); router.get("/earnings", vendorEarnings); router.get("/payouts", vendorEarnings); router.get("/payouts/:payoutId", vendorEarnings); export default router;

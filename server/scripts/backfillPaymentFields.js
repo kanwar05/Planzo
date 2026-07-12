@@ -1,0 +1,2 @@
+import "dotenv/config"; import mongoose from "mongoose"; import connectDatabase from "../src/config/database.js"; import Booking from "../src/models/Booking.js"; import { initializeBookingPayments } from "../src/services/payments/paymentCalculationService.js";
+await connectDatabase(); let changed = 0; for await (const booking of Booking.find({ $or: [{ totalAmount: { $exists: false } }, { totalAmount: null }] }).cursor()) { initializeBookingPayments(booking); await booking.save(); changed += 1; } console.log(`Backfilled ${changed} bookings.`); await mongoose.disconnect();

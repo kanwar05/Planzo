@@ -34,6 +34,7 @@ const customerLinks = [
     to: "/customer/dashboard?view=bookings",
     icon: CalendarDays,
   },
+  { label: "Payments", to: "/customer/payments", icon: CreditCard },
   { label: "Favorites", to: "/customer/favorites", icon: Heart },
   {
     label: "Messages",

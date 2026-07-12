@@ -1,0 +1,3 @@
+import PaymentProvider from "./PaymentProvider.js";
+import ApiError from "../../utils/ApiError.js";
+export default class StripeProvider extends PaymentProvider { constructor() { super(); } unavailable() { throw new ApiError(501, "Stripe provider is not configured yet."); } createOrder() { return this.unavailable(); } verifyPayment() { return this.unavailable(); } verifyWebhook() { return this.unavailable(); } fetchPayment() { return this.unavailable(); } refundPayment() { return this.unavailable(); } createPayout() { return this.unavailable(); } fetchPayoutStatus() { return this.unavailable(); } }

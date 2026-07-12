@@ -19,6 +19,7 @@ import {
   sendBookingCreatedNotification,
   sendBookingStatusNotification,
 } from "../services/transactionalNotificationService.js";
+import { initializeBookingPayments } from "../services/payments/paymentCalculationService.js";
 
 const populateBooking = (query) =>
   query
@@ -108,6 +109,8 @@ export const createBooking = asyncHandler(async (req, res) => {
     reviewReminderDueAt: null,
     reviewReminderSentAt: null,
   });
+  initializeBookingPayments(booking);
+  await booking.save();
 
   // Notify vendor of new booking request
   await safeCreateNotification(
