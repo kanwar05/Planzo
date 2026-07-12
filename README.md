@@ -110,3 +110,31 @@ See [`server/README.md`](server/README.md) for:
 - Cloudinary vendor image uploads
 - Example curl requests
 - Testing instructions
+# Planzo payments
+
+Planzo uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
+
+```mermaid
+flowchart TD
+    A[Customer creates booking] --> B[Vendor accepts booking]
+    B --> C[Customer pays 25 percent]
+    C --> D[Booking financially confirmed]
+    D --> E[Event day arrives]
+    E --> F[Customer pays 40 percent]
+    F --> G[Total paid becomes 65 percent]
+    G --> H[Vendor completes event]
+    H --> I[Customer pays final 35 percent]
+    I --> J[Booking fully paid]
+    J --> K[Payout hold period]
+    K --> L[Vendor payout processed]
+```
+
+Payment attempts live in the dedicated ledger. Captured entries project booking status as `pending` → `deposit_paid` → `partially_paid` → `paid`; refunds project `partially_refunded` or `refunded`. A later failure never erases captured progress. Payout state is separate and moves through `not_eligible`, `pending`, `processing`, and terminal/hold states.
+
+## Razorpay setup and local testing
+
+Copy `server/.env.example` to `server/.env`, use Razorpay test-mode keys, and set a distinct webhook secret. In the Razorpay dashboard, point the webhook to `https://YOUR_API/api/payments/webhooks/razorpay` and enable payment, refund, order, and payout events. The endpoint verifies the raw body and `X-Razorpay-Signature`; do not proxy it through middleware that rewrites JSON. Run `npm run payments:backfill` in `server` once for legacy bookings, then run backend tests with `npm test` and frontend tests/build with `npm test` and `npm run build` in `frontend`. Automated tests mock provider behavior and must not use live credentials.
+
+All payment variables are documented in `server/.env.example`. Startup rejects percentage configurations that do not total 100, and production startup requires Razorpay credentials. Cancellation uses the free-window and fee settings; calculations should be recorded before refund initiation. Refunds are initiated by admins and finalized only by verified webhooks. A completed, fully paid, undisputed booking becomes payout-eligible after `VENDOR_PAYOUT_HOLD_DAYS`; platform fees and refund deductions are reflected separately.
+
+Each captured installment receives a server-generated unique receipt number and downloadable PDF. The final installment is labeled as the consolidated invoice. Invoice access is restricted to the customer, associated vendor, or admin. Planzo stores no card, UPI, wallet, or bank credentials. Secrets and provider signatures are omitted from API responses. Adding Stripe requires implementing the existing provider interface and selecting it in the factory; booking eligibility and monetary state logic remain unchanged.

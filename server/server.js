@@ -3,11 +3,13 @@ import mongoose from "mongoose";
 import app from "./src/app.js";
 import connectDatabase from "./src/config/database.js";
 import { startNotificationSchedulers } from "./src/jobs/notificationJobs.js";
+import { validatePaymentEnvironment } from "./src/config/payment.js";
 
 const port = Number(process.env.PORT) || 5001;
 
 async function startServer() {
   try {
+    validatePaymentEnvironment();
     await connectDatabase();
     const notificationScheduler = startNotificationSchedulers();
 

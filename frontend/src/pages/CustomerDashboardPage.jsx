@@ -899,6 +899,12 @@ export default function CustomerDashboardPage() {
                           </td>
                           <td className="px-5 py-4 text-right">
                             <div className="flex justify-end gap-3">
+                              <Link
+                                to={`/bookings/${booking._id}/payment`}
+                                className="text-xs font-extrabold text-coral hover:text-coral/75"
+                              >
+                                Payment details
+                              </Link>
                               {booking.vendorId?._id && (
                                 <Link
                                   to={`/vendors/${booking.vendorId._id}`}
@@ -995,6 +1001,12 @@ export default function CustomerDashboardPage() {
                             {booking.status}
                           </span>
                         </div>
+                        <Link
+                          to={`/bookings/${booking._id}/payment`}
+                          className="mt-4 inline-flex text-sm font-extrabold text-coral"
+                        >
+                          View payment details
+                        </Link>
                       </article>
                     ))}
                   </div>

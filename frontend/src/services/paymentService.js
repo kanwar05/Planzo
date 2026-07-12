@@ -1,0 +1,10 @@
+import { api } from "./api";
+export const getBookingPayments = async (id) => (await api.get(`/payments/bookings/${id}`)).data;
+export const createPaymentOrder = async (id, installmentType) => (await api.post(`/payments/bookings/${id}/order`, { installmentType })).data;
+export const verifyPayment = async (id, payload) => (await api.post(`/payments/bookings/${id}/verify`, payload)).data;
+export const getPaymentHistory = async () => (await api.get("/payments/my-history")).data.payments;
+export const getVendorEarnings = async () => (await api.get("/vendor/payments/earnings")).data;
+export const getAdminPayments = async (params = {}) => (await api.get("/admin/payments", { params })).data.payments;
+export const refundPayment = async (id, data) => (await api.post(`/admin/payments/${id}/refund`, data)).data;
+export const invoiceUrl = (id) => `${api.defaults.baseURL}/payments/${id}/invoice`;
+export const openRazorpay = ({ keyId, order, customer, onSuccess, onFailure }) => new Promise((resolve, reject) => { if (!window.Razorpay) { const error = new Error("Razorpay Checkout could not be loaded."); onFailure?.(error); reject(error); return; } const checkout = new window.Razorpay({ key: keyId, order_id: order.id, amount: order.amount, currency: order.currency, name: "Planzo", description: "Booking installment", prefill: { name: customer?.name, email: customer?.email, contact: customer?.phone }, handler: async (response) => { await onSuccess(response); resolve(response); }, modal: { ondismiss: () => reject(new Error("Payment cancelled.")) } }); checkout.on("payment.failed", (response) => onFailure?.(response.error)); checkout.open(); });

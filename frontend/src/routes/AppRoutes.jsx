@@ -23,6 +23,11 @@ import VendorAvailabilityPage from "../pages/VendorAvailabilityPage";
 import VendorDetailsPage from "../pages/VendorDetailsPage";
 import VendorProfilePage from "../pages/VendorProfilePage";
 import VendorsPage from "../pages/VendorsPage";
+import BookingPaymentPage from "../pages/BookingPaymentPage";
+import PaymentResultPage from "../pages/PaymentResultPage";
+import PaymentHistoryPage from "../pages/PaymentHistoryPage";
+import VendorEarningsPage from "../pages/VendorEarningsPage";
+import AdminPaymentsPage from "../pages/AdminPaymentsPage";
 
 export const appRoutes = [
   {
@@ -50,6 +55,8 @@ export const appRoutes = [
         element: <MainLayout />,
         children: [
           { path: "/booking/:vendorId", element: <BookingRequestPage /> },
+          { path: "/payments/success", element: <PaymentResultPage /> },
+          { path: "/payments/failed", element: <PaymentResultPage failed /> },
         ],
       },
       {
@@ -63,6 +70,9 @@ export const appRoutes = [
             path: "/customer/favorites",
             element: <CustomerFavoritesPage />,
           },
+          { path: "/bookings/:bookingId/payment", element: <BookingPaymentPage /> },
+          { path: "/customer/bookings/:bookingId/payments", element: <BookingPaymentPage /> },
+          { path: "/customer/payments", element: <PaymentHistoryPage /> },
         ],
       },
     ],
@@ -76,6 +86,8 @@ export const appRoutes = [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
           { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },
+          { path: "/vendor/earnings", element: <VendorEarningsPage /> },
+          { path: "/vendor/payouts/:payoutId", element: <VendorEarningsPage /> },
         ],
       },
     ],
@@ -91,6 +103,8 @@ export const appRoutes = [
           { path: "/admin/vendors/reported", element: <AdminReportedVendorsPage /> },
           { path: "/admin/reviews", element: <AdminReviewsPage /> },
           { path: "/admin/bookings", element: <AdminBookingsPage /> },
+          { path: "/admin/payments", element: <AdminPaymentsPage /> },
+          { path: "/admin/payments/failed", element: <AdminPaymentsPage failed /> },
         ],
       },
     ],
