@@ -14,6 +14,7 @@ import {
   getAdminStats,
 } from "../controllers/adminController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
+import { getVerification, listVerifications, reviewVerification } from "../controllers/vendorVerificationController.js";
 
 const router = Router();
 
@@ -25,6 +26,9 @@ router.get("/stats", getAdminStats);
 
 // Vendor management
 router.get("/vendors/unverified", getUnverifiedVendors);
+router.get("/verifications", listVerifications);
+router.get("/verifications/:id", getVerification);
+router.patch("/verifications/:id/review", reviewVerification);
 router.patch("/vendors/:vendorId/verify", verifyVendor);
 router.patch("/vendors/:vendorId/reject", rejectVendor);
 router.patch("/vendors/:vendorId/unverify", unverifyVendor);

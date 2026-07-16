@@ -66,7 +66,7 @@ const vendorLinks = [
   { label: "Analytics", to: "/vendor/dashboard?view=analytics", icon: LayoutDashboard },
   { label: "Payments", to: "/vendor/dashboard?view=payments", icon: CreditCard },
   { label: "Settings", to: "/vendor/profile-setup", icon: Settings },
-  { label: "Verification", to: "/vendor/profile-setup#verification", icon: ShieldCheck },
+  { label: "Verification", to: "/vendor/verification", icon: ShieldCheck },
 ];
 
 const initials = (name = "PZ") =>
