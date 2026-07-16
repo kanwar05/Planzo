@@ -154,6 +154,21 @@ export const uploadVerificationDocuments = (req, res, next) => {
   )(req, res, next);
 };
 
+export const uploadTypedVerificationDocuments = ensureCloudinaryConfigured(
+  createUploader(
+    (file) => `planzo/vendors/verification/${file.fieldname}`,
+    5,
+    documentFileFilter,
+    { resourceType: "auto", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
+  ).fields([
+    { name: "governmentId", maxCount: 1 },
+    { name: "businessLicense", maxCount: 1 },
+    { name: "gstCertificate", maxCount: 1 },
+    { name: "panCard", maxCount: 1 },
+    { name: "profilePhoto", maxCount: 1 },
+  ]),
+);
+
 const reviewImageUpload = createUploader(
   "planzo/reviews",
   4,

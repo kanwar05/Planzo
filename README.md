@@ -2,6 +2,14 @@
 
 Event services marketplace where customers discover and book vendors, vendors manage bookings and showcase their work, and admins moderate the platform.
 
+## Vendor verification
+
+Vendors use the guided flow at `/vendor/verification` to upload a Government ID, Business License, PAN Card, and Profile Photo; a GST Certificate is optional. PDF, JPG, PNG, and WEBP files up to 5 MB are accepted and stored in type-specific Cloudinary folders. Duplicate files across document types are rejected.
+
+Submissions move through `pending`, `approved`, `rejected`, and `needs_resubmission`. Vendors can see the current status and review reason and replace documents after rejection or a resubmission request. Pending and approved submissions are locked. Administrators review image/PDF previews at `/admin/vendors/unverified`, approve, reject with a reason, or request resubmission with a reason.
+
+The API uses a dedicated `VendorVerification` model with typed documents, `verificationHistory`, `reviewedBy`, and `reviewedAt`. Vendor endpoints are `GET /api/vendor/verification/me` and `POST /api/vendor/verification/submit`; admin endpoints are under `/api/admin/verifications`. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` before accepting uploads.
+
 PLANZO is split into two independent applications:
 
 ```text

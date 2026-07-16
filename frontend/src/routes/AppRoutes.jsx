@@ -28,6 +28,7 @@ import PaymentResultPage from "../pages/PaymentResultPage";
 import PaymentHistoryPage from "../pages/PaymentHistoryPage";
 import VendorEarningsPage from "../pages/VendorEarningsPage";
 import AdminPaymentsPage from "../pages/AdminPaymentsPage";
+import VendorVerificationPage from "../pages/VendorVerificationPage";
 
 export const appRoutes = [
   {
@@ -86,6 +87,7 @@ export const appRoutes = [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
           { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },
+          { path: "/vendor/verification", element: <VendorVerificationPage /> },
           { path: "/vendor/earnings", element: <VendorEarningsPage /> },
           { path: "/vendor/payouts/:payoutId", element: <VendorEarningsPage /> },
         ],
