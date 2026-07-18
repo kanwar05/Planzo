@@ -1,8 +1,5 @@
 import {
   ArrowLeft,
-  Check,
-  CheckCheck,
-  File,
   ImagePlus,
   Menu,
   Paperclip,
@@ -18,6 +15,7 @@ import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Toast from "../components/Toast";
+import ChatMessageList from "../components/ChatMessageList";
 import { useAuth } from "../context/AuthContext";
 import {
   createConversation,
@@ -287,19 +285,6 @@ export default function ChatPage() {
         ? `last seen ${new Date(other.lastSeenAt).toLocaleString()}`
         : "offline"
     : "";
-  const receipt = (message) =>
-    message.seenBy?.some(
-      (id) => String(id?._id || id) === String(other?._id),
-    ) ? (
-      <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
-    ) : message.deliveredTo?.some(
-        (id) => String(id?._id || id) === String(other?._id),
-      ) ? (
-      <CheckCheck className="h-3.5 w-3.5" />
-    ) : (
-      <Check className="h-3.5 w-3.5" />
-    );
-
   return (
     <section className="container-shell py-5">
       <Toast message={error} type="error" onClose={() => setError("")} />
@@ -411,74 +396,12 @@ export default function ChatPage() {
                 {loading ? (
                   <LoadingSkeleton />
                 ) : (
-                  messages.map((message) => {
-                    const mine = message.sender?._id === user?._id;
-                    return (
-                      <div
-                        key={message._id}
-                        className={`group mb-3 flex ${mine ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[82%] rounded-2xl px-3 py-2 shadow-sm ${mine ? "bg-plum text-white" : "bg-white"}`}
-                        >
-                          {message.deletedAt ? (
-                            <i className="text-sm opacity-65">
-                              This message was deleted
-                            </i>
-                          ) : (
-                            <>
-                              {message.attachments?.map((attachment) =>
-                                attachment.kind === "image" ? (
-                                  <a
-                                    key={attachment.publicId}
-                                    href={attachment.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <img
-                                      src={attachment.url}
-                                      alt={attachment.originalName}
-                                      className="mb-2 max-h-72 rounded-xl object-cover"
-                                    />
-                                  </a>
-                                ) : (
-                                  <a
-                                    key={attachment.publicId}
-                                    href={attachment.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="mb-2 flex items-center gap-2 rounded-xl bg-black/10 p-3"
-                                  >
-                                    <File className="h-5 w-5" />
-                                    <span className="truncate">
-                                      {attachment.originalName}
-                                    </span>
-                                  </a>
-                                ),
-                              )}
-                              {message.text && (
-                                <p className="whitespace-pre-wrap break-words text-sm">
-                                  {message.text}
-                                </p>
-                              )}
-                            </>
-                          )}
-                          <span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-60">
-                            {time(message.createdAt)}
-                            {mine && receipt(message)}
-                            {mine && !message.deletedAt && (
-                              <button
-                                onClick={() => removeMessage(message._id)}
-                                className="ml-1 hidden group-hover:block"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
+                  <ChatMessageList
+                    messages={messages}
+                    currentUserId={user?._id}
+                    otherUserId={other?._id}
+                    onDelete={removeMessage}
+                  />
                 )}
                 <div ref={endRef} />
               </div>
