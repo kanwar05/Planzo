@@ -12,6 +12,7 @@ import {
   getMyVendorProfile,
   getVendorById,
   getVendors,
+  getVendorSearchMetadata,
   removeCoverImage,
   removePortfolioImage,
   removeProfileImage,
@@ -38,6 +39,7 @@ import { getVendorReviews } from "../controllers/reviewController.js";
 const router = Router();
 
 router.get("/", getVendors);
+router.get("/search/meta", getVendorSearchMetadata);
 router.get("/:id/availability", getAvailability);
 router.post(
   "/availability",

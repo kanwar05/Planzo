@@ -120,6 +120,14 @@ See [`server/README.md`](server/README.md) for:
 - Testing instructions
 # Planzo payments
 
+## Production vendor search
+
+`GET /api/vendors` uses a faceted MongoDB aggregation for instant text search, multiple categories, price, rating, experience, verified status, city, date availability, and GeoJSON radius filters. Sorting supports highest rated, lowest price, newest, popularity, most booked, and distance. Results use bounded pagination with `hasNextPage`; booking counts and popularity scores are calculated inside the pipeline.
+
+Vendor profiles accept optional `latitude`, `longitude`, and `locationCity` values. Radius filtering requires stored coordinates and the `lat`, `lng`, and `radiusKm` query parameters. `GET /api/vendors/search/meta?q=` supplies cached city autocomplete suggestions. Composite and `2dsphere` indexes support the main access paths. Search responses use a bounded 30-second application cache and short browser/CDN cache headers; vendor profile mutations invalidate cached results.
+
+The vendor directory includes debounced search, dual price sliders, category selection, autocomplete, browser-location radius search, availability dates, verification and experience filters, removable chips, responsive mobile filters, sorting, skeleton states, and intersection-observer infinite scrolling.
+
 Planzo uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
 
 ```mermaid

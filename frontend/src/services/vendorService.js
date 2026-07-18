@@ -1,9 +1,11 @@
 import { api } from "./api";
 
-export const getVendors = async (filters = {}) => {
-  const response = await api.get("/vendors", { params: filters });
+export const getVendors = async (filters = {}, options = {}) => {
+  const response = await api.get("/vendors", { params: filters, signal: options.signal });
   return response.data;
 };
+
+export const getVendorSearchMeta = async (q = "") => (await api.get("/vendors/search/meta", { params: { q } })).data;
 
 export const getVendorById = async (id) => {
   const response = await api.get(`/vendors/${id}`);

@@ -26,6 +26,18 @@ const cloudinaryImageSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const geoPointSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ["Point"], required: true },
+    coordinates: {
+      type: [Number],
+      required: true,
+      validate: { validator: (value) => Array.isArray(value) && value.length === 2, message: "Coordinates must contain longitude and latitude." },
+    },
+  },
+  { _id: false },
+);
+
 const packageSchema = new mongoose.Schema(
   {
     name: {
@@ -129,6 +141,8 @@ const vendorSchema = new mongoose.Schema(
       trim: true,
       maxlength: [160, "Location cannot exceed 160 characters."],
     },
+    locationCity: { type: String, trim: true, index: true, default: "" },
+    locationPoint: { type: geoPointSchema, default: undefined },
     profileImage: {
       type: cloudinaryImageSchema,
       default: null,
@@ -234,6 +248,7 @@ vendorSchema.pre("init", function normalizeLegacyPortfolio(data) {
 });
 
 vendorSchema.pre("save", function syncVerificationState(next) {
+  if (this.location && !this.locationCity) this.locationCity = this.location.split(",")[0].trim();
   if (!this.verificationStatus) {
     this.verificationStatus = this.verified ? "approved" : "pending";
   }
@@ -258,5 +273,8 @@ vendorSchema.index({
   description: "text",
   location: "text",
 });
+vendorSchema.index({ locationPoint: "2dsphere" });
+vendorSchema.index({ reported: 1, serviceCategory: 1, verificationStatus: 1, pricing: 1, averageRating: -1, experience: -1 });
+vendorSchema.index({ reported: 1, createdAt: -1 });
 
 export default mongoose.model("Vendor", vendorSchema);
