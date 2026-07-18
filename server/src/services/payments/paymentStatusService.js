@@ -1,5 +1,6 @@
 import Payment from "../../models/Payment.js";
 import { initializeBookingPayments } from "./paymentCalculationService.js";
+import CancellationRequest from "../../models/CancellationRequest.js";
 
 export const syncBookingPaymentState = async (booking, { session } = {}) => {
   initializeBookingPayments(booking);
@@ -15,6 +16,16 @@ export const syncBookingPaymentState = async (booking, { session } = {}) => {
   else if (paid >= booking.depositAmount + booking.eventDayAmount) booking.paymentStatus = "partially_paid";
   else if (paid >= booking.depositAmount) booking.paymentStatus = "deposit_paid";
   else booking.paymentStatus = payments.some((p) => p.status === "failed") ? "failed" : "pending";
+  if (booking.cancellationRequest) {
+    const cancellation = await CancellationRequest.findById(booking.cancellationRequest).session(session || null);
+    if (cancellation && ["approved", "processing", "partially_refunded"].includes(cancellation.refundStatus)) {
+      if (refunded >= cancellation.refundAmount) cancellation.refundStatus = "refunded";
+      else if (refunded > 0) cancellation.refundStatus = "partially_refunded";
+      else cancellation.refundStatus = "processing";
+      booking.refundStatus = cancellation.refundStatus;
+      await cancellation.save({ session });
+    }
+  }
   const fee = Math.floor(booking.totalAmount * Number(process.env.PLATFORM_FEE_PERCENTAGE || 10) / 100);
   booking.platformFeeAmount = fee; booking.vendorPayoutAmount = Math.max(0, booking.totalAmount - fee - refunded - (booking.cancellationFeeAmount || 0));
   if (booking.paymentStatus === "paid" && booking.status === "completed" && booking.payoutStatus === "not_eligible") booking.payoutStatus = "pending";

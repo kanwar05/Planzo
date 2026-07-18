@@ -29,6 +29,7 @@ import PaymentHistoryPage from "../pages/PaymentHistoryPage";
 import VendorEarningsPage from "../pages/VendorEarningsPage";
 import AdminPaymentsPage from "../pages/AdminPaymentsPage";
 import VendorVerificationPage from "../pages/VendorVerificationPage";
+import AdminCancellationsPage from "../pages/AdminCancellationsPage";
 
 export const appRoutes = [
   {
@@ -106,6 +107,7 @@ export const appRoutes = [
           { path: "/admin/reviews", element: <AdminReviewsPage /> },
           { path: "/admin/bookings", element: <AdminBookingsPage /> },
           { path: "/admin/payments", element: <AdminPaymentsPage /> },
+          { path: "/admin/cancellations", element: <AdminCancellationsPage /> },
           { path: "/admin/payments/failed", element: <AdminPaymentsPage failed /> },
         ],
       },

@@ -39,6 +39,7 @@ import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import {
+  cancelBookingRequest,
   getVendorRequests,
   updateBookingStatus,
 } from "../services/bookingService";
@@ -460,6 +461,15 @@ export default function VendorDashboardPage() {
     }
   };
 
+  const cancelRequest = async (id) => {
+    const reason = window.prompt("Why are you cancelling this booking?");
+    if (!reason?.trim()) return;
+    setUpdatingId(id); setError("");
+    try { const { booking } = await cancelBookingRequest(id, reason.trim()); setRequests((current) => current.map((item) => item._id === id ? booking : item)); setSuccess("Booking cancelled and refund request created."); }
+    catch (requestError) { setError(getApiError(requestError, "Unable to cancel this booking.")); }
+    finally { setUpdatingId(""); }
+  };
+
   const saveReply = async (reviewId) => {
     const message = replyDrafts[reviewId]?.trim();
     if (!message) return;
@@ -684,6 +694,7 @@ export default function VendorDashboardPage() {
                             <Button type="button" variant="outline" disabled={updatingId === request._id} onClick={() => changeStatus(request._id, "rejected")} className="!px-4 !py-2">
                               <XCircle className="h-4 w-4" /> Reject
                             </Button>
+                            <Button type="button" variant="ghost" disabled={updatingId === request._id} onClick={() => cancelRequest(request._id)} className="!px-4 !py-2 text-red-600">Cancel</Button>
                             <Button to="/vendor/dashboard?view=messages" variant="ghost" className="!px-4 !py-2">
                               <MessageSquare className="h-4 w-4" /> Chat
                             </Button>
@@ -719,6 +730,7 @@ export default function VendorDashboardPage() {
                             <Button to="/vendor/dashboard?view=messages" variant="ghost" className="!px-3 !py-2">
                               Contact
                             </Button>
+                            <button type="button" onClick={() => cancelRequest(event._id)} className="text-xs font-bold text-red-600">Cancel</button>
                           </div>
                           <p className="mt-3 text-sm text-ink/55">{formatDate(event.eventDate)} · {bookingTime(event)}</p>
                           <p className="mt-1 flex items-center gap-1.5 text-sm text-ink/45"><MapPin className="h-4 w-4" /> {event.eventLocation || "Location pending"}</p>

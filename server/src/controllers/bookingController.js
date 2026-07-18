@@ -171,6 +171,9 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   requireFields(req.body, ["status"]);
 
   const status = String(req.body.status).toLowerCase();
+  if (status === "cancelled") {
+    throw new ApiError(400, "Use the booking cancellation endpoint and provide a reason.");
+  }
   const rejectionReason =
     status === "rejected" && typeof req.body.reason === "string"
       ? req.body.reason.trim()

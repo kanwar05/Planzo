@@ -38,7 +38,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "../services/authService";
-import { getMyBookings, updateBookingStatus } from "../services/bookingService";
+import { cancelBookingRequest, getMyBookings } from "../services/bookingService";
 import { getFavorites } from "../services/favoriteService";
 import {
   createReview,
@@ -338,10 +338,12 @@ export default function CustomerDashboardPage() {
   );
 
   const cancelBooking = async (id) => {
+    const reason = window.prompt("Why are you cancelling this booking?");
+    if (!reason?.trim()) return;
     setUpdatingId(id);
     setError("");
     try {
-      const updated = await updateBookingStatus(id, "cancelled");
+      const { booking: updated } = await cancelBookingRequest(id, reason.trim());
       setBookings((current) =>
         current.map((booking) => (booking._id === id ? updated : booking)),
       );
@@ -625,6 +627,7 @@ export default function CustomerDashboardPage() {
                             >
                               {booking.status}
                             </span>
+                            {booking.status === "cancelled" && <p className="mt-1 text-xs text-ink/45">Refund: {(booking.refundStatus || "not applicable").replaceAll("_", " ")}{booking.refundAmount ? ` · ${formatCurrency(booking.refundAmount / 100)}` : ""}</p>}
                           </div>
                           <div className="mt-4 grid gap-3 text-sm text-ink/55 sm:grid-cols-4">
                             <span>{formatDate(booking.eventDate)}</span>
