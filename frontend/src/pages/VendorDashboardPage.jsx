@@ -695,7 +695,7 @@ export default function VendorDashboardPage() {
                               <XCircle className="h-4 w-4" /> Reject
                             </Button>
                             <Button type="button" variant="ghost" disabled={updatingId === request._id} onClick={() => cancelRequest(request._id)} className="!px-4 !py-2 text-red-600">Cancel</Button>
-                            <Button to="/vendor/dashboard?view=messages" variant="ghost" className="!px-4 !py-2">
+                            <Button to={`/vendor/messages?bookingId=${request._id}`} variant="ghost" className="!px-4 !py-2">
                               <MessageSquare className="h-4 w-4" /> Chat
                             </Button>
                           </div>
@@ -727,7 +727,7 @@ export default function VendorDashboardPage() {
                               <p className="font-extrabold">{event.customerId?.name || "Client"}</p>
                               <p className="text-sm text-ink/45">{event.eventType}</p>
                             </div>
-                            <Button to="/vendor/dashboard?view=messages" variant="ghost" className="!px-3 !py-2">
+                            <Button to={`/vendor/messages?bookingId=${event._id}`} variant="ghost" className="!px-3 !py-2">
                               Contact
                             </Button>
                             <button type="button" onClick={() => cancelRequest(event._id)} className="text-xs font-bold text-red-600">Cancel</button>
@@ -855,7 +855,7 @@ export default function VendorDashboardPage() {
               <h2 className="text-xl font-extrabold">Messages Preview</h2>
               <div className="mt-5 space-y-3">
                 {(requests.length ? requests.slice(0, 4) : []).map((request, index) => (
-                  <Link key={request._id} to="/vendor/dashboard?view=messages" className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3 transition hover:bg-slate-50">
+                  <Link key={request._id} to="/vendor/messages" className="flex items-center gap-3 rounded-2xl border border-ink/8 p-3 transition hover:bg-slate-50">
                     <span className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-coral to-plum text-sm font-extrabold text-white">
                       {initials(request.customerId?.name || "Client")}
                     </span>
@@ -988,7 +988,7 @@ export default function VendorDashboardPage() {
                   [CalendarDays, "Update Availability", "/vendor/availability"],
                   [Upload, "Upload Portfolio", "/vendor/profile-setup#portfolio"],
                   [Layers3, "Create Package", "/vendor/profile-setup#packages"],
-                  [MessageSquare, "Open Messages", "/vendor/dashboard?view=messages"],
+                  [MessageSquare, "Open Messages", "/vendor/messages"],
                 ].map(([Icon, label, to]) => (
                   <Link key={label} to={to} className="flex items-center gap-3 rounded-2xl border border-ink/8 p-4 font-extrabold transition hover:-translate-y-0.5 hover:border-coral/30 hover:text-coral hover:shadow-soft">
                     <span className="grid h-10 w-10 place-items-center rounded-2xl bg-coral/10 text-coral"><Icon className="h-5 w-5" /></span>

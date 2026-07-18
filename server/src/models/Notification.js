@@ -14,6 +14,7 @@ export const NOTIFICATION_TYPES = [
   "booking_update",
   "vendor_reply",
   "profile_completion_nudge",
+  "chat_message",
 ];
 
 const notificationSchema = new mongoose.Schema(
