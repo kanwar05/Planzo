@@ -38,7 +38,7 @@ const customerLinks = [
   { label: "Favorites", to: "/customer/favorites", icon: Heart },
   {
     label: "Messages",
-    to: "/customer/dashboard?view=messages",
+    to: "/messages",
     icon: MessageCircle,
   },
   { label: "Reviews", to: "/customer/dashboard?view=reviews", icon: Star },
@@ -61,7 +61,7 @@ const vendorLinks = [
   { label: "Availability", to: "/vendor/availability", icon: CalendarRange },
   { label: "Packages", to: "/vendor/profile-setup#packages", icon: Store },
   { label: "Portfolio", to: "/vendor/profile-setup#portfolio", icon: Store },
-  { label: "Messages", to: "/vendor/dashboard?view=messages", icon: MessageCircle },
+  { label: "Messages", to: "/vendor/messages", icon: MessageCircle },
   { label: "Reviews", to: "/vendor/dashboard?view=reviews", icon: Star },
   { label: "Analytics", to: "/vendor/dashboard?view=analytics", icon: LayoutDashboard },
   { label: "Payments", to: "/vendor/dashboard?view=payments", icon: CreditCard },

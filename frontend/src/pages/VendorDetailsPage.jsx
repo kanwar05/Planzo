@@ -258,7 +258,7 @@ export default function VendorDetailsPage() {
                   <CalendarDays className="h-4 w-4" /> Request Booking
                 </Button>
                 <Button
-                  to={`mailto:${vendor.userId?.email || ""}`}
+                  to={`/messages?participantId=${vendor.userId?._id || ""}`}
                   variant="outline"
                   className="w-full"
                 >

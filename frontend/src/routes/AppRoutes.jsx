@@ -30,6 +30,7 @@ import VendorEarningsPage from "../pages/VendorEarningsPage";
 import AdminPaymentsPage from "../pages/AdminPaymentsPage";
 import VendorVerificationPage from "../pages/VendorVerificationPage";
 import AdminCancellationsPage from "../pages/AdminCancellationsPage";
+import ChatPage from "../pages/ChatPage";
 
 export const appRoutes = [
   {
@@ -75,6 +76,8 @@ export const appRoutes = [
           { path: "/bookings/:bookingId/payment", element: <BookingPaymentPage /> },
           { path: "/customer/bookings/:bookingId/payments", element: <BookingPaymentPage /> },
           { path: "/customer/payments", element: <PaymentHistoryPage /> },
+          { path: "/messages", element: <ChatPage /> },
+          { path: "/messages/:conversationId", element: <ChatPage /> },
         ],
       },
     ],
@@ -91,6 +94,8 @@ export const appRoutes = [
           { path: "/vendor/verification", element: <VendorVerificationPage /> },
           { path: "/vendor/earnings", element: <VendorEarningsPage /> },
           { path: "/vendor/payouts/:payoutId", element: <VendorEarningsPage /> },
+          { path: "/vendor/messages", element: <ChatPage /> },
+          { path: "/vendor/messages/:conversationId", element: <ChatPage /> },
         ],
       },
     ],

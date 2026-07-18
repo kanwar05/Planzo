@@ -120,6 +120,22 @@ See [`server/README.md`](server/README.md) for:
 - Testing instructions
 # Planzo payments
 
+## Realtime chat
+
+Planzo chat uses Socket.IO plus MongoDB-backed `Conversation` and `Message` records. Socket handshakes authenticate the existing HttpOnly `planzo_access` JWT cookie; REST endpoints under `/api/chat` use the same access rules. Booking conversations are restricted to the booking customer, vendor account, and admins. Direct one-to-one conversations can also be created with a participant ID.
+
+Messages support Unicode emoji, up to five Cloudinary-backed image/file attachments of 10 MB each, full-text search, soft deletion, per-user conversation deletion, unread counters, delivery timestamps, seen receipts, typing events, online presence, and persisted last-seen timestamps. New messages also create Planzo notifications. Compound participant, booking, message-order, and text indexes support chat-list and history queries.
+
+The responsive `/messages` UI provides a mobile conversation/chat split view, unread badges, presence and last-seen text, booking context, message search, attachment previews, emoji selection, typing feedback, receipts, deletion, and automatic scrolling. Configure `VITE_SOCKET_URL` only when the socket origin differs from the API origin; otherwise it is derived from `VITE_API_URL`.
+
+## Production vendor search
+
+`GET /api/vendors` uses a faceted MongoDB aggregation for instant text search, multiple categories, price, rating, experience, verified status, city, date availability, and GeoJSON radius filters. Sorting supports highest rated, lowest price, newest, popularity, most booked, and distance. Results use bounded pagination with `hasNextPage`; booking counts and popularity scores are calculated inside the pipeline.
+
+Vendor profiles accept optional `latitude`, `longitude`, and `locationCity` values. Radius filtering requires stored coordinates and the `lat`, `lng`, and `radiusKm` query parameters. `GET /api/vendors/search/meta?q=` supplies cached city autocomplete suggestions. Composite and `2dsphere` indexes support the main access paths. Search responses use a bounded 30-second application cache and short browser/CDN cache headers; vendor profile mutations invalidate cached results.
+
+The vendor directory includes debounced search, dual price sliders, category selection, autocomplete, browser-location radius search, availability dates, verification and experience filters, removable chips, responsive mobile filters, sorting, skeleton states, and intersection-observer infinite scrolling.
+
 Planzo uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
 
 ```mermaid

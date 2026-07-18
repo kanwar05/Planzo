@@ -1,5 +1,5 @@
-import { Filter, Search, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Filter, LocateFixed, Search, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
@@ -9,342 +9,59 @@ import VendorCard from "../components/VendorCard";
 import { useAuth } from "../context/AuthContext";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import {
-  addFavorite,
-  getFavorites,
-  removeFavorite,
-} from "../services/favoriteService";
-import { getVendors } from "../services/vendorService";
+import { addFavorite, getFavorites, removeFavorite } from "../services/favoriteService";
+import { getVendorSearchMeta, getVendors } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
+
+const defaults = { search: "", categories: [], city: "", minRating: "", minExperience: "", minPrice: 0, maxPrice: 500000, availabilityDate: "", verified: false, radiusKm: 25, lat: "", lng: "", sort: "popularity" };
+const sortOptions = [["popularity", "Popularity"], ["highest_rated", "Highest Rated"], ["lowest_price", "Lowest Price"], ["newest", "Newest"], ["most_booked", "Most Booked"], ["distance", "Nearest"]];
 
 export default function VendorsPage() {
   useDocumentTitle("Find vendors");
-  const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
-  const [search, setSearch] = useState(params.get("q") || "");
-  const [category, setCategory] = useState(params.get("category") || "");
-  const [location, setLocation] = useState(params.get("location") || "");
-  const [minRating, setMinRating] = useState(params.get("minRating") || "");
-  const [minExperience, setMinExperience] = useState(params.get("minExperience") || "");
-  const [minPrice, setMinPrice] = useState(params.get("minPrice") || "");
-  const [maxPrice, setMaxPrice] = useState(params.get("maxPrice") || "");
-  const [sort, setSort] = useState(params.get("sort") || "recommended");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [vendors, setVendors] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, pages: 1 });
-  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
-  const [favoriteLoadingId, setFavoriteLoadingId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [url, setUrl] = useSearchParams(); const navigate = useNavigate(); const { user, isAuthenticated } = useAuth();
+  const initial = { ...defaults, search: url.get("q") || "", categories: url.get("categories")?.split(",").filter(Boolean) || [], city: url.get("city") || "", minRating: url.get("minRating") || "", minExperience: url.get("minExperience") || "", minPrice: Number(url.get("minPrice") || 0), maxPrice: Number(url.get("maxPrice") || 500000), availabilityDate: url.get("availabilityDate") || "", verified: url.get("verified") === "true", radiusKm: Number(url.get("radiusKm") || 25), lat: url.get("lat") || "", lng: url.get("lng") || "", sort: url.get("sort") || "popularity" };
+  const [filters, setFilters] = useState(initial); const [debouncedSearch, setDebouncedSearch] = useState(initial.search);
+  const [vendors, setVendors] = useState([]); const [pagination, setPagination] = useState({ page: 1, total: 0, hasNextPage: false });
+  const [loading, setLoading] = useState(true); const [loadingMore, setLoadingMore] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
+  const [drawer, setDrawer] = useState(false); const [cities, setCities] = useState([]); const [cityOpen, setCityOpen] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState(new Set()); const [favoriteLoadingId, setFavoriteLoadingId] = useState(""); const sentinel = useRef(null); const requestId = useRef(0);
+  const set = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
 
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError("");
+  useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(filters.search.trim()), 250); return () => clearTimeout(timer); }, [filters.search]);
+  const query = useMemo(() => ({ search: debouncedSearch || undefined, categories: filters.categories.join(",") || undefined, city: filters.city || undefined, minRating: filters.minRating || undefined, minExperience: filters.minExperience || undefined, minPrice: filters.minPrice || undefined, maxPrice: filters.maxPrice < defaults.maxPrice ? filters.maxPrice : undefined, availabilityDate: filters.availabilityDate || undefined, verified: filters.verified || undefined, radiusKm: filters.lat ? filters.radiusKm : undefined, lat: filters.lat || undefined, lng: filters.lng || undefined, sort: filters.lat && filters.sort === "distance" ? "distance" : filters.sort, limit: 12 }), [debouncedSearch, filters]);
+  const queryKey = JSON.stringify(query);
 
-      try {
-        const data = await getVendors({
-          search: search || undefined,
-          category: category || undefined,
-          location: location || undefined,
-          minRating: minRating || undefined,
-          minExperience: minExperience || undefined,
-          minPrice: minPrice || undefined,
-          maxPrice: maxPrice || undefined,
-          sort: sort !== "recommended" ? sort : undefined,
-          limit: 12,
-          page: 1,
-        });
-        setVendors(data.vendors);
-        setPagination(data.pagination);
-      } catch (requestError) {
-        setError(getApiError(requestError, "Unable to load vendors."));
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
+  useEffect(() => { const id = ++requestId.current; const controller = new AbortController(); setLoading(true); setError(""); getVendors({ ...query, page: 1 }, { signal: controller.signal }).then((data) => { if (id === requestId.current) { setVendors(data.vendors); setPagination(data.pagination); } }).catch((e) => { if (e.name !== "CanceledError" && id === requestId.current) setError(getApiError(e, "Unable to search vendors.")); }).finally(() => { if (id === requestId.current) setLoading(false); }); return () => controller.abort(); }, [queryKey]);
+  useEffect(() => { const next = {}; if (filters.search) next.q = filters.search; for (const key of ["city", "minRating", "minExperience", "availabilityDate", "sort", "lat", "lng", "radiusKm"]) if (filters[key] && filters[key] !== defaults[key]) next[key] = String(filters[key]); if (filters.categories.length) next.categories = filters.categories.join(","); if (filters.minPrice) next.minPrice = String(filters.minPrice); if (filters.maxPrice < defaults.maxPrice) next.maxPrice = String(filters.maxPrice); if (filters.verified) next.verified = "true"; setUrl(next, { replace: true }); }, [filters, setUrl]);
+  useEffect(() => { const timer = setTimeout(() => getVendorSearchMeta(filters.city).then((data) => setCities(data.cities)).catch(() => setCities([])), 150); return () => clearTimeout(timer); }, [filters.city]);
+  useEffect(() => { if (!isAuthenticated || user?.role !== "customer") return setFavoriteIds(new Set()); getFavorites().then((items) => setFavoriteIds(new Set(items.map((x) => x.vendorId?._id).filter(Boolean)))).catch(() => {}); }, [isAuthenticated, user?.role]);
 
-    return () => clearTimeout(timer);
-  }, [search, category, location, minRating, minExperience, minPrice, maxPrice, sort]);
+  const loadMore = async () => { if (loading || loadingMore || !pagination.hasNextPage) return; setLoadingMore(true); try { const data = await getVendors({ ...query, page: pagination.page + 1 }); setVendors((current) => [...current, ...data.vendors.filter((item) => !current.some((old) => old._id === item._id))]); setPagination(data.pagination); } catch (e) { setError(getApiError(e, "Unable to load more vendors.")); } finally { setLoadingMore(false); } };
+  useEffect(() => { const node = sentinel.current; if (!node) return; const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && loadMore(), { rootMargin: "300px" }); observer.observe(node); return () => observer.disconnect(); }, [pagination.hasNextPage, pagination.page, loading, loadingMore, queryKey]);
+  const reset = () => { setFilters(defaults); setDebouncedSearch(""); setUrl({}); };
+  const toggleCategory = (value) => set("categories", filters.categories.includes(value) ? filters.categories.filter((x) => x !== value) : [...filters.categories, value]);
+  const locate = () => { if (!navigator.geolocation) return setError("Location is unavailable in this browser."); navigator.geolocation.getCurrentPosition(({ coords }) => { setFilters((current) => ({ ...current, lat: coords.latitude.toFixed(6), lng: coords.longitude.toFixed(6), sort: "distance" })); }, () => setError("Location permission was not granted."), { enableHighAccuracy: false, timeout: 8000 }); };
+  const toggleFavorite = async (id) => { if (!isAuthenticated || user?.role !== "customer") return navigate("/login"); const had = favoriteIds.has(id); setFavoriteLoadingId(id); setFavoriteIds((current) => { const next = new Set(current); had ? next.delete(id) : next.add(id); return next; }); try { had ? await removeFavorite(id) : await addFavorite(id); setSuccess(had ? "Removed from favorites" : "Added to favorites"); } catch (e) { setError(getApiError(e, "Unable to update favorites.")); setFavoriteIds((current) => { const next = new Set(current); had ? next.add(id) : next.delete(id); return next; }); } finally { setFavoriteLoadingId(""); } };
 
-  useEffect(() => {
-    if (!isAuthenticated || user?.role !== "customer") {
-      setFavoriteIds(new Set());
-      return;
-    }
+  const chips = [debouncedSearch && ["search", `“${debouncedSearch}”`], ...filters.categories.map((x) => [`category:${x}`, x]), filters.city && ["city", filters.city], filters.minRating && ["rating", `${filters.minRating}+ stars`], filters.minExperience && ["experience", `${filters.minExperience}+ years`], filters.verified && ["verified", "Verified only"], filters.availabilityDate && ["date", `Available ${filters.availabilityDate}`], filters.lat && ["radius", `Within ${filters.radiusKm} km`], (filters.minPrice > 0 || filters.maxPrice < defaults.maxPrice) && ["price", `₹${filters.minPrice.toLocaleString()}–₹${filters.maxPrice.toLocaleString()}`]].filter(Boolean);
+  const removeChip = (key) => { if (key.startsWith("category:")) toggleCategory(key.slice(9)); else if (key === "search") set("search", ""); else if (key === "city") set("city", ""); else if (key === "rating") set("minRating", ""); else if (key === "experience") set("minExperience", ""); else if (key === "verified") set("verified", false); else if (key === "date") set("availabilityDate", ""); else if (key === "radius") setFilters((c) => ({ ...c, lat: "", lng: "", sort: "popularity" })); else if (key === "price") setFilters((c) => ({ ...c, minPrice: 0, maxPrice: defaults.maxPrice })); };
 
-    getFavorites()
-      .then((items) =>
-        setFavoriteIds(
-          new Set(items.map((item) => item.vendorId?._id).filter(Boolean)),
-        ),
-      )
-      .catch(() => {
-        setFavoriteIds(new Set());
-      });
-  }, [isAuthenticated, user?.role]);
+  const FilterPanel = () => <div className="space-y-6"><div className="flex items-center justify-between"><h3 className="flex items-center gap-2 font-extrabold"><SlidersHorizontal className="h-5 w-5" /> Filters</h3><button onClick={reset} className="text-xs font-bold text-coral">Reset</button></div>
+    <div><span className="label">Categories</span><div className="space-y-2">{services.map((item) => <label key={item.title} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.categories.includes(item.title)} onChange={() => toggleCategory(item.title)} />{item.title}</label>)}</div></div>
+    <div className="relative"><label className="label">City</label><input className="field" value={filters.city} onFocus={() => setCityOpen(true)} onChange={(e) => { set("city", e.target.value); setCityOpen(true); }} placeholder="Start typing a city" />{cityOpen && cities.length > 0 && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border bg-white shadow-xl">{cities.map((city) => <button key={city} className="block w-full px-4 py-2 text-left text-sm hover:bg-sand" onClick={() => { set("city", city); setCityOpen(false); }}>{city}</button>)}</div>}</div>
+    <div><div className="flex justify-between"><label className="label">Price range</label><span className="text-xs">₹{filters.minPrice.toLocaleString()} – ₹{filters.maxPrice.toLocaleString()}</span></div><input type="range" min="0" max="500000" step="5000" value={filters.minPrice} onChange={(e) => set("minPrice", Math.min(Number(e.target.value), filters.maxPrice))} className="w-full" /><input type="range" min="0" max="500000" step="5000" value={filters.maxPrice} onChange={(e) => set("maxPrice", Math.max(Number(e.target.value), filters.minPrice))} className="w-full" /></div>
+    <div><label className="label">Minimum rating</label><div className="flex gap-2">{["4", "4.5", "4.8"].map((x) => <button key={x} onClick={() => set("minRating", filters.minRating === x ? "" : x)} className={`rounded-xl border px-3 py-2 text-xs font-bold ${filters.minRating === x ? "border-coral bg-coral/10 text-coral" : "bg-white"}`}>{x}+ ★</button>)}</div></div>
+    <div><label className="label">Experience</label><select className="field" value={filters.minExperience} onChange={(e) => set("minExperience", e.target.value)}><option value="">Any experience</option><option value="2">2+ years</option><option value="5">5+ years</option><option value="10">10+ years</option></select></div>
+    <div><label className="label">Available on</label><input type="date" min={new Date().toISOString().slice(0, 10)} className="field" value={filters.availabilityDate} onChange={(e) => set("availabilityDate", e.target.value)} /></div>
+    <label className="flex items-center justify-between rounded-xl border p-3 text-sm font-bold">Verified vendors only<input type="checkbox" checked={filters.verified} onChange={(e) => set("verified", e.target.checked)} /></label>
+    <div><Button variant="outline" onClick={locate} className="w-full"><LocateFixed className="h-4 w-4" /> Use my location</Button>{filters.lat && <><label className="label mt-3">Radius: {filters.radiusKm} km</label><input type="range" min="5" max="100" step="5" value={filters.radiusKm} onChange={(e) => set("radiusKm", Number(e.target.value))} className="w-full" /></>}</div>
+  </div>;
 
-  useEffect(() => {
-    const next = {};
-    if (search) next.q = search;
-    if (category) next.category = category;
-    if (location) next.location = location;
-    if (minRating) next.minRating = minRating;
-    if (minExperience) next.minExperience = minExperience;
-    if (minPrice) next.minPrice = minPrice;
-    if (maxPrice) next.maxPrice = maxPrice;
-    if (sort && sort !== "recommended") next.sort = sort;
-    setParams(next, { replace: true });
-  }, [search, category, location, minRating, minExperience, minPrice, maxPrice, sort, setParams]);
-
-  const clear = () => {
-    setSearch("");
-    setCategory("");
-    setLocation("");
-    setMinRating("");
-    setMinExperience("");
-    setMinPrice("");
-    setMaxPrice("");
-    setSort("recommended");
-    setParams({});
-  };
-
-  const toggleFavorite = async (vendorId) => {
-    if (!isAuthenticated || user?.role !== "customer") {
-      navigate("/login");
-      return;
-    }
-
-    const wasFavorited = favoriteIds.has(vendorId);
-    setFavoriteLoadingId(vendorId);
-    setError("");
-    setSuccess("");
-    setFavoriteIds((current) => {
-      const next = new Set(current);
-      if (wasFavorited) next.delete(vendorId);
-      else next.add(vendorId);
-      return next;
-    });
-
-    try {
-      if (wasFavorited) {
-        await removeFavorite(vendorId);
-        setSuccess("Vendor removed from favorites");
-      } else {
-        await addFavorite(vendorId);
-        setSuccess("Vendor added to favorites");
-      }
-    } catch (requestError) {
-      setFavoriteIds((current) => {
-        const next = new Set(current);
-        if (wasFavorited) next.add(vendorId);
-        else next.delete(vendorId);
-        return next;
-      });
-      setError(getApiError(requestError, "Unable to update favorites."));
-    } finally {
-      setFavoriteLoadingId("");
-    }
-  };
-
-  const FilterPanel = () => (
-    <div className="space-y-7">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 font-extrabold">
-          <SlidersHorizontal className="h-5 w-5" /> Filters
-        </h3>
-        <button onClick={clear} className="text-xs font-bold text-coral">
-          Clear all
-        </button>
-      </div>
-      <div>
-        <label className="label">Service category</label>
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value)}
-          className="field"
-        >
-          <option value="">All services</option>
-          {services.map((item) => (
-            <option key={item.slug} value={item.title}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="label">Location</label>
-        <input
-          value={location}
-          onChange={(event) => setLocation(event.target.value)}
-          className="field"
-          placeholder="Search location..."
-        />
-      </div>
-      <div>
-        <label className="label">Minimum rating</label>
-        <div className="grid grid-cols-2 gap-2">
-          {["4", "4.5", "4.8"].map((item) => (
-            <button
-              type="button"
-              key={item}
-              onClick={() => setMinRating(minRating === item ? "" : item)}
-              className={`rounded-xl border px-3 py-2 text-xs font-bold ${
-                minRating === item
-                  ? "border-coral bg-coral/10 text-coral"
-                  : "bg-white"
-              }`}
-            >
-              {item}+ ★
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <label className="label">Minimum experience (years)</label>
-        <input
-          type="number"
-          min="0"
-          value={minExperience}
-          onChange={(event) => setMinExperience(event.target.value)}
-          className="field"
-          placeholder="e.g., 5"
-        />
-      </div>
-      <div>
-        <label className="label">Price range</label>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            min="0"
-            value={minPrice}
-            onChange={(event) => setMinPrice(event.target.value)}
-            className="field flex-1"
-            placeholder="Min"
-          />
-          <input
-            type="number"
-            min="0"
-            value={maxPrice}
-            onChange={(event) => setMaxPrice(event.target.value)}
-            className="field flex-1"
-            placeholder="Max"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <section className="section-pad container-shell !pt-12">
-      <Toast
-        message={error || success}
-        type={error ? "error" : "success"}
-        onClose={() => {
-          setError("");
-          setSuccess("");
-        }}
-      />
-      <div className="max-w-2xl">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-coral">
-          Curated for you
-        </p>
-        <h1 className="mt-3 text-4xl font-extrabold sm:text-5xl">
-          Find your event people.
-        </h1>
-        <p className="mt-4 text-ink/50">
-          Explore professionals whose work and pricing fit your celebration.
-        </p>
-      </div>
-      <div className="mt-9 flex gap-3">
-        <label className="relative flex-1">
-          <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/35" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="field !rounded-full !py-4 !pl-13"
-            style={{ paddingLeft: "3.25rem" }}
-            placeholder="Search by vendor, service, or city"
-          />
-        </label>
-        <Button
-          onClick={() => setFiltersOpen(true)}
-          variant="outline"
-          className="lg:hidden"
-        >
-          <Filter className="h-4 w-4" />
-          <span className="hidden sm:inline">Filters</span>
-        </Button>
-      </div>
-      <div className="mt-10 grid items-start gap-8 lg:grid-cols-[260px_1fr]">
-        <aside className="sticky top-28 hidden rounded-[1.75rem] border bg-white p-6 shadow-soft lg:block">
-          <FilterPanel />
-        </aside>
-        <div>
-          <div className="mb-5 flex items-center justify-between">
-            <p className="text-sm text-ink/50">
-              <strong className="text-ink">{vendors.length}</strong> trusted
-              vendors
-              {pagination.pages > 1 && (
-                <span> (Page {pagination.page} of {pagination.pages})</span>
-              )}
-            </p>
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value)}
-              className="rounded-full border bg-white px-4 py-2.5 text-xs font-bold outline-none"
-            >
-              <option value="recommended">Recommended</option>
-              <option value="rating">Highest rated</option>
-              <option value="experience">Most experienced</option>
-              <option value="price_asc">Price: low to high</option>
-              <option value="price_desc">Price: high to low</option>
-            </select>
-          </div>
-          {loading ? (
-            <LoadingSkeleton />
-          ) : error ? (
-            <EmptyState title="Could not load vendors" description={error} />
-          ) : vendors.length ? (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {vendors.map((vendor) => (
-                <VendorCard
-                  key={vendor._id}
-                  vendor={vendor}
-                  isFavorited={favoriteIds.has(vendor._id)}
-                  favoriteLoading={favoriteLoadingId === vendor._id}
-                  onToggleFavorite={() => toggleFavorite(vendor._id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState onClear={clear} />
-          )}
-        </div>
-      </div>
-      {filtersOpen && (
-        <div className="fixed inset-0 z-[60] bg-ink/30 backdrop-blur-sm lg:hidden">
-          <div className="absolute inset-y-0 right-0 w-full max-w-sm overflow-y-auto bg-cream p-6">
-            <div className="mb-8 flex justify-end">
-              <button
-                onClick={() => setFiltersOpen(false)}
-                className="grid h-10 w-10 place-items-center rounded-full bg-white"
-              >
-                <X />
-              </button>
-            </div>
-            <FilterPanel />
-            <Button
-              onClick={() => setFiltersOpen(false)}
-              className="mt-9 w-full"
-            >
-              Show {filtered.length} vendors
-            </Button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
+  return <section className="section-pad container-shell !pt-12"><Toast message={error || success} type={error ? "error" : "success"} onClose={() => { setError(""); setSuccess(""); }} /><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-coral">Production search</p><h1 className="mt-3 text-4xl font-extrabold sm:text-5xl">Find your event people.</h1></div>
+    <div className="mt-8 flex gap-3"><label className="relative flex-1"><Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/35" /><input value={filters.search} onChange={(e) => set("search", e.target.value)} className="field !rounded-full !py-4" style={{ paddingLeft: "3.25rem" }} placeholder="Search vendors, services, or locations" /></label><Button variant="outline" onClick={() => setDrawer(true)} className="lg:hidden"><Filter className="h-4 w-4" /> Filters</Button></div>
+    {chips.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{chips.map(([key, label]) => <button key={key} onClick={() => removeChip(key)} className="flex items-center gap-1 rounded-full bg-plum/10 px-3 py-1.5 text-xs font-bold text-plum">{label}<X className="h-3 w-3" /></button>)}<button onClick={reset} className="px-2 text-xs font-bold text-coral">Reset all</button></div>}
+    <div className="mt-8 grid items-start gap-8 lg:grid-cols-[280px_1fr]"><aside className="sticky top-28 hidden rounded-[1.75rem] border bg-white p-6 shadow-soft lg:block"><FilterPanel /></aside><main><div className="mb-5 flex items-center justify-between gap-3"><p className="text-sm text-ink/50"><b className="text-ink">{pagination.total}</b> vendors found</p><select value={filters.sort} onChange={(e) => set("sort", e.target.value)} className="rounded-full border bg-white px-4 py-2.5 text-xs font-bold">{sortOptions.filter(([key]) => key !== "distance" || filters.lat).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+      {loading ? <LoadingSkeleton /> : vendors.length ? <><div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">{vendors.map((vendor) => <VendorCard key={vendor._id} vendor={vendor} isFavorited={favoriteIds.has(vendor._id)} favoriteLoading={favoriteLoadingId === vendor._id} onToggleFavorite={() => toggleFavorite(vendor._id)} />)}</div><div ref={sentinel} className="h-10" />{loadingMore && <div className="mt-4"><LoadingSkeleton /></div>}{!pagination.hasNextPage && <p className="mt-8 text-center text-sm text-ink/40">You’ve reached the end.</p>}</> : <EmptyState title="No vendors match" description="Try widening your radius or removing a filter." actionLabel="Reset filters" onClear={reset} />}</main></div>
+    {drawer && <div className="fixed inset-0 z-[60] bg-ink/30 backdrop-blur-sm lg:hidden"><div className="absolute inset-y-0 right-0 w-full max-w-sm overflow-y-auto bg-cream p-6"><div className="mb-6 flex justify-end"><button onClick={() => setDrawer(false)} className="grid h-10 w-10 place-items-center rounded-full bg-white"><X /></button></div><FilterPanel /><Button onClick={() => setDrawer(false)} className="mt-8 w-full">Show {pagination.total} vendors</Button></div></div>}
+  </section>;
 }

@@ -908,6 +908,7 @@ export default function CustomerDashboardPage() {
                               >
                                 Payment details
                               </Link>
+                              <Link to={`/messages?bookingId=${booking._id}`} className="text-xs font-extrabold text-plum hover:text-plum/75">Chat</Link>
                               {booking.vendorId?._id && (
                                 <Link
                                   to={`/vendors/${booking.vendorId._id}`}

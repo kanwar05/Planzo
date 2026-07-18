@@ -17,6 +17,7 @@ import paymentAdminRoutes from "./routes/paymentAdminRoutes.js";
 import vendorPaymentRoutes from "./routes/vendorPaymentRoutes.js";
 import vendorVerificationRoutes from "./routes/vendorVerificationRoutes.js";
 import cancellationRoutes from "./routes/cancellationRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 import { razorpayWebhook } from "./controllers/webhookController.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
@@ -116,6 +117,7 @@ app.use("/api/bookings", cancellationRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -14,6 +14,7 @@ import {
   toNonNegativeNumber,
   validateObjectId,
 } from "../utils/validation.js";
+import { clearVendorSearchCache, getVendorSearchMeta, searchVendors } from "../services/vendorSearchService.js";
 
 const EDITABLE_FIELDS = [
   "businessName",
@@ -23,6 +24,7 @@ const EDITABLE_FIELDS = [
   "pricing",
   "packages",
   "location",
+  "locationCity",
 ];
 
 function normalizeVendorInput(body) {
@@ -56,6 +58,12 @@ function normalizeVendorInput(body) {
       };
     });
   }
+  if (body.latitude !== undefined || body.longitude !== undefined) {
+    const latitude = Number(body.latitude); const longitude = Number(body.longitude);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new ApiError(400, "Valid latitude and longitude are required.");
+    data.locationPoint = { type: "Point", coordinates: [longitude, latitude] };
+  }
+  if (data.location && !data.locationCity) data.locationCity = data.location.split(",")[0].trim();
   return data;
 }
 
@@ -381,6 +389,7 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
   if (!vendor) {
     throw new ApiError(404, "Vendor profile not found.");
   }
+  clearVendorSearchCache();
 
   const image = vendor.portfolioImages.find(
     (item) =>
@@ -429,6 +438,7 @@ export const createVendorProfile = asyncHandler(async (req, res) => {
     ...normalizeVendorInput(req.body),
     userId: req.user._id,
   });
+  clearVendorSearchCache();
 
   res.status(201).json({
     success: true,
@@ -438,87 +448,20 @@ export const createVendorProfile = asyncHandler(async (req, res) => {
 });
 
 export const getVendors = asyncHandler(async (req, res) => {
-  const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-  const limit = Math.min(
-    Math.max(Number.parseInt(req.query.limit, 10) || 12, 1),
-    50,
-  );
-  const filters = { reported: false };
-
-  if (req.query.category) filters.serviceCategory = req.query.category;
-  if (req.query.verified === "true") filters.verificationStatus = "approved";
-  if (req.query.location) {
-    filters.location = {
-      $regex: String(req.query.location).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      $options: "i",
-    };
-  }
-  if (req.query.search) filters.$text = { $search: req.query.search };
-
-  // Add minimum rating filter
-  if (req.query.minRating) {
-    const minRating = Number.parseFloat(req.query.minRating);
-    if (!Number.isNaN(minRating) && minRating >= 0 && minRating <= 5) {
-      filters.averageRating = { $gte: minRating };
-    }
-  }
-
-  // Add minimum experience filter
-  if (req.query.minExperience) {
-    const minExp = Number.parseInt(req.query.minExperience, 10);
-    if (!Number.isNaN(minExp) && minExp >= 0) {
-      filters.experience = { $gte: minExp };
-    }
-  }
-
-  // Add price range filter
-  if (req.query.minPrice || req.query.maxPrice) {
-    filters.pricing = {};
-    if (req.query.minPrice) {
-      const minPrice = Number.parseFloat(req.query.minPrice);
-      if (!Number.isNaN(minPrice) && minPrice >= 0) {
-        filters.pricing.$gte = minPrice;
-      }
-    }
-    if (req.query.maxPrice) {
-      const maxPrice = Number.parseFloat(req.query.maxPrice);
-      if (!Number.isNaN(maxPrice) && maxPrice >= 0) {
-        filters.pricing.$lte = maxPrice;
-      }
-    }
-  }
-
-  const sort =
-    req.query.sort === "price_asc"
-      ? { pricing: 1 }
-      : req.query.sort === "price_desc"
-        ? { pricing: -1 }
-        : req.query.sort === "rating"
-          ? { averageRating: -1, verified: -1, createdAt: -1 }
-          : req.query.sort === "experience"
-            ? { experience: -1, verified: -1, createdAt: -1 }
-            : { verified: -1, averageRating: -1, rating: -1, createdAt: -1 };
-
-  const [vendors, total] = await Promise.all([
-    Vendor.find(filters)
-      .populate("userId", "name email phone")
-      .sort(sort)
-      .skip((page - 1) * limit)
-      .limit(limit),
-    Vendor.countDocuments(filters),
-  ]);
+  const result = await searchVendors(req.query);
+  res.set("Cache-Control", "public, max-age=15, stale-while-revalidate=30");
 
   res.status(200).json({
     success: true,
-    count: vendors.length,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-    },
-    vendors,
+    count: result.vendors.length,
+    ...result,
   });
+});
+
+export const getVendorSearchMetadata = asyncHandler(async (req, res) => {
+  const result = await getVendorSearchMeta(String(req.query.q || "").trim());
+  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
+  res.json({ success: true, ...result });
 });
 
 export const getVendorById = asyncHandler(async (req, res) => {
@@ -562,6 +505,7 @@ export const updateVendorProfile = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Vendor profile not found.");
   }
 
+  clearVendorSearchCache();
   res.status(200).json({
     success: true,
     message: "Vendor profile updated successfully.",
@@ -624,6 +568,7 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
     Availability.deleteOne({ vendorId: vendor._id }),
     vendor.deleteOne(),
   ]);
+  clearVendorSearchCache();
 
   res.status(200).json({
     success: true,

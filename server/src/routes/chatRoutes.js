@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { createConversation, deleteConversation, deleteMessage, getMessages, listConversations, readConversation, sendMessage } from "../controllers/chatController.js";
+import { protect } from "../middleware/authMiddleware.js";
+import { uploadChatAttachments } from "../middleware/upload.js";
+const router = Router(); router.use(protect);
+router.get("/conversations", listConversations);
+router.post("/conversations", createConversation);
+router.get("/conversations/:id/messages", getMessages);
+router.post("/conversations/:id/messages", uploadChatAttachments, sendMessage);
+router.patch("/conversations/:id/read", readConversation);
+router.delete("/conversations/:id", deleteConversation);
+router.delete("/messages/:messageId", deleteMessage);
+export default router;

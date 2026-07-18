@@ -35,6 +35,7 @@ const userSchema = new mongoose.Schema(
       enum: ["customer", "vendor", "admin"],
       default: "customer",
     },
+    lastSeenAt: { type: Date, default: null },
     passwordResetTokenHash: {
       type: String,
       select: false,

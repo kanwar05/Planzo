@@ -18,10 +18,13 @@ const DOCUMENT_MIME_TYPES = new Set([
   "application/pdf",
 ]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_CHAT_FILE_SIZE = 10 * 1024 * 1024;
+const CHAT_EXTENSIONS = new Set([...DOCUMENT_EXTENSIONS, ".doc", ".docx", ".txt", ".csv", ".xls", ".xlsx"]);
+const CHAT_MIME_TYPES = new Set([...DOCUMENT_MIME_TYPES, "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
 
 const getCloudinaryResourceType = (file) => {
   const extension = path.extname(file.originalname || "").toLowerCase();
-  return extension === ".pdf" ? "raw" : "image";
+  return IMAGE_EXTENSIONS.has(extension) ? "image" : "raw";
 };
 
 const createStorage = (folder, options = {}) =>
@@ -71,7 +74,7 @@ const createUploader = (folder, files, fileFilter = imageFileFilter, options = {
   multer({
     storage: createStorage(folder, options),
     limits: {
-      fileSize: MAX_IMAGE_SIZE,
+      fileSize: options.maxFileSize || MAX_IMAGE_SIZE,
       files,
       fields: 10,
       parts: files + 10,
@@ -168,6 +171,26 @@ export const uploadTypedVerificationDocuments = ensureCloudinaryConfigured(
     { name: "profilePhoto", maxCount: 1 },
   ]),
 );
+
+const chatFileFilter = (req, file, callback) => {
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  if (!CHAT_EXTENSIONS.has(extension) || !CHAT_MIME_TYPES.has(file.mimetype)) {
+    return callback(new ApiError(400, "Unsupported chat attachment type."));
+  }
+  return callback(null, true);
+};
+
+export const uploadChatAttachments = (req, res, next) => {
+  if (!req.is("multipart/form-data")) return next();
+  return ensureCloudinaryConfigured(
+    createUploader(
+      "planzo/chat",
+      5,
+      chatFileFilter,
+      { resourceType: "auto", allowedFormats: ["jpg", "jpeg", "png", "webp", "pdf", "doc", "docx", "txt", "csv", "xls", "xlsx"], maxFileSize: MAX_CHAT_FILE_SIZE },
+    ).array("attachments", 5),
+  )(req, res, next);
+};
 
 const reviewImageUpload = createUploader(
   "planzo/reviews",
