@@ -146,3 +146,11 @@ Copy `server/.env.example` to `server/.env`, use Razorpay test-mode keys, and se
 All payment variables are documented in `server/.env.example`. Startup rejects percentage configurations that do not total 100, and production startup requires Razorpay credentials. Cancellation uses the free-window and fee settings; calculations should be recorded before refund initiation. Refunds are initiated by admins and finalized only by verified webhooks. A completed, fully paid, undisputed booking becomes payout-eligible after `VENDOR_PAYOUT_HOLD_DAYS`; platform fees and refund deductions are reflected separately.
 
 Each captured installment receives a server-generated unique receipt number and downloadable PDF. The final installment is labeled as the consolidated invoice. Invoice access is restricted to the customer, associated vendor, or admin. Planzo stores no card, UPI, wallet, or bank credentials. Secrets and provider signatures are omitted from API responses. Adding Stripe requires implementing the existing provider interface and selecting it in the factory; booking eligibility and monetary state logic remain unchanged.
+
+## Booking cancellation and refunds
+
+Customers, vendors, and admins cancel through `POST /api/bookings/:id/cancel` with a required reason. The immutable cancellation record stores the actor and role, timestamp, policy snapshot, calculated percentage and amount, late fee, dispute details, reviewer, and timeline. Key status and amount fields are also projected onto `Booking` for customer and vendor dashboards.
+
+Customer cancellations receive a full refund before `CANCELLATION_FREE_WINDOW_HOURS`, a configurable partial refund between that window and `CANCELLATION_PARTIAL_WINDOW_HOURS`, and no refund closer to or after the event. The late fee is deducted from partial refunds. Vendor and admin cancellations calculate a full refund of captured funds. All monetary values are integer paise.
+
+Eligible refunds enter `pending_review`. Admins review them at `/admin/cancellations` and approve or reject with a reason. Approval distributes the refund safely across captured installments; Razorpay webhooks finalize `partially_refunded` or `refunded`. Customers and vendors can dispute non-final outcomes, and vendors can retrieve their cancellation history from `GET /api/bookings/vendor-history`.

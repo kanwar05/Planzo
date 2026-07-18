@@ -135,6 +135,7 @@ export default function AdminDashboardPage() {
           <StatCard title="Verified Vendors" value={summary.verifiedVendors || 0} icon={BadgeCheck} tone="text-emerald-700" />
           <StatCard title="Pending Verification" value={summary.pendingVerification || 0} icon={CheckCircle} tone="text-amber-700" to="/admin/vendors/unverified" />
           <StatCard title="Total Bookings" value={summary.totalBookings || 0} icon={Calendar} tone="text-coral" to="/admin/bookings" />
+          <StatCard title="Cancellation Refunds" value="Review" icon={AlertCircle} tone="text-amber-700" to="/admin/cancellations" />
           <StatCard title="Recent Reports" value={dashboard?.recentReports?.pagination?.total || 0} icon={AlertCircle} tone="text-red-600" to="/admin/vendors/reported" />
           <StatCard
             title="Tracked Revenue"
@@ -251,6 +252,7 @@ export default function AdminDashboardPage() {
           <Button to="/admin/bookings" variant="outline">
             View Bookings
           </Button>
+          <Button to="/admin/cancellations" variant="outline">Cancellation refunds</Button>
         </div>
       </div>
     </section>

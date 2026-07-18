@@ -15,6 +15,7 @@ import {
 } from "../controllers/adminController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 import { getVerification, listVerifications, reviewVerification } from "../controllers/vendorVerificationController.js";
+import { listCancellations, reviewRefund } from "../controllers/cancellationController.js";
 
 const router = Router();
 
@@ -23,6 +24,8 @@ router.use(protect, authorizeRoles("admin"));
 
 // Dashboard stats
 router.get("/stats", getAdminStats);
+router.get("/cancellations", listCancellations);
+router.patch("/cancellations/:id/refund", reviewRefund);
 
 // Vendor management
 router.get("/vendors/unverified", getUnverifiedVendors);

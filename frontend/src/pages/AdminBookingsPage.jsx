@@ -8,6 +8,7 @@ import Button from "../components/Button";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import {api} from "../services/api";
 import { getApiError } from "../utils/apiError";
+import { cancelBookingRequest } from "../services/bookingService";
 
 const STATUS_COLORS = {
   pending: "bg-yellow-50 border-yellow-200 text-yellow-700",
@@ -26,6 +27,16 @@ export default function AdminBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [updatingId, setUpdatingId] = useState("");
+
+  const cancelBooking = async (id) => {
+    const reason = window.prompt("Administrative cancellation reason");
+    if (!reason?.trim()) return;
+    setUpdatingId(id); setError("");
+    try { await cancelBookingRequest(id, reason.trim()); await loadBookings(pagination.page); }
+    catch (err) { setError(getApiError(err, "Unable to cancel booking.")); }
+    finally { setUpdatingId(""); }
+  };
 
   useEffect(() => {
     if (user?.role !== "admin") {
@@ -186,7 +197,9 @@ export default function AdminBookingsPage() {
                       <p className="mt-4 text-xs text-ink/50">
                         Booking ID: {booking._id}
                       </p>
+                      {booking.status === "cancelled" && <p className="mt-2 text-sm text-ink/60">Refund: {(booking.refundStatus || "not applicable").replaceAll("_", " ")}</p>}
                     </div>
+                    {["pending", "accepted"].includes(booking.status) && <Button variant="outline" disabled={updatingId === booking._id} onClick={() => cancelBooking(booking._id)}>Cancel booking</Button>}
                   </div>
                 </div>
               ))}
