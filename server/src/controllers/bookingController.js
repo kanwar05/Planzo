@@ -20,6 +20,7 @@ import {
   sendBookingStatusNotification,
 } from "../services/transactionalNotificationService.js";
 import { initializeBookingPayments } from "../services/payments/paymentCalculationService.js";
+import { safeSyncBookingToGoogle } from "../services/googleCalendarService.js";
 
 const populateBooking = (query) =>
   query
@@ -241,6 +242,9 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     booking.reviewReminderSentAt = null;
   }
   await booking.save();
+  if (["accepted", "completed", "rejected"].includes(status)) {
+    await safeSyncBookingToGoogle(booking._id);
+  }
   await populateBookingDocument(booking);
 
   const vendorOwnerId = vendor?.userId?._id || vendor?.userId;

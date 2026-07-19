@@ -36,6 +36,7 @@ Planzo/
 - View customer reviews and respond publicly
 - Track bookings and manage availability
 - Receive notifications for new bookings and reviews
+- Connect Google Calendar, automatically sync accepted bookings and cancellations, and export ICS files
 
 ### Admin
 - Verify vendor profiles before they appear in search
@@ -70,6 +71,44 @@ Backend runs at `http://localhost:5001` by default.
 
 The frontend expects the API at `http://localhost:5001/api`. Override it with
 `VITE_API_URL` in `frontend/.env` when needed.
+
+## Google Calendar integration
+
+Vendors manage Calendar from `/vendor/calendar`. Accepted bookings are created
+in the vendor's primary Google Calendar, updates are reconciled automatically,
+and cancellations remove the event. The customer is included as an attendee and
+receives Google Calendar updates plus 24-hour email and 1-hour popup reminders.
+Vendors can also run an immediate sync or export accepted/completed bookings as
+an interoperable `.ics` file.
+
+Setup:
+
+1. In Google Cloud Console, enable the Google Calendar API and configure the
+   OAuth consent screen.
+2. Create an OAuth 2.0 **Web application** client.
+3. Add
+   `http://localhost:5001/api/calendar/google/callback` for development (and the
+   exact HTTPS production callback) to Authorized redirect URIs.
+4. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`,
+   `GOOGLE_CALENDAR_REDIRECT_URI`, and a long random
+   `GOOGLE_TOKEN_ENCRYPTION_KEY` in `server/.env`.
+5. Ensure `CLIENT_URL` is the frontend origin. Restart the API.
+
+The backend requests only `calendar.events`, uses an expiring signed OAuth
+`state`, requests offline access, and encrypts refresh tokens at rest with
+AES-256-GCM. Access tokens are obtained only when needed and are not persisted.
+`CALENDAR_SYNC_INTERVAL_MS` controls the reconciliation interval (15 minutes by
+default). Booking operations remain successful if Google is unavailable; the
+sync error is recorded and retried by the scheduler or **Sync now**.
+
+Calendar API routes:
+
+- `GET /api/calendar/status`
+- `POST /api/calendar/google/connect`
+- `GET /api/calendar/google/callback`
+- `POST /api/calendar/sync`
+- `DELETE /api/calendar/connection`
+- `GET /api/calendar/export`
 
 ## Key Features In Detail
 

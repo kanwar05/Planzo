@@ -6,6 +6,7 @@ import connectDatabase from "./src/config/database.js";
 import { startNotificationSchedulers } from "./src/jobs/notificationJobs.js";
 import { validatePaymentEnvironment } from "./src/config/payment.js";
 import { initializeChatSocket } from "./src/realtime/chatSocket.js";
+import { startCalendarSyncScheduler } from "./src/jobs/calendarSyncJobs.js";
 
 const port = Number(process.env.PORT) || 5001;
 
@@ -14,6 +15,7 @@ async function startServer() {
     validatePaymentEnvironment();
     await connectDatabase();
     const notificationScheduler = startNotificationSchedulers();
+    const calendarSyncScheduler = startCalendarSyncScheduler();
 
     const server = createServer(app);
     initializeChatSocket(server, app);
@@ -26,6 +28,7 @@ async function startServer() {
       if (notificationScheduler) {
         clearInterval(notificationScheduler);
       }
+      if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
       server.close(async () => {
         await mongoose.connection.close();
         process.exit(0);

@@ -1,6 +1,7 @@
 import {
   Bell,
   CalendarDays,
+  CalendarCheck2,
   CalendarPlus,
   CalendarRange,
   ChevronLeft,
@@ -59,6 +60,7 @@ const vendorLinks = [
   { label: "Dashboard", to: "/vendor/dashboard", icon: LayoutDashboard },
   { label: "Bookings", to: "/vendor/dashboard?view=bookings", icon: CalendarDays },
   { label: "Availability", to: "/vendor/availability", icon: CalendarRange },
+  { label: "Calendar", to: "/vendor/calendar", icon: CalendarCheck2 },
   { label: "Packages", to: "/vendor/profile-setup#packages", icon: Store },
   { label: "Portfolio", to: "/vendor/profile-setup#portfolio", icon: Store },
   { label: "Messages", to: "/vendor/messages", icon: MessageCircle },
