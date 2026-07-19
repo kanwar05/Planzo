@@ -25,13 +25,13 @@ describe("ChatMessageList alignment", () => {
     expect(getMessageSenderId(own)).toBe(currentUserId);
     expect(isOwnChatMessage(own, currentUserId)).toBe(true);
     expect(screen.getByTestId("message-row-1")).toHaveClass("w-full", "justify-end");
-    expect(screen.getByText("mine").parentElement).toHaveClass("bg-emerald-600");
+    expect(screen.getByText("mine").parentElement).toHaveClass("bg-blue-600");
   });
 
   it("left-aligns another user's message with a populated sender object", () => {
     render(<ChatMessageList messages={[message("2", { _id: otherUserId }, "theirs")]} currentUserId={currentUserId} otherUserId={otherUserId} />);
     expect(screen.getByTestId("message-row-2")).toHaveClass("w-full", "justify-start");
-    expect(screen.getByText("theirs").parentElement).toHaveClass("bg-white");
+    expect(screen.getByText("theirs").parentElement).toHaveClass("bg-gray-100");
   });
 
   it("handles plain MongoDB sender IDs", () => {

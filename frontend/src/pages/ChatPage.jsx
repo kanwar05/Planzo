@@ -16,6 +16,7 @@ import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Toast from "../components/Toast";
 import ChatMessageList from "../components/ChatMessageList";
+import { getMessageSenderId } from "../components/ChatMessageList";
 import { useAuth } from "../context/AuthContext";
 import {
   createConversation,
@@ -61,7 +62,9 @@ export default function ChatPage() {
   const typingTimer = useRef(null);
   const socket = useMemo(getChatSocket, []);
   const active = conversations.find((item) => item._id === activeId);
-  const other = active?.participants.find((item) => item._id !== user?._id);
+  const other = active?.participants.find(
+    (item) => String(item._id) !== String(user?._id),
+  );
   const myState = (conversation) =>
     conversation.participantStates?.find(
       (state) => String(state.user?._id || state.user) === String(user?._id),
@@ -110,7 +113,7 @@ export default function ChatPage() {
       loadList().catch(() => {});
       if (
         message.conversation === activeId &&
-        message.sender?._id !== user?._id
+        String(getMessageSenderId(message)) !== String(user?._id)
       )
         socket.emit("message:seen", { conversationId: activeId });
     };
@@ -118,7 +121,7 @@ export default function ChatPage() {
       if (id === activeId)
         setMessages((current) =>
           current.map((message) =>
-            message.sender?._id === user?._id
+            String(getMessageSenderId(message)) === String(user?._id)
               ? {
                   ...message,
                   seenBy: [...new Set([...(message.seenBy || []), userId])],
@@ -132,7 +135,7 @@ export default function ChatPage() {
       if (id === activeId)
         setMessages((current) =>
           current.map((message) =>
-            message.sender?._id === user?._id
+            String(getMessageSenderId(message)) === String(user?._id)
               ? {
                   ...message,
                   deliveredTo: [
@@ -288,7 +291,7 @@ export default function ChatPage() {
   return (
     <section className="container-shell py-5">
       <Toast message={error} type="error" onClose={() => setError("")} />
-      <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-7xl overflow-hidden rounded-[1.75rem] border bg-white shadow-soft">
+      <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-7xl overflow-hidden rounded-[1.75rem] border bg-white text-ink shadow-soft">
         <aside
           className={`${listOpen ? "flex" : "hidden"} w-full flex-col border-r md:flex md:w-80 lg:w-96`}
         >
@@ -313,7 +316,7 @@ export default function ChatPage() {
                   <button
                     key={conversation._id}
                     onClick={() => select(conversation._id)}
-                    className={`flex w-full gap-3 border-b p-4 text-left hover:bg-sand/40 ${activeId === conversation._id ? "bg-plum/5" : ""}`}
+                    className={`flex w-full gap-3 border-b p-4 text-left hover:bg-sand/40  ${activeId === conversation._id ? "bg-plum/5 " : ""}`}
                   >
                     <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-full bg-plum text-sm font-bold text-white">
                       {person?.name?.slice(0, 2).toUpperCase()}
@@ -363,7 +366,7 @@ export default function ChatPage() {
         >
           {active ? (
             <>
-              <header className="flex items-center gap-3 border-b p-4">
+              <header className="flex items-center gap-3 border-b bg-white p-4">
                 <button className="md:hidden" onClick={() => setListOpen(true)}>
                   <ArrowLeft />
                 </button>
@@ -381,7 +384,7 @@ export default function ChatPage() {
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="rounded-full border py-2 pl-9 pr-3 text-sm"
+                    className="rounded-full border bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 "
                     placeholder="Search messages"
                   />
                 </label>
@@ -392,7 +395,7 @@ export default function ChatPage() {
                   <Trash2 className="h-5 w-5 text-red-500" />
                 </button>
               </header>
-              <div className="flex-1 overflow-y-auto bg-sand/25 p-4">
+              <div className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-3 sm:p-4">
                 {loading ? (
                   <LoadingSkeleton />
                 ) : (
@@ -431,7 +434,7 @@ export default function ChatPage() {
                   <Smile />
                 </button>
                 {emojiOpen && (
-                  <div className="absolute bottom-16 left-3 grid grid-cols-5 gap-2 rounded-xl border bg-white p-3 shadow-xl">
+                  <div className="absolute bottom-16 left-3 grid grid-cols-5 gap-2 rounded-xl border bg-white p-3 shadow-xl ">
                     {emojis.map((emoji) => (
                       <button
                         key={emoji}
@@ -464,7 +467,7 @@ export default function ChatPage() {
                       send();
                     }
                   }}
-                  className="field min-h-11 flex-1 resize-none !rounded-2xl"
+                  className="field min-h-11 flex-1 resize-none !rounded-2xl "
                   rows="1"
                   placeholder="Type a message"
                 />
