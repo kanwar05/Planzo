@@ -6,6 +6,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { validateObjectId } from "../utils/validation.js";
 import { calculateCancellation } from "../services/payments/cancellationPolicyService.js";
 import { initiateBookingRefund } from "../services/payments/refundService.js";
+import { safeSyncBookingToGoogle } from "../services/googleCalendarService.js";
 
 const bookingAccess = async (booking, user) => {
   const vendor = await Vendor.findById(booking.vendorId);
@@ -42,6 +43,7 @@ export const cancelBooking = asyncHandler(async (req, res) => {
   booking.cancellationRequest = cancellation._id; booking.payoutOnHold = true; booking.payoutStatus = "on_hold";
   booking.cancellationTimeline.push({ action: "cancelled", status: refundStatus, note, actor: req.user._id });
   await booking.save();
+  await safeSyncBookingToGoogle(booking._id);
   res.status(201).json({ success: true, message: "Booking cancelled and refund eligibility calculated.", booking, cancellation });
 });
 

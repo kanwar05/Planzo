@@ -31,6 +31,7 @@ import AdminPaymentsPage from "../pages/AdminPaymentsPage";
 import VendorVerificationPage from "../pages/VendorVerificationPage";
 import AdminCancellationsPage from "../pages/AdminCancellationsPage";
 import ChatPage from "../pages/ChatPage";
+import VendorCalendarPage from "../pages/VendorCalendarPage";
 
 export const appRoutes = [
   {
@@ -90,6 +91,7 @@ export const appRoutes = [
         children: [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
           { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
+          { path: "/vendor/calendar", element: <VendorCalendarPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },
           { path: "/vendor/verification", element: <VendorVerificationPage /> },
           { path: "/vendor/earnings", element: <VendorEarningsPage /> },

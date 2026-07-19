@@ -115,6 +115,9 @@ const bookingSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    googleCalendarEventId: { type: String, default: null, index: true },
+    googleCalendarSyncedAt: { type: Date, default: null },
+    googleCalendarSyncError: { type: String, default: "" },
   },
   {
     timestamps: true,
