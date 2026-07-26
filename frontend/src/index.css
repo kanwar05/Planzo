@@ -21,3 +21,12 @@
 }
 
 button, a { -webkit-tap-highlight-color: transparent; }
+
+html[data-theme="dark"] body { background: #171019; color: #f8f3f7; }
+html[data-theme="dark"] .bg-white { background-color: #251b28; }
+html[data-theme="dark"] .text-ink { color: #f8f3f7; }
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

@@ -51,7 +51,7 @@ const customerLinks = [
   { label: "Profile", to: "/customer/dashboard?view=profile", icon: UserRound },
   {
     label: "Settings",
-    to: "/customer/dashboard?view=settings",
+    to: "/settings",
     icon: Settings,
   },
 ];
@@ -67,7 +67,7 @@ const vendorLinks = [
   { label: "Reviews", to: "/vendor/dashboard?view=reviews", icon: Star },
   { label: "Analytics", to: "/vendor/dashboard?view=analytics", icon: LayoutDashboard },
   { label: "Payments", to: "/vendor/dashboard?view=payments", icon: CreditCard },
-  { label: "Settings", to: "/vendor/profile-setup", icon: Settings },
+  { label: "Settings", to: "/vendor/settings", icon: Settings },
   { label: "Verification", to: "/vendor/verification", icon: ShieldCheck },
 ];
 
