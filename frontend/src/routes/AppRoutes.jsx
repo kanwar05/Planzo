@@ -32,6 +32,7 @@ import VendorVerificationPage from "../pages/VendorVerificationPage";
 import AdminCancellationsPage from "../pages/AdminCancellationsPage";
 import ChatPage from "../pages/ChatPage";
 import VendorCalendarPage from "../pages/VendorCalendarPage";
+import SettingsPage from "../pages/SettingsPage";
 
 export const appRoutes = [
   {
@@ -79,6 +80,7 @@ export const appRoutes = [
           { path: "/customer/payments", element: <PaymentHistoryPage /> },
           { path: "/messages", element: <ChatPage /> },
           { path: "/messages/:conversationId", element: <ChatPage /> },
+          { path: "/settings", element: <SettingsPage /> },
         ],
       },
     ],
@@ -98,6 +100,7 @@ export const appRoutes = [
           { path: "/vendor/payouts/:payoutId", element: <VendorEarningsPage /> },
           { path: "/vendor/messages", element: <ChatPage /> },
           { path: "/vendor/messages/:conversationId", element: <ChatPage /> },
+          { path: "/vendor/settings", element: <SettingsPage /> },
         ],
       },
     ],

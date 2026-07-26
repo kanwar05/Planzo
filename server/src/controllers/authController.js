@@ -57,20 +57,37 @@ function validatePasswordStrength(password) {
   }
 }
 
-async function createRefreshToken(userId) {
+function getDevice(req) {
+  const agent = req.get("user-agent") || "";
+  const browser =
+    /Edg\//.test(agent) ? "Edge" :
+    /Chrome\//.test(agent) ? "Chrome" :
+    /Firefox\//.test(agent) ? "Firefox" :
+    /Safari\//.test(agent) ? "Safari" : "Unknown browser";
+  const type = /Mobile|Android|iPhone|iPad/i.test(agent)
+    ? "Mobile device"
+    : /Windows/i.test(agent) ? "Windows computer"
+    : /Macintosh|Mac OS/i.test(agent) ? "Mac computer"
+    : /Linux/i.test(agent) ? "Linux computer" : "Unknown device";
+  return { type, browser, ip: req.ip || "Unknown" };
+}
+
+async function createRefreshToken(userId, req) {
   const refreshToken = createOpaqueToken();
   await RefreshToken.create({
     userId,
     tokenHash: hashToken(refreshToken),
     expiresAt: getRefreshTokenExpiryDate(),
+    device: getDevice(req),
+    lastUsedAt: new Date(),
   });
 
   return refreshToken;
 }
 
-async function startSession(res, user, statusCode, message) {
+async function startSession(req, res, user, statusCode, message) {
   const accessToken = generateAccessToken(user._id);
-  const refreshToken = await createRefreshToken(user._id);
+  const refreshToken = await createRefreshToken(user._id, req);
 
   setAuthCookies(res, { accessToken, refreshToken });
 
@@ -129,7 +146,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({ name, email, phone, password, role });
-  await startSession(res, user, 201, "Account created successfully.");
+  await startSession(req, res, user, 201, "Account created successfully.");
 });
 
 export const login = asyncHandler(async (req, res) => {
@@ -145,8 +162,11 @@ export const login = asyncHandler(async (req, res) => {
   if (!user || !passwordMatches) {
     throw new ApiError(401, "Invalid email or password.");
   }
+  if (user.accountStatus === "deactivated") {
+    throw new ApiError(403, "This account is deactivated. Contact support to reactivate it.");
+  }
 
-  await startSession(res, user, 200, "Logged in successfully.");
+  await startSession(req, res, user, 200, "Logged in successfully.");
 });
 
 export const refresh = asyncHandler(async (req, res) => {
@@ -175,10 +195,11 @@ export const refresh = asyncHandler(async (req, res) => {
   }
 
   tokenRecord.revokedAt = new Date();
+  tokenRecord.lastUsedAt = new Date();
   await tokenRecord.save();
 
   const accessToken = generateAccessToken(user._id);
-  const refreshToken = await createRefreshToken(user._id);
+  const refreshToken = await createRefreshToken(user._id, req);
   setAuthCookies(res, { accessToken, refreshToken });
 
   res.status(200).json({

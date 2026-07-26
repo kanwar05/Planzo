@@ -34,6 +34,9 @@ export const protect = asyncHandler(async (req, res, next) => {
   if (!user) {
     throw new ApiError(401, "The user for this token no longer exists.");
   }
+  if (user.accountStatus === "deactivated") {
+    throw new ApiError(403, "This account is deactivated.");
+  }
 
   if (
     user.passwordChangedAt &&
