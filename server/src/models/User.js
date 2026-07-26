@@ -42,6 +42,8 @@ const userSchema = new mongoose.Schema(
       default: "active",
     },
     deactivatedAt: { type: Date, default: null },
+    suspendedAt: { type: Date, default: null },
+    suspensionReason: { type: String, default: "" },
     passwordResetTokenHash: {
       type: String,
       select: false,

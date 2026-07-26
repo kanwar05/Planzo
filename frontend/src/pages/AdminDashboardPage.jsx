@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   Users,
   UserRound,
+  FileClock,
 } from "lucide-react";
 import Button from "../components/Button";
 import DashboardChart from "../components/DashboardChart";
@@ -239,7 +240,7 @@ export default function AdminDashboardPage() {
           </aside>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Button to="/admin/vendors/unverified" variant="outline">
             Verify Vendors
           </Button>
@@ -253,6 +254,9 @@ export default function AdminDashboardPage() {
             View Bookings
           </Button>
           <Button to="/admin/cancellations" variant="outline">Cancellation refunds</Button>
+          <Button to="/admin/audit-logs" variant="outline">
+            <FileClock className="h-4 w-4" /> Audit Logs
+          </Button>
         </div>
       </div>
     </section>

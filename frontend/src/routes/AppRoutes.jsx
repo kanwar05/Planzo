@@ -33,6 +33,7 @@ import AdminCancellationsPage from "../pages/AdminCancellationsPage";
 import ChatPage from "../pages/ChatPage";
 import VendorCalendarPage from "../pages/VendorCalendarPage";
 import SettingsPage from "../pages/SettingsPage";
+import AdminAuditLogsPage from "../pages/AdminAuditLogsPage";
 
 export const appRoutes = [
   {
@@ -119,6 +120,7 @@ export const appRoutes = [
           { path: "/admin/payments", element: <AdminPaymentsPage /> },
           { path: "/admin/cancellations", element: <AdminCancellationsPage /> },
           { path: "/admin/payments/failed", element: <AdminPaymentsPage failed /> },
+          { path: "/admin/audit-logs", element: <AdminAuditLogsPage /> },
         ],
       },
     ],
