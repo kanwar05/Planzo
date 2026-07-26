@@ -26,6 +26,7 @@ import {
   sendPasswordResetConfirmation,
   sendPasswordResetNotification,
 } from "../services/transactionalNotificationService.js";
+import { recordAudit } from "../services/auditService.js";
 
 function serializeUser(user) {
   return {
@@ -165,7 +166,20 @@ export const login = asyncHandler(async (req, res) => {
   if (user.accountStatus === "deactivated") {
     throw new ApiError(403, "This account is deactivated. Contact support to reactivate it.");
   }
+  if (user.suspendedAt) {
+    throw new ApiError(403, "This account is suspended.");
+  }
 
+  await recordAudit(req, {
+    action: "login",
+    actor: user._id,
+    admin: null,
+    targetType: "User",
+    targetId: user._id,
+    targetLabel: user.email,
+    newValue: { status: "success", role: user.role },
+    reason: "Successful login",
+  });
   await startSession(req, res, user, 200, "Logged in successfully.");
 });
 

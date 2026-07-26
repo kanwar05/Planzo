@@ -4,6 +4,7 @@ import VendorVerification, { DOCUMENT_TYPES } from "../models/VendorVerification
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { validateObjectId } from "../utils/validation.js";
+import { recordAudit } from "../services/auditService.js";
 
 const REQUIRED_DOCUMENTS = ["governmentId", "businessLicense", "panCard", "profilePhoto"];
 
@@ -114,6 +115,7 @@ export const reviewVerification = asyncHandler(async (req, res) => {
   const verification = await VendorVerification.findById(req.params.id);
   if (!verification) throw new ApiError(404, "Verification not found.");
   if (verification.status !== "pending") throw new ApiError(409, "Only pending submissions can be reviewed.");
+  const oldValue = { status: verification.status, reason: verification.reason };
   verification.status = action;
   verification.reason = reason;
   verification.reviewedBy = req.user._id;
@@ -124,6 +126,12 @@ export const reviewVerification = asyncHandler(async (req, res) => {
     verified: action === "approved",
     verificationStatus: action === "needs_resubmission" ? "rejected" : action,
     verificationRejectionReason: reason,
+  });
+  await recordAudit(req, {
+    action: action === "approved" ? "vendor_approved" : "vendor_rejected",
+    targetType: "VendorVerification", targetId: verification._id,
+    targetLabel: `Verification ${verification._id}`, oldValue,
+    newValue: { status: action, reason }, reason: reason || "Verification requirements met.",
   });
   res.json({ success: true, message: `Verification ${action.replace("_", " ")}.`, verification });
 });

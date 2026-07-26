@@ -12,7 +12,11 @@ import {
   reportVendor,
   resolveVendorReport,
   getAdminStats,
+  editBooking,
+  setUserSuspension,
+  changeUserRole,
 } from "../controllers/adminController.js";
+import { listAuditLogs } from "../controllers/auditController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 import { getVerification, listVerifications, reviewVerification } from "../controllers/vendorVerificationController.js";
 import { listCancellations, reviewRefund } from "../controllers/cancellationController.js";
@@ -24,6 +28,7 @@ router.use(protect, authorizeRoles("admin"));
 
 // Dashboard stats
 router.get("/stats", getAdminStats);
+router.get("/audit-logs", listAuditLogs);
 router.get("/cancellations", listCancellations);
 router.patch("/cancellations/:id/refund", reviewRefund);
 
@@ -48,5 +53,8 @@ router.post("/reviews/:reviewId/flag", flagReview);
 
 // Booking viewing
 router.get("/bookings", getBookingsForAdmin);
+router.patch("/bookings/:bookingId", editBooking);
+router.patch("/users/:userId/suspension", setUserSuspension);
+router.patch("/users/:userId/role", changeUserRole);
 
 export default router;

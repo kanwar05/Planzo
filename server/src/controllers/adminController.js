@@ -7,6 +7,9 @@ import { requireFields, validateObjectId } from "../utils/validation.js";
 import { sendVendorVerificationUpdateNotification } from "../services/transactionalNotificationService.js";
 import { getAdminDashboardAnalytics } from "../services/analyticsService.js";
 import { safeCreateNotification } from "./notificationController.js";
+import User from "../models/User.js";
+import RefreshToken from "../models/RefreshToken.js";
+import { recordAudit } from "../services/auditService.js";
 
 const updateVendorVerification = async (vendorId, status, reason = "") => {
   const vendor = await Vendor.findById(vendorId).populate(
@@ -25,6 +28,7 @@ const updateVendorVerification = async (vendorId, status, reason = "") => {
     );
   }
 
+  const oldValue = { verificationStatus: vendor.verificationStatus, verified: vendor.verified };
   vendor.verificationStatus = status;
   vendor.verificationRejectionReason = status === "rejected" ? reason.trim() : "";
   vendor.verified = status === "approved";
@@ -49,14 +53,20 @@ const updateVendorVerification = async (vendorId, status, reason = "") => {
     reason: vendor.verificationRejectionReason,
   });
 
-  return vendor;
+  return { vendor, oldValue };
 };
 
 // Verify vendor
 export const verifyVendor = asyncHandler(async (req, res) => {
   validateObjectId(req.params.vendorId, "vendor id");
 
-  const vendor = await updateVendorVerification(req.params.vendorId, "approved");
+  const { vendor, oldValue } = await updateVendorVerification(req.params.vendorId, "approved");
+  await recordAudit(req, {
+    action: "vendor_approved", targetType: "Vendor", targetId: vendor._id,
+    targetLabel: vendor.businessName, oldValue,
+    newValue: { verificationStatus: "approved", verified: true },
+    reason: String(req.body?.reason || "Verification requirements met."),
+  });
 
   res.status(200).json({
     success: true,
@@ -72,11 +82,17 @@ export const rejectVendor = asyncHandler(async (req, res) => {
   const reason =
     typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
 
-  const vendor = await updateVendorVerification(
+  const { vendor, oldValue } = await updateVendorVerification(
     req.params.vendorId,
     "rejected",
     reason || "No reason provided.",
   );
+  await recordAudit(req, {
+    action: "vendor_rejected", targetType: "Vendor", targetId: vendor._id,
+    targetLabel: vendor.businessName, oldValue,
+    newValue: { verificationStatus: "rejected", verified: false },
+    reason: vendor.verificationRejectionReason,
+  });
 
   res.status(200).json({
     success: true,
@@ -89,11 +105,17 @@ export const rejectVendor = asyncHandler(async (req, res) => {
 export const unverifyVendor = asyncHandler(async (req, res) => {
   validateObjectId(req.params.vendorId, "vendor id");
 
-  const vendor = await updateVendorVerification(
+  const { vendor, oldValue } = await updateVendorVerification(
     req.params.vendorId,
     "rejected",
     "No reason provided.",
   );
+  await recordAudit(req, {
+    action: "vendor_rejected", targetType: "Vendor", targetId: vendor._id,
+    targetLabel: vendor.businessName, oldValue,
+    newValue: { verificationStatus: "rejected", verified: false },
+    reason: "No reason provided.",
+  });
 
   res.status(200).json({
     success: true,
@@ -152,6 +174,11 @@ export const deleteReview = asyncHandler(async (req, res) => {
   await Vendor.findByIdAndUpdate(vendorId, {
     averageRating: avg,
     reviewCount: reviews.length,
+  });
+  await recordAudit(req, {
+    action: "review_deleted", targetType: "Review", targetId: review._id,
+    targetLabel: `Review ${review._id}`, oldValue: review.toObject(),
+    newValue: null, reason: String(req.body?.reason || "Removed by moderator."),
   });
 
   res.status(200).json({
@@ -255,6 +282,72 @@ export const getBookingsForAdmin = asyncHandler(async (req, res) => {
     },
     bookings,
   });
+});
+
+export const editBooking = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.bookingId, "booking id");
+  requireFields(req.body, ["reason"]);
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) throw new ApiError(404, "Booking not found.");
+  const allowed = ["eventType", "eventDate", "eventDateOnly", "eventStartTime", "eventEndTime", "eventLocation", "budget", "specialRequirements", "status"];
+  const changes = {};
+  const oldValue = {};
+  for (const field of allowed) {
+    if (req.body[field] !== undefined) {
+      oldValue[field] = booking[field];
+      booking[field] = req.body[field];
+      changes[field] = booking[field];
+    }
+  }
+  if (!Object.keys(changes).length) throw new ApiError(400, "Provide at least one booking field to edit.");
+  await booking.save();
+  await recordAudit(req, {
+    action: "booking_edited", targetType: "Booking", targetId: booking._id,
+    targetLabel: `${booking.eventType} booking`, oldValue, newValue: changes,
+    reason: String(req.body.reason).trim(),
+  });
+  res.json({ success: true, message: "Booking updated.", booking });
+});
+
+export const setUserSuspension = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.userId, "user id");
+  const suspended = req.body.suspended !== false;
+  const reason = String(req.body.reason || "").trim();
+  if (suspended && !reason) throw new ApiError(400, "A suspension reason is required.");
+  if (String(req.user._id) === req.params.userId) throw new ApiError(400, "You cannot suspend your own account.");
+  const user = await User.findById(req.params.userId);
+  if (!user) throw new ApiError(404, "User not found.");
+  const oldValue = { suspendedAt: user.suspendedAt, suspensionReason: user.suspensionReason };
+  user.suspendedAt = suspended ? new Date() : null;
+  user.suspensionReason = suspended ? reason : "";
+  await user.save({ validateBeforeSave: false });
+  if (suspended) await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
+  await recordAudit(req, {
+    action: suspended ? "user_suspended" : "user_unsuspended",
+    targetType: "User", targetId: user._id, targetLabel: user.email,
+    oldValue, newValue: { suspendedAt: user.suspendedAt, suspensionReason: user.suspensionReason },
+    reason: reason || "Suspension removed.",
+  });
+  res.json({ success: true, message: suspended ? "User suspended." : "User suspension removed.", user });
+});
+
+export const changeUserRole = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.userId, "user id");
+  requireFields(req.body, ["role", "reason"]);
+  if (!["customer", "vendor", "admin"].includes(req.body.role)) throw new ApiError(400, "Invalid role.");
+  if (String(req.user._id) === req.params.userId) throw new ApiError(400, "You cannot change your own role.");
+  const user = await User.findById(req.params.userId);
+  if (!user) throw new ApiError(404, "User not found.");
+  const oldRole = user.role;
+  user.role = req.body.role;
+  await user.save({ validateBeforeSave: false });
+  await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
+  await recordAudit(req, {
+    action: "role_changed", targetType: "User", targetId: user._id,
+    targetLabel: user.email, oldValue: { role: oldRole }, newValue: { role: user.role },
+    reason: String(req.body.reason).trim(),
+  });
+  res.json({ success: true, message: "User role updated.", user });
 });
 
 // Get reported vendors
