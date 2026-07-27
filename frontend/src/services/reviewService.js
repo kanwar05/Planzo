@@ -61,3 +61,17 @@ export const replyToReview = async (id, message) => {
   const response = await api.patch(`/reviews/${id}/reply`, { message });
   return response.data.review;
 };
+
+export const reportReview = async (id, reason) => {
+  await api.post(`/reviews/${id}/report`, { reason });
+};
+
+export const appealReview = async (id, message) => {
+  const response = await api.post(`/reviews/${id}/appeal`, { message });
+  return response.data.appeal;
+};
+
+export const getReviewHistory = async (id) => {
+  const response = await api.get(`/reviews/${id}/history`);
+  return response.data;
+};

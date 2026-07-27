@@ -240,6 +240,13 @@ dates, times outside business hours, and overlapping active bookings.
 - `PATCH /api/reviews/:id` — review owner only
 - `DELETE /api/reviews/:id` — review owner only
 - `PATCH /api/reviews/:id/reply` — reviewed vendor only
+- `POST /api/reviews/:id/report` — authenticated user; one report per user
+- `POST /api/reviews/:id/appeal` — review author or reviewed vendor
+- `GET /api/reviews/:id/history` — author, vendor, or admin
+- `GET /api/admin/reviews?queue=true` — moderation queue
+- `PATCH /api/admin/reviews/:id/moderate` — approve, hide, or soft-remove
+- `PATCH /api/admin/reviews/:id/images` — approve or reject uploaded images
+- `PATCH /api/admin/reviews/:id/appeal` — approve or reject an appeal
 
 Customers can create one review per completed booking. The API verifies the
 booking owner and vendor, so ratings cannot be posted directly against an
@@ -275,6 +282,13 @@ Review image objects store Cloudinary `url` and `publicId` values. Removed
 images are deleted from Cloudinary. On every review create, rating update, or
 delete, the API recalculates the vendor's `averageRating` and `reviewCount`
 from review records; clients cannot set those fields.
+
+Review text is checked for configurable profanity (`REVIEW_PROFANITY_WORDS`),
+repetition, multiple links, and excessive capitals. Matches are queued rather
+than published. Only active reviews affect public ratings. Uploaded images begin
+in `pending` and are visible publicly only after approval. Reports, status
+changes, appeals, image decisions, and vendor-response edits retain history;
+admin removal is intentionally soft so that evidence and appeals are preserved.
 
 Vendors can publish or update their response:
 
