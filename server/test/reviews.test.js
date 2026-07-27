@@ -146,3 +146,76 @@ test("completed booking review lifecycle enforces ownership and recalculates rat
   assert.equal(refreshedVendor.averageRating, 0);
   assert.equal(refreshedVendor.reviewCount, 0);
 });
+
+test("reports, moderation, images, appeals, history, and automated filters work together", async () => {
+  const [customer, reporter, vendorUser, admin] = await User.create([
+    { name: "Author", email: "author@example.com", phone: "8888888881", password: "secret123", role: "customer" },
+    { name: "Reporter", email: "reporter@example.com", phone: "8888888882", password: "secret123", role: "customer" },
+    { name: "Vendor", email: "replyvendor@example.com", phone: "8888888883", password: "secret123", role: "vendor" },
+    { name: "Admin", email: "reviewadmin@example.com", phone: "8888888884", password: "secret123", role: "admin" },
+  ]);
+  const vendor = await Vendor.create({
+    userId: vendorUser._id,
+    businessName: "Moderated Events",
+    serviceCategory: "Decoration",
+    description: "Events with care.",
+    pricing: 10000,
+    location: "Mumbai",
+  });
+  const booking = await Booking.create({
+    customerId: customer._id,
+    vendorId: vendor._id,
+    eventType: "Party",
+    eventDate: new Date(Date.now() + 86400000),
+    eventDateOnly: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    eventStartTime: "10:00",
+    eventEndTime: "11:00",
+    eventLocation: "Mumbai",
+    budget: 20000,
+    status: "completed",
+  });
+
+  const created = await request(app).post("/api/reviews").set("Authorization", auth(customer))
+    .send({ bookingId: booking._id, rating: 1, comment: "SHIT SHIT SHIT SHIT SHIT SHIT" });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.review.status, "flagged");
+  assert.ok(created.body.review.automatedModeration.profanity.length);
+  const reviewId = created.body.review._id;
+
+  const report = await request(app).post(`/api/reviews/${reviewId}/report`)
+    .set("Authorization", auth(reporter)).send({ reason: "Looks like spam." });
+  assert.equal(report.status, 201);
+  const duplicate = await request(app).post(`/api/reviews/${reviewId}/report`)
+    .set("Authorization", auth(reporter)).send({ reason: "Again." });
+  assert.equal(duplicate.status, 409);
+
+  const queue = await request(app).get("/api/admin/reviews?queue=true")
+    .set("Authorization", auth(admin));
+  assert.equal(queue.status, 200);
+  assert.equal(queue.body.reviews.length, 1);
+
+  const hidden = await request(app).patch(`/api/admin/reviews/${reviewId}/moderate`)
+    .set("Authorization", auth(admin)).send({ action: "hide", reason: "Profanity." });
+  assert.equal(hidden.body.review.status, "hidden");
+  const publicList = await request(app).get(`/api/vendors/${vendor._id}/reviews`);
+  assert.equal(publicList.body.reviews.length, 0);
+
+  const appeal = await request(app).post(`/api/reviews/${reviewId}/appeal`)
+    .set("Authorization", auth(customer)).send({ message: "I edited my wording." });
+  assert.equal(appeal.status, 201);
+  const appealDecision = await request(app).patch(`/api/admin/reviews/${reviewId}/appeal`)
+    .set("Authorization", auth(admin)).send({ decision: "approved", reason: "Second chance." });
+  assert.equal(appealDecision.body.review.status, "active");
+
+  await request(app).patch(`/api/reviews/${reviewId}/reply`)
+    .set("Authorization", auth(vendorUser)).send({ message: "First response." });
+  const editedReply = await request(app).patch(`/api/reviews/${reviewId}/reply`)
+    .set("Authorization", auth(vendorUser)).send({ message: "Updated response." });
+  assert.equal(editedReply.body.review.vendorReply.history[0].message, "First response.");
+
+  const history = await request(app).get(`/api/reviews/${reviewId}/history`)
+    .set("Authorization", auth(customer));
+  assert.equal(history.status, 200);
+  assert.ok(history.body.moderationHistory.some((entry) => entry.action === "appeal_approved"));
+  assert.equal(history.body.vendorResponseHistory.length, 1);
+});

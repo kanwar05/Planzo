@@ -10,6 +10,8 @@ import { safeCreateNotification } from "./notificationController.js";
 import User from "../models/User.js";
 import RefreshToken from "../models/RefreshToken.js";
 import { recordAudit } from "../services/auditService.js";
+import { recalculateVendorRating } from "../utils/reviewRating.js";
+import { historyEntry } from "../services/reviewModerationService.js";
 
 const updateVendorVerification = async (vendorId, status, reason = "") => {
   const vendor = await Vendor.findById(vendorId).populate(
@@ -158,27 +160,29 @@ export const getUnverifiedVendors = asyncHandler(async (req, res) => {
 export const deleteReview = asyncHandler(async (req, res) => {
   validateObjectId(req.params.reviewId, "review id");
 
-  const review = await Review.findByIdAndDelete(req.params.reviewId);
+  const review = await Review.findById(req.params.reviewId);
 
   if (!review) {
     throw new ApiError(404, "Review not found.");
   }
 
-  // Update vendor rating
-  const vendorId = review.vendorId;
-  const reviews = await Review.find({ vendorId });
-  const avg =
-    reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-      : 0;
-  await Vendor.findByIdAndUpdate(vendorId, {
-    averageRating: avg,
-    reviewCount: reviews.length,
-  });
+  const oldValue = review.toObject();
+  const fromStatus = review.status;
+  review.status = "removed";
+  review.moderationReason = String(req.body?.reason || "Removed by moderator.");
+  review.moderationHistory.push(historyEntry({
+    action: "removed",
+    actor: req.user,
+    fromStatus,
+    toStatus: "removed",
+    reason: review.moderationReason,
+  }));
+  await review.save();
+  await recalculateVendorRating(review.vendorId);
   await recordAudit(req, {
     action: "review_deleted", targetType: "Review", targetId: review._id,
-    targetLabel: `Review ${review._id}`, oldValue: review.toObject(),
-    newValue: null, reason: String(req.body?.reason || "Removed by moderator."),
+    targetLabel: `Review ${review._id}`, oldValue,
+    newValue: review.toObject(), reason: review.moderationReason,
   });
 
   res.status(200).json({
@@ -198,10 +202,19 @@ export const flagReview = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Review not found.");
   }
 
+  const fromStatus = review.status;
   review.status = "flagged";
   review.flaggedAt = new Date();
   review.moderationReason = String(req.body.moderationReason).trim();
+  review.moderationHistory.push(historyEntry({
+    action: "flagged",
+    actor: req.user,
+    fromStatus,
+    toStatus: "flagged",
+    reason: review.moderationReason,
+  }));
   await review.save();
+  await recalculateVendorRating(review.vendorId);
 
   res.status(200).json({
     success: true,
@@ -218,14 +231,23 @@ export const getReviewsForModeration = asyncHandler(async (req, res) => {
     100,
   );
 
+  const filter = {};
+  if (req.query.status && req.query.status !== "all") filter.status = req.query.status;
+  if (req.query.queue === "true") {
+    filter.$or = [
+      { status: { $in: ["flagged", "hidden"] } },
+      { "appeal.status": "pending" },
+      { "images.moderationStatus": "pending" },
+    ];
+  }
   const [reviews, total] = await Promise.all([
-    Review.find()
+    Review.find(filter)
       .populate("customerId", "name email")
       .populate("vendorId", "businessName")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
-    Review.countDocuments(),
+    Review.countDocuments(filter),
   ]);
 
   res.status(200).json({
@@ -239,6 +261,97 @@ export const getReviewsForModeration = asyncHandler(async (req, res) => {
     },
     reviews,
   });
+});
+
+export const moderateReview = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.reviewId, "review id");
+  requireFields(req.body, ["action"]);
+  const action = String(req.body.action);
+  if (!["approve", "hide", "remove"].includes(action)) {
+    throw new ApiError(400, "Action must be approve, hide, or remove.");
+  }
+  const reason = String(req.body.reason || "").trim();
+  if (action !== "approve" && !reason) throw new ApiError(400, "A reason is required.");
+
+  const review = await Review.findById(req.params.reviewId);
+  if (!review) throw new ApiError(404, "Review not found.");
+  const fromStatus = review.status;
+  review.status = { approve: "active", hide: "hidden", remove: "removed" }[action];
+  review.moderationReason = action === "approve" ? null : reason;
+  review.flaggedAt = null;
+  review.moderationHistory.push(historyEntry({
+    action: action === "approve" ? "approved" : `${action}d`,
+    actor: req.user,
+    fromStatus,
+    toStatus: review.status,
+    reason,
+  }));
+  await review.save();
+  await recalculateVendorRating(review.vendorId);
+  res.status(200).json({ success: true, message: `Review ${action}d.`, review });
+});
+
+export const moderateReviewImages = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.reviewId, "review id");
+  requireFields(req.body, ["publicIds", "decision"]);
+  const publicIds = Array.isArray(req.body.publicIds) ? req.body.publicIds.map(String) : [];
+  if (!["approved", "rejected"].includes(req.body.decision) || !publicIds.length) {
+    throw new ApiError(400, "Provide image publicIds and an approved or rejected decision.");
+  }
+  const reason = String(req.body.reason || "").trim();
+  if (req.body.decision === "rejected" && !reason) {
+    throw new ApiError(400, "A rejection reason is required.");
+  }
+  const review = await Review.findById(req.params.reviewId);
+  if (!review) throw new ApiError(404, "Review not found.");
+  let matched = 0;
+  review.images.forEach((image) => {
+    if (publicIds.includes(image.publicId)) {
+      image.moderationStatus = req.body.decision;
+      image.moderationReason = reason || null;
+      matched += 1;
+    }
+  });
+  if (!matched) throw new ApiError(404, "No matching review images found.");
+  review.moderationHistory.push(historyEntry({
+    action: `images_${req.body.decision}`,
+    actor: req.user,
+    reason,
+    details: { publicIds },
+  }));
+  await review.save();
+  res.status(200).json({ success: true, message: "Image moderation saved.", review });
+});
+
+export const decideReviewAppeal = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.reviewId, "review id");
+  requireFields(req.body, ["decision"]);
+  if (!["approved", "rejected"].includes(req.body.decision)) {
+    throw new ApiError(400, "Decision must be approved or rejected.");
+  }
+  const review = await Review.findById(req.params.reviewId);
+  if (!review?.appeal || review.appeal.status !== "pending") {
+    throw new ApiError(404, "No pending appeal found.");
+  }
+  const fromStatus = review.status;
+  review.appeal.status = req.body.decision;
+  review.appeal.decidedBy = req.user._id;
+  review.appeal.decidedAt = new Date();
+  review.appeal.decisionReason = String(req.body.reason || "").trim() || null;
+  if (req.body.decision === "approved") {
+    review.status = "active";
+    review.moderationReason = null;
+  }
+  review.moderationHistory.push(historyEntry({
+    action: `appeal_${req.body.decision}`,
+    actor: req.user,
+    fromStatus,
+    toStatus: review.status,
+    reason: review.appeal.decisionReason,
+  }));
+  await review.save();
+  await recalculateVendorRating(review.vendorId);
+  res.status(200).json({ success: true, message: "Appeal decision saved.", review });
 });
 
 // Get all bookings for viewing

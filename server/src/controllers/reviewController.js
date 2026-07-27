@@ -10,6 +10,10 @@ import {
   validateObjectId,
 } from "../utils/validation.js";
 import { safeCreateNotification } from "./notificationController.js";
+import {
+  historyEntry,
+  inspectReviewText,
+} from "../services/reviewModerationService.js";
 
 const MAX_REVIEW_IMAGES = 4;
 
@@ -94,6 +98,7 @@ export const createReview = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Vendors cannot review themselves.");
   }
 
+  const moderation = inspectReviewText(req.body.comment);
   let review;
   try {
     review = await Review.create({
@@ -103,6 +108,25 @@ export const createReview = asyncHandler(async (req, res) => {
       rating: parseRating(req.body.rating),
       comment: String(req.body.comment).trim(),
       images: files.map(toReviewImage),
+      status: moderation.shouldFlag ? "flagged" : "active",
+      flaggedAt: moderation.shouldFlag ? new Date() : null,
+      moderationReason: moderation.shouldFlag
+        ? "Automatically queued by text moderation."
+        : null,
+      automatedModeration: {
+        profanity: moderation.profanity,
+        spamReasons: moderation.spamReasons,
+        checkedAt: new Date(),
+      },
+      moderationHistory: moderation.shouldFlag
+        ? [historyEntry({
+            action: "auto_flagged",
+            fromStatus: "active",
+            toStatus: "flagged",
+            reason: "Automated spam/profanity detection.",
+            details: moderation,
+          })]
+        : [],
     });
   } catch (error) {
     await destroyImages(files);
@@ -126,7 +150,9 @@ export const createReview = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: "Review published successfully.",
+    message: moderation.shouldFlag
+      ? "Review submitted and queued for moderation."
+      : "Review published successfully.",
     review,
   });
 });
@@ -141,15 +167,20 @@ export const getVendorReviews = asyncHandler(async (req, res) => {
   );
 
   const [reviews, total] = await Promise.all([
-    Review.find({ vendorId: req.params.vendorId })
+    Review.find({ vendorId: req.params.vendorId, status: "active" })
       .populate("customerId", "name")
       .populate("bookingId", "eventType eventDate")
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
-    Review.countDocuments({ vendorId: req.params.vendorId }),
+    Review.countDocuments({ vendorId: req.params.vendorId, status: "active" }),
   ]);
 
+  const publicReviews = reviews.map((review) => {
+    const value = review.toObject();
+    value.images = value.images.filter((image) => image.moderationStatus === "approved");
+    return value;
+  });
   res.status(200).json({
     success: true,
     count: reviews.length,
@@ -159,7 +190,7 @@ export const getVendorReviews = asyncHandler(async (req, res) => {
       total,
       pages: Math.ceil(total / limit),
     },
-    reviews,
+    reviews: publicReviews,
   });
 });
 
@@ -232,6 +263,24 @@ export const updateReview = asyncHandler(async (req, res) => {
   }
   if (req.body.comment !== undefined) {
     review.comment = String(req.body.comment).trim();
+    const moderation = inspectReviewText(review.comment);
+    review.automatedModeration = {
+      profanity: moderation.profanity,
+      spamReasons: moderation.spamReasons,
+      checkedAt: new Date(),
+    };
+    if (moderation.shouldFlag && review.status === "active") {
+      review.moderationHistory.push(historyEntry({
+        action: "auto_flagged_after_edit",
+        fromStatus: "active",
+        toStatus: "flagged",
+        reason: "Automated spam/profanity detection.",
+        details: moderation,
+      }));
+      review.status = "flagged";
+      review.flaggedAt = new Date();
+      review.moderationReason = "Automatically queued after review edit.";
+    }
   }
   review.images = [...keptImages, ...newFiles.map(toReviewImage)];
 
@@ -290,7 +339,18 @@ export const replyToReview = asyncHandler(async (req, res) => {
   review.vendorReply = {
     message: String(req.body.message).trim(),
     repliedAt: new Date(),
+    editedAt: review.vendorReply ? new Date() : null,
+    history: review.vendorReply
+      ? [
+          ...(review.vendorReply.history || []),
+          { message: review.vendorReply.message, changedAt: new Date() },
+        ]
+      : [],
   };
+  review.moderationHistory.push(historyEntry({
+    action: review.vendorReply.history.length ? "vendor_response_edited" : "vendor_response_added",
+    actor: req.user,
+  }));
   await review.save();
   await populateReview(review);
 
@@ -307,5 +367,83 @@ export const replyToReview = asyncHandler(async (req, res) => {
     success: true,
     message: "Reply saved successfully.",
     review,
+  });
+});
+
+export const reportReview = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.id, "review id");
+  requireFields(req.body, ["reason"]);
+  const review = await Review.findById(req.params.id);
+  if (!review || review.status === "removed") throw new ApiError(404, "Review not found.");
+  if (review.reports.some((report) => String(report.reporterId) === String(req.user._id))) {
+    throw new ApiError(409, "You have already reported this review.");
+  }
+
+  const fromStatus = review.status;
+  review.reports.push({ reporterId: req.user._id, reason: String(req.body.reason).trim() });
+  review.status = "flagged";
+  review.flaggedAt = new Date();
+  review.moderationReason = "Reported by a community member.";
+  review.moderationHistory.push(historyEntry({
+    action: "reported",
+    actor: req.user,
+    fromStatus,
+    toStatus: "flagged",
+    reason: String(req.body.reason).trim(),
+  }));
+  await review.save();
+  if (fromStatus === "active") await recalculateVendorRating(review.vendorId);
+
+  res.status(201).json({ success: true, message: "Review reported for moderation." });
+});
+
+export const appealReview = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.id, "review id");
+  requireFields(req.body, ["message"]);
+  const review = await Review.findById(req.params.id);
+  if (!review) throw new ApiError(404, "Review not found.");
+  const vendor = await Vendor.findById(review.vendorId).select("userId");
+  const mayAppeal =
+    String(review.customerId) === String(req.user._id) ||
+    String(vendor?.userId) === String(req.user._id);
+  if (!mayAppeal) throw new ApiError(403, "Only the review author or vendor may appeal.");
+  if (!["flagged", "hidden", "removed"].includes(review.status)) {
+    throw new ApiError(409, "Only moderated reviews can be appealed.");
+  }
+  if (review.appeal?.status === "pending") throw new ApiError(409, "An appeal is already pending.");
+
+  review.appeal = {
+    message: String(req.body.message).trim(),
+    status: "pending",
+    submittedBy: req.user._id,
+    submittedAt: new Date(),
+  };
+  review.moderationHistory.push(historyEntry({
+    action: "appeal_submitted",
+    actor: req.user,
+    reason: String(req.body.message).trim(),
+  }));
+  await review.save();
+  res.status(201).json({ success: true, message: "Appeal submitted.", appeal: review.appeal });
+});
+
+export const getReviewHistory = asyncHandler(async (req, res) => {
+  validateObjectId(req.params.id, "review id");
+  const review = await Review.findById(req.params.id).select(
+    "customerId vendorId moderationHistory vendorReply.history appeal status",
+  );
+  if (!review) throw new ApiError(404, "Review not found.");
+  const vendor = await Vendor.findById(review.vendorId).select("userId");
+  const allowed =
+    req.user.role === "admin" ||
+    String(review.customerId) === String(req.user._id) ||
+    String(vendor?.userId) === String(req.user._id);
+  if (!allowed) throw new ApiError(403, "You cannot view this review history.");
+  res.status(200).json({
+    success: true,
+    status: review.status,
+    moderationHistory: review.moderationHistory,
+    vendorResponseHistory: review.vendorReply?.history || [],
+    appeal: review.appeal,
   });
 });

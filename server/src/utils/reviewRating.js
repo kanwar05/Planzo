@@ -13,7 +13,7 @@ export const calculateAverageRating = (ratings = []) => {
 
 export const recalculateVendorRating = async (vendorId) => {
   const summary = await Review.aggregate([
-    { $match: { vendorId } },
+    { $match: { vendorId, status: "active" } },
     {
       $group: {
         _id: "$vendorId",

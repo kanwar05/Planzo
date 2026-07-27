@@ -4,6 +4,9 @@ import {
   deleteReview,
   replyToReview,
   updateReview,
+  reportReview,
+  appealReview,
+  getReviewHistory,
 } from "../controllers/reviewController.js";
 import {
   authorizeRoles,
@@ -29,5 +32,8 @@ router.patch(
 );
 router.delete("/:id", authorizeRoles("customer"), deleteReview);
 router.patch("/:id/reply", authorizeRoles("vendor"), replyToReview);
+router.post("/:id/report", reportReview);
+router.post("/:id/appeal", authorizeRoles("customer", "vendor"), appealReview);
+router.get("/:id/history", getReviewHistory);
 
 export default router;

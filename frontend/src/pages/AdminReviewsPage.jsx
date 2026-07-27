@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, Flag } from "lucide-react";
+import { Trash2, Check, EyeOff, ImageOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import EmptyState from "../components/EmptyState";
@@ -20,6 +20,7 @@ export default function AdminReviewsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [status, setStatus] = useState("queue");
 
   useEffect(() => {
     if (user?.role !== "admin") {
@@ -27,15 +28,21 @@ export default function AdminReviewsPage() {
       return;
     }
 
-    loadReviews();
-  }, [user, navigate]);
+    loadReviews(1, status);
+  }, [user, navigate, status]);
 
-  const loadReviews = async (page = 1) => {
+  const loadReviews = async (page = 1, selectedStatus = status) => {
     setLoading(true);
     setError("");
     try {
       const response = await api.get("/admin/reviews", {
-        params: { page, limit: 10 },
+        params: {
+          page,
+          limit: 10,
+          ...(selectedStatus === "queue"
+            ? { queue: true }
+            : selectedStatus === "all" ? {} : { status: selectedStatus }),
+        },
       });
       setReviews(response.data.data?.reviews || response.data.reviews || []);
       setPagination(response.data.data?.pagination || response.data.pagination);
@@ -43,6 +50,58 @@ export default function AdminReviewsPage() {
       setError(getApiError(err, "Failed to load reviews"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const moderate = async (reviewId, action) => {
+    const reason =
+      action === "approve"
+        ? ""
+        : window.prompt(`Reason to ${action} this review:`);
+    if (action !== "approve" && !reason) return;
+    setDeletingId(reviewId);
+    try {
+      await api.patch(`/admin/reviews/${reviewId}/moderate`, { action, reason });
+      setSuccess(`Review ${action}d`);
+      await loadReviews(pagination.page);
+    } catch (err) {
+      setError(getApiError(err, "Failed to moderate review"));
+    } finally {
+      setDeletingId("");
+    }
+  };
+
+  const moderateImage = async (reviewId, publicId, decision) => {
+    const reason =
+      decision === "rejected" ? window.prompt("Image rejection reason:") : "";
+    if (decision === "rejected" && !reason) return;
+    setDeletingId(reviewId);
+    try {
+      await api.patch(`/admin/reviews/${reviewId}/images`, {
+        publicIds: [publicId],
+        decision,
+        reason,
+      });
+      setSuccess(`Image ${decision}`);
+      await loadReviews(pagination.page);
+    } catch (err) {
+      setError(getApiError(err, "Failed to moderate image"));
+    } finally {
+      setDeletingId("");
+    }
+  };
+
+  const decideAppeal = async (reviewId, decision) => {
+    const reason = window.prompt(`Reason for ${decision} appeal decision:`) || "";
+    setDeletingId(reviewId);
+    try {
+      await api.patch(`/admin/reviews/${reviewId}/appeal`, { decision, reason });
+      setSuccess(`Appeal ${decision}`);
+      await loadReviews(pagination.page);
+    } catch (err) {
+      setError(getApiError(err, "Failed to decide appeal"));
+    } finally {
+      setDeletingId("");
     }
   };
 
@@ -58,19 +117,6 @@ export default function AdminReviewsPage() {
       setSuccess("Review deleted successfully");
     } catch (err) {
       setError(getApiError(err, "Failed to delete review"));
-    } finally {
-      setDeletingId("");
-    }
-  };
-
-  const handleFlagReview = async (reviewId) => {
-    setDeletingId(reviewId);
-    setError("");
-    try {
-      await api.post(`/admin/reviews/${reviewId}/flag`);
-      setSuccess("Review flagged for review");
-    } catch (err) {
-      setError(getApiError(err, "Failed to flag review"));
     } finally {
       setDeletingId("");
     }
@@ -105,8 +151,20 @@ export default function AdminReviewsPage() {
           </Button>
           <h1 className="text-4xl font-extrabold">Moderate Reviews</h1>
           <p className="mt-2 text-ink/50">
-            Review and manage user reviews
+            Resolve reports, automated flags, images, and appeals.
           </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {["queue", "all", "active", "flagged", "hidden", "removed"].map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={status === value ? "primary" : "outline"}
+                onClick={() => setStatus(value)}
+              >
+                {value[0].toUpperCase() + value.slice(1)}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -136,6 +194,9 @@ export default function AdminReviewsPage() {
                           <p className="text-sm text-ink/60">
                             By {review.customerId?.name || "Unknown User"}
                           </p>
+                          <span className="mt-2 inline-block rounded-full bg-sand px-3 py-1 text-xs font-bold uppercase">
+                            {review.status} · {review.reports?.length || 0} reports
+                          </span>
                         </div>
                         <div className="flex items-center gap-1">
                           {Array.from({ length: 5 }).map((_, i) => (
@@ -156,15 +217,30 @@ export default function AdminReviewsPage() {
                         {review.comment}
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {review.images?.map((img, idx) => (
-                          <img
-                            key={idx}
-                            src={img.url}
-                            alt="review"
-                            className="h-20 w-20 rounded-lg object-cover"
-                          />
+                        {review.images?.map((img) => (
+                          <div key={img.publicId} className="rounded-lg border p-2">
+                            <img src={img.url} alt="Review evidence" className="h-20 w-20 rounded-lg object-cover" />
+                            <p className="mt-1 text-center text-[10px] uppercase">{img.moderationStatus}</p>
+                            <div className="mt-1 flex gap-1">
+                              <button aria-label="Approve image" onClick={() => moderateImage(review._id, img.publicId, "approved")} className="rounded bg-green-100 p-1"><Check className="h-3 w-3" /></button>
+                              <button aria-label="Reject image" onClick={() => moderateImage(review._id, img.publicId, "rejected")} className="rounded bg-red-100 p-1"><ImageOff className="h-3 w-3" /></button>
+                            </div>
+                          </div>
                         ))}
                       </div>
+                      {review.moderationReason && <p className="mt-3 text-sm text-red-700">Reason: {review.moderationReason}</p>}
+                      {review.automatedModeration?.spamReasons?.length > 0 && (
+                        <p className="mt-2 text-xs text-amber-700">Auto-detected: {review.automatedModeration.spamReasons.join(", ")}</p>
+                      )}
+                      {review.appeal?.status === "pending" && (
+                        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                          <strong>Appeal:</strong> {review.appeal.message}
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" onClick={() => decideAppeal(review._id, "approved")}>Approve appeal</Button>
+                            <Button size="sm" variant="outline" onClick={() => decideAppeal(review._id, "rejected")}>Reject appeal</Button>
+                          </div>
+                        </div>
+                      )}
                       <p className="mt-4 text-xs text-ink/50">
                         Posted on{" "}
                         {new Date(review.createdAt).toLocaleDateString()}
@@ -172,13 +248,22 @@ export default function AdminReviewsPage() {
                     </div>
                     <div className="flex flex-col gap-3">
                       <Button
-                        onClick={() => handleFlagReview(review._id)}
+                        onClick={() => moderate(review._id, "approve")}
                         disabled={deletingId === review._id}
                         variant="outline"
                         className="flex items-center gap-2"
                       >
-                        <Flag className="h-4 w-4" />
-                        Flag
+                        <Check className="h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => moderate(review._id, "hide")}
+                        disabled={deletingId === review._id}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                        Hide
                       </Button>
                       <Button
                         onClick={() => handleDeleteReview(review._id)}

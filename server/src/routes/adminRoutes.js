@@ -7,6 +7,9 @@ import {
   deleteReview,
   flagReview,
   getReviewsForModeration,
+  moderateReview,
+  moderateReviewImages,
+  decideReviewAppeal,
   getBookingsForAdmin,
   getReportedVendors,
   reportVendor,
@@ -50,6 +53,9 @@ router.patch("/vendors/:vendorId/report-resolution", resolveVendorReport);
 router.get("/reviews", getReviewsForModeration);
 router.delete("/reviews/:reviewId", deleteReview);
 router.post("/reviews/:reviewId/flag", flagReview);
+router.patch("/reviews/:reviewId/moderate", moderateReview);
+router.patch("/reviews/:reviewId/images", moderateReviewImages);
+router.patch("/reviews/:reviewId/appeal", decideReviewAppeal);
 
 // Booking viewing
 router.get("/bookings", getBookingsForAdmin);
