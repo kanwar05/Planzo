@@ -63,6 +63,24 @@ const authLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: Number(process.env.PASSWORD_RESET_RATE_WINDOW_MS) || 60 * 60 * 1000,
+  max: Number(process.env.PASSWORD_RESET_REQUEST_MAX) || 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipRateLimitInTests,
+  handler: rateLimitHandler,
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: Number(process.env.PASSWORD_RESET_RATE_WINDOW_MS) || 60 * 60 * 1000,
+  max: Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipRateLimitInTests,
+  handler: rateLimitHandler,
+});
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet());
@@ -105,6 +123,8 @@ app.get("/", (req, res) => {
 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/forgot-password", forgotPasswordLimiter);
+app.use("/api/auth/reset-password", resetPasswordLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin", adminRoutes);

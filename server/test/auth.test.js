@@ -198,12 +198,23 @@ test("forgot and reset password invalidate existing refresh tokens", async () =>
     .send({ email: "customer@example.com" });
   assert.equal(forgotResponse.status, 200);
   assert.ok(forgotResponse.body.resetToken);
+  const storedReset = await User.findOne({ email: "customer@example.com" })
+    .select("+passwordResetTokenHash +passwordResetExpiresAt");
+  assert.notEqual(storedReset.passwordResetTokenHash, forgotResponse.body.resetToken);
+  assert.equal(storedReset.passwordResetTokenHash.length, 64);
+  assert.ok(storedReset.passwordResetExpiresAt > new Date());
 
   const resetResponse = await request(app).post("/api/auth/reset-password").send({
     token: forgotResponse.body.resetToken,
     password: "Better@12345",
   });
   assert.equal(resetResponse.status, 200);
+
+  const replayResponse = await request(app).post("/api/auth/reset-password").send({
+    token: forgotResponse.body.resetToken,
+    password: "Another@12345",
+  });
+  assert.equal(replayResponse.status, 400);
 
   const oldAccessResponse = await agent.get("/api/auth/me");
   assert.equal(oldAccessResponse.status, 401);
@@ -216,4 +227,45 @@ test("forgot and reset password invalidate existing refresh tokens", async () =>
     password: "Better@12345",
   });
   assert.equal(newLoginResponse.status, 200);
+});
+
+test("expired reset tokens fail and unknown emails receive the same response", async () => {
+  const unknown = await request(app)
+    .post("/api/auth/forgot-password")
+    .send({ email: "missing@example.com" });
+  assert.equal(unknown.status, 200);
+  assert.equal(unknown.body.resetToken, undefined);
+
+  const user = await User.create({
+    name: "Expiry Test",
+    email: "expiry@example.com",
+    phone: "9999999998",
+    password: strongPassword,
+    role: "customer",
+  });
+  const requested = await request(app)
+    .post("/api/auth/forgot-password")
+    .send({ email: user.email });
+  await User.updateOne(
+    { _id: user._id },
+    { passwordResetExpiresAt: new Date(Date.now() - 1000) },
+  );
+  const expired = await request(app).post("/api/auth/reset-password").send({
+    token: requested.body.resetToken,
+    password: "Changed@12345",
+  });
+  assert.equal(expired.status, 400);
+  assert.match(expired.body.message, /invalid or expired/i);
+});
+
+test("forgot password endpoint applies its dedicated rate limit", async () => {
+  const responses = [];
+  for (let index = 0; index < 4; index += 1) {
+    responses.push(await request(app)
+      .post("/api/auth/forgot-password")
+      .set("x-enable-rate-limit-test", "true")
+      .send({ email: `limited${index}@example.com` }));
+  }
+  assert.deepEqual(responses.map((response) => response.status), [200, 200, 200, 429]);
+  assert.ok(responses[3].headers["ratelimit-reset"]);
 });

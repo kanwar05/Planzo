@@ -273,10 +273,25 @@ export const resetPassword = asyncHandler(async (req, res) => {
   const password = String(req.body.password);
   validatePasswordStrength(password);
 
-  const user = await User.findOne({
-    passwordResetTokenHash: hashToken(String(req.body.token)),
+  const token = String(req.body.token).trim();
+  if (!/^[a-f0-9]{96}$/i.test(token)) {
+    throw new ApiError(400, "Password reset token is invalid or expired.");
+  }
+
+  // Consume the token atomically before changing the password. Two concurrent
+  // requests can never successfully use the same reset link.
+  const user = await User.findOneAndUpdate({
+    passwordResetTokenHash: hashToken(token),
     passwordResetExpiresAt: { $gt: new Date() },
-  }).select("+passwordResetTokenHash +passwordResetExpiresAt");
+  }, {
+    $unset: {
+      passwordResetTokenHash: 1,
+      passwordResetExpiresAt: 1,
+    },
+    $set: { passwordResetConsumedAt: new Date() },
+  }, {
+    new: true,
+  }).select("+password +passwordResetConsumedAt");
 
   if (!user) {
     throw new ApiError(400, "Password reset token is invalid or expired.");
@@ -284,8 +299,6 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   user.password = password;
   user.passwordChangedAt = new Date();
-  user.passwordResetTokenHash = undefined;
-  user.passwordResetExpiresAt = undefined;
   await user.save();
 
   await RefreshToken.updateMany(

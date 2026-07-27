@@ -373,7 +373,32 @@ export const notificationTemplates = {
     return {
       subject: title,
       text: bodyLines.join("\n"),
-      html: buildBaseHtml({ title, bodyLines }),
+      html: `
+        <!doctype html>
+        <html>
+          <body style="margin:0;background:#f7f2ec;font-family:Arial,sans-serif;color:#24172a;">
+            <div style="display:none;max-height:0;overflow:hidden;">Your secure Planzo password reset link expires in 15 minutes.</div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f2ec;padding:32px 12px;">
+              <tr><td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 16px 50px rgba(36,23,42,.10);">
+                  <tr><td style="padding:30px 36px;background:#24172a;color:#fff;">
+                    <div style="font-size:24px;font-weight:800;letter-spacing:-.5px;">Planzo<span style="color:#ef6f61;">.</span></div>
+                  </td></tr>
+                  <tr><td style="padding:40px 36px;">
+                    <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:#fff0ed;color:#c94f43;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Account recovery</div>
+                    <h1 style="margin:20px 0 12px;font-size:30px;line-height:1.15;">Reset your password</h1>
+                    <p style="margin:0 0 18px;color:#665c6a;font-size:16px;line-height:1.7;">Hi ${escapeHtml(userName || "there")}, we received a request to reset your Planzo password.</p>
+                    <p style="margin:0 0 26px;color:#665c6a;font-size:16px;line-height:1.7;">This single-use link expires in <strong>15 minutes</strong>.</p>
+                    <a href="${escapeHtml(resetLink)}" style="display:inline-block;background:#ef6f61;color:#fff;text-decoration:none;font-weight:800;padding:15px 24px;border-radius:12px;">Choose a new password</a>
+                    <p style="margin:28px 0 8px;color:#665c6a;font-size:13px;line-height:1.6;">Button not working? Copy this address:</p>
+                    <p style="margin:0;padding:12px;background:#f7f2ec;border-radius:10px;color:#665c6a;font-size:12px;line-height:1.5;word-break:break-all;">${escapeHtml(resetLink)}</p>
+                    <div style="margin-top:28px;padding-top:22px;border-top:1px solid #eee7e1;color:#817785;font-size:13px;line-height:1.6;">If you did not request this reset, no action is needed. Your current password remains unchanged.</div>
+                  </td></tr>
+                </table>
+              </td></tr>
+            </table>
+          </body>
+        </html>`,
       smsText: buildSmsBody([
         `Planzo password reset requested.`,
         `If this wasn't you, contact support.`,

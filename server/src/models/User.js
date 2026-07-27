@@ -54,6 +54,11 @@ const userSchema = new mongoose.Schema(
       select: false,
       default: undefined,
     },
+    passwordResetConsumedAt: {
+      type: Date,
+      select: false,
+      default: undefined,
+    },
     passwordChangedAt: {
       type: Date,
       default: undefined,
