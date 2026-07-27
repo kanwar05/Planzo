@@ -216,6 +216,17 @@ Deleting a vendor profile also removes its profile, cover, and portfolio
 assets from Cloudinary. If cleanup fails, the profile is kept and the API
 returns a clear `502` response instead of silently orphaning assets.
 
+### Vendor analytics
+
+- `GET /api/analytics/vendor` — vendor dashboard JSON
+- `GET /api/analytics/vendor/export` — matching CSV download
+
+Both endpoints accept `startDate` and `endDate` (`YYYY-MM-DD`). The dashboard
+includes revenue and booking series, acceptance/cancellation/conversion rates,
+month-over-month growth, popular event services, customer locations, repeat
+customer insights, and active-review trends. Revenue represents accepted
+booking value for trends and completed booking value for total earnings.
+
 ### Bookings
 
 - `POST /api/bookings` — customer only

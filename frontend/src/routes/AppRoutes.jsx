@@ -34,6 +34,7 @@ import ChatPage from "../pages/ChatPage";
 import VendorCalendarPage from "../pages/VendorCalendarPage";
 import SettingsPage from "../pages/SettingsPage";
 import AdminAuditLogsPage from "../pages/AdminAuditLogsPage";
+import VendorAnalyticsPage from "../pages/VendorAnalyticsPage";
 
 export const appRoutes = [
   {
@@ -93,6 +94,7 @@ export const appRoutes = [
         element: <DashboardLayout vendor />,
         children: [
           { path: "/vendor/dashboard", element: <VendorDashboardPage /> },
+          { path: "/vendor/analytics", element: <VendorAnalyticsPage /> },
           { path: "/vendor/availability", element: <VendorAvailabilityPage /> },
           { path: "/vendor/calendar", element: <VendorCalendarPage /> },
           { path: "/vendor/profile-setup", element: <VendorProfilePage /> },

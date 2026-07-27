@@ -389,6 +389,10 @@ export const getVendorDashboardAnalytics = async (userId, query = {}) => {
         occupancyRows,
         monthlyRows,
         weeklyRows,
+        popularServiceRows,
+        customerRows,
+        demographicRows,
+        reviewTrendRows,
       ] = await Promise.all([
         Booking.aggregate([
           { $match: { vendorId: vendorObjectId } },
@@ -512,11 +516,47 @@ export const getVendorDashboardAnalytics = async (userId, query = {}) => {
             },
           },
         ]),
+        Booking.aggregate([
+          { $match: { vendorId: vendorObjectId, createdAt: { $gte: startDate, $lt: endDate } } },
+          { $group: { _id: "$eventType", bookings: { $sum: 1 }, revenue: { $sum: { $cond: [{ $in: ["$status", ["accepted", "completed"]] }, "$budget", 0] } } } },
+          { $sort: { bookings: -1, revenue: -1 } },
+          { $limit: 8 },
+        ]),
+        Booking.aggregate([
+          { $match: { vendorId: vendorObjectId } },
+          { $group: { _id: "$customerId", bookings: { $sum: 1 }, revenue: { $sum: { $cond: [{ $in: ["$status", ["accepted", "completed"]] }, "$budget", 0] } } } },
+          { $sort: { bookings: -1 } },
+        ]),
+        Booking.aggregate([
+          { $match: { vendorId: vendorObjectId, createdAt: { $gte: startDate, $lt: endDate } } },
+          { $group: { _id: "$eventLocation", customers: { $addToSet: "$customerId" }, bookings: { $sum: 1 } } },
+          { $project: { _id: 1, bookings: 1, customers: { $size: "$customers" } } },
+          { $sort: { bookings: -1 } },
+          { $limit: 8 },
+        ]),
+        Review.aggregate([
+          { $match: { vendorId: vendorObjectId, status: "active", createdAt: { $gte: startDate, $lt: endDate } } },
+          { $group: { _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } }, averageRating: { $avg: "$rating" }, reviews: { $sum: 1 } } },
+          { $sort: { "_id.year": 1, "_id.month": 1 } },
+        ]),
       ]);
 
       const byStatus = Object.fromEntries(statusRows.map((row) => [row._id, row.count]));
       const bookingFacet = recentBookingRows[0] || { items: [], total: [] };
       const totalBookings = bookingFacet.total[0]?.count || 0;
+      const acceptedBookings = (byStatus.accepted || 0) + (byStatus.completed || 0);
+      const cancelledBookings = (byStatus.cancelled || 0) + (byStatus.rejected || 0);
+      const resolvedBookings = totalBookings - (byStatus.pending || 0);
+      const monthlyStats = fillMonthlyBuckets(monthlyRows, startDate, endDate);
+      const currentRevenue = monthlyStats.at(-1)?.revenue || 0;
+      const previousRevenue = monthlyStats.at(-2)?.revenue || 0;
+      const monthlyGrowth = previousRevenue
+        ? Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 1000) / 10
+        : currentRevenue ? 100 : 0;
+      const repeatCustomers = customerRows.filter((row) => row.bookings > 1);
+      const uniqueCustomers = customerRows.length;
+      const rate = (numerator, denominator) =>
+        denominator ? Math.round((numerator / denominator) * 1000) / 10 : 0;
 
       return {
         filters: { startDate, endDate },
@@ -525,6 +565,15 @@ export const getVendorDashboardAnalytics = async (userId, query = {}) => {
           totalBookings,
           pendingRequests: byStatus.pending || 0,
           acceptedBookings: byStatus.accepted || 0,
+          completedBookings: byStatus.completed || 0,
+          cancelledBookings,
+          acceptanceRate: rate(acceptedBookings, resolvedBookings),
+          cancellationRate: rate(cancelledBookings, totalBookings),
+          conversionRate: rate(acceptedBookings, totalBookings),
+          monthlyGrowth,
+          uniqueCustomers,
+          repeatCustomers: repeatCustomers.length,
+          repeatCustomerRate: rate(repeatCustomers.length, uniqueCustomers),
           monthlyRevenue: monthlyRevenueRows[0]?.revenue || 0,
           totalEarnings: totalEarningsRows[0]?.revenue || 0,
           profileCompletionPercentage: profileCompletion(vendor),
@@ -540,11 +589,69 @@ export const getVendorDashboardAnalytics = async (userId, query = {}) => {
           status: row._id.status,
           count: row.count,
         })),
-        monthlyStats: fillMonthlyBuckets(monthlyRows, startDate, endDate),
+        monthlyStats,
         weeklyStats: weeklyBuckets(weeklyRows),
+        popularServices: popularServiceRows.map((row) => ({
+          service: row._id || "Unspecified",
+          bookings: row.bookings,
+          revenue: row.revenue,
+        })),
+        customerDemographics: {
+          locations: demographicRows.map((row) => ({
+            location: row._id || "Unspecified",
+            customers: row.customers,
+            bookings: row.bookings,
+          })),
+        },
+        repeatCustomerInsights: {
+          uniqueCustomers,
+          repeatCustomers: repeatCustomers.length,
+          repeatCustomerRate: rate(repeatCustomers.length, uniqueCustomers),
+          topCustomers: customerRows.slice(0, 8).map((row) => ({
+            customerId: row._id,
+            bookings: row.bookings,
+            revenue: row.revenue,
+          })),
+        },
+        reviewTrends: reviewTrendRows.map((row) => {
+          const date = new Date(Date.UTC(row._id.year, row._id.month - 1, 1));
+          return {
+            key: monthKey(date),
+            label: monthLabel(date),
+            averageRating: Math.round(row.averageRating * 10) / 10,
+            reviews: row.reviews,
+          };
+        }),
       };
     },
   );
+};
+
+const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+
+export const getVendorAnalyticsCsv = async (userId, query = {}) => {
+  const dashboard = await getVendorDashboardAnalytics(userId, query);
+  const rows = [
+    ["metric", "value"],
+    ["total_revenue", dashboard.summary.totalEarnings],
+    ["monthly_revenue", dashboard.summary.monthlyRevenue],
+    ["total_bookings", dashboard.summary.totalBookings],
+    ["acceptance_rate", dashboard.summary.acceptanceRate],
+    ["cancellation_rate", dashboard.summary.cancellationRate],
+    ["conversion_rate", dashboard.summary.conversionRate],
+    ["monthly_growth", dashboard.summary.monthlyGrowth],
+    ["repeat_customer_rate", dashboard.summary.repeatCustomerRate],
+    [],
+    ["month", "bookings", "revenue"],
+    ...dashboard.monthlyStats.map((item) => [item.key, item.bookings, item.revenue]),
+    [],
+    ["popular_service", "bookings", "revenue"],
+    ...dashboard.popularServices.map((item) => [item.service, item.bookings, item.revenue]),
+    [],
+    ["review_month", "reviews", "average_rating"],
+    ...dashboard.reviewTrends.map((item) => [item.key, item.reviews, item.averageRating]),
+  ];
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
 };
 
 export const getAdminDashboardAnalytics = async (query = {}) => {
