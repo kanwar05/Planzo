@@ -1,4 +1,4 @@
-import { Mail } from "lucide-react";
+import { CheckCircle2, Mail } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "../components/Button";
@@ -11,6 +11,7 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [devToken, setDevToken] = useState("");
+  const [sentTo, setSentTo] = useState("");
 
   const submit = async (event) => {
     event.preventDefault();
@@ -21,8 +22,10 @@ export default function ForgotPasswordPage() {
 
     try {
       const form = new FormData(event.currentTarget);
-      const response = await forgotPassword(form.get("email"));
+      const email = form.get("email");
+      const response = await forgotPassword(email);
       setMessage(response.message);
+      setSentTo(email);
       if (response.resetToken) setDevToken(response.resetToken);
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to start password reset."));
@@ -44,11 +47,22 @@ export default function ForgotPasswordPage() {
       <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-coral">
         Account recovery
       </p>
-      <h1 className="mt-3 text-4xl font-extrabold">Reset your password.</h1>
-      <p className="mt-3 text-sm text-ink/50">
-        Enter your account email and we will create a secure reset link.
-      </p>
-      <form onSubmit={submit} className="mt-9 space-y-5">
+      <h1 className="mt-3 text-4xl font-extrabold">{sentTo ? "Check your inbox." : "Reset your password."}</h1>
+      {sentTo ? (
+        <div className="mt-7 rounded-3xl border border-emerald-100 bg-emerald-50 p-6">
+          <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+          <p className="mt-4 font-bold">If an account exists for {sentTo}, a secure link is on its way.</p>
+          <p className="mt-2 text-sm leading-6 text-ink/55">It expires in 15 minutes and can only be used once. Check your spam folder if it does not arrive.</p>
+          <Button type="button" variant="outline" className="mt-5" onClick={() => { setSentTo(""); setMessage(""); setDevToken(""); }}>
+            Try another email
+          </Button>
+        </div>
+      ) : (
+      <>
+        <p className="mt-3 text-sm text-ink/50">
+          Enter your account email and we will send a secure, single-use reset link.
+        </p>
+        <form onSubmit={submit} className="mt-9 space-y-5">
         <div>
           <label className="label">Email address</label>
           <div className="relative">
@@ -65,10 +79,12 @@ export default function ForgotPasswordPage() {
         <Button type="submit" loading={loading} disabled={loading} className="w-full">
           Send reset instructions
         </Button>
-      </form>
+        </form>
+      </>
+      )}
       {devToken && (
         <div className="mt-5 rounded-2xl bg-sand p-4 text-xs font-semibold text-ink/60">
-          Development reset token: {devToken}
+          Development only: <Link className="font-bold text-coral" to={`/reset-password?token=${encodeURIComponent(devToken)}`}>open reset page</Link>
         </div>
       )}
       <p className="mt-7 text-center text-sm text-ink/50">

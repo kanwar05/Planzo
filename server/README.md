@@ -46,6 +46,9 @@ curl http://localhost:5001/api/health
 | `SMTP_USER` | SMTP username, if your provider requires auth |
 | `SMTP_PASS` | SMTP password, if your provider requires auth |
 | `SMTP_FROM` | Sender address used for email notifications |
+| `PASSWORD_RESET_REQUEST_MAX` | Reset emails allowed per IP/hour; defaults to 3 |
+| `PASSWORD_RESET_ATTEMPT_MAX` | Token attempts allowed per IP/hour; defaults to 10 |
+| `PASSWORD_RESET_RATE_WINDOW_MS` | Optional rate-limit window override |
 | `TWILIO_ACCOUNT_SID` | Twilio account SID for transactional SMS |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token for transactional SMS |
 | `TWILIO_PHONE_NUMBER` | Verified Twilio phone number used as the SMS sender |
@@ -82,6 +85,15 @@ should be provisioned directly by a trusted administrator.
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `GET /api/auth/me`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+
+Password reset responses do not reveal whether an email is registered. Reset
+links contain a random 384-bit token; only its SHA-256 hash is stored. Links
+expire after 15 minutes and are atomically consumed on first use. A successful
+reset revokes every refresh token and sends a password-changed notification.
+The raw token is returned only while `NODE_ENV` is not `production`, to support
+local and automated testing.
 
 ### Vendors
 
