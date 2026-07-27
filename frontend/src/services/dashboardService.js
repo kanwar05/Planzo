@@ -13,6 +13,14 @@ export const getVendorDashboard = async (params = {}) => {
   return dashboardFrom(response);
 };
 
+export const exportVendorAnalytics = async (params = {}) => {
+  const response = await api.get("/analytics/vendor/export", {
+    params,
+    responseType: "blob",
+  });
+  return response.data;
+};
+
 export const getAdminDashboard = async (params = {}) => {
   const response = await api.get("/analytics/admin", { params });
   return dashboardFrom(response);

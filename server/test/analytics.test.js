@@ -201,6 +201,13 @@ test("vendor dashboard returns revenue, profile, rating, events, and occupancy f
   assert.equal(response.body.dashboard.summary.totalBookings, 4);
   assert.equal(response.body.dashboard.summary.pendingRequests, 1);
   assert.equal(response.body.dashboard.summary.acceptedBookings, 1);
+  assert.equal(response.body.dashboard.summary.completedBookings, 1);
+  assert.equal(response.body.dashboard.summary.cancelledBookings, 1);
+  assert.equal(response.body.dashboard.summary.acceptanceRate, 66.7);
+  assert.equal(response.body.dashboard.summary.cancellationRate, 25);
+  assert.equal(response.body.dashboard.summary.conversionRate, 50);
+  assert.equal(response.body.dashboard.summary.repeatCustomers, 1);
+  assert.equal(response.body.dashboard.summary.repeatCustomerRate, 100);
   assert.equal(response.body.dashboard.summary.monthlyRevenue, 50000);
   assert.equal(response.body.dashboard.summary.totalEarnings, 30000);
   assert.equal(response.body.dashboard.summary.averageRating, 4.5);
@@ -208,6 +215,27 @@ test("vendor dashboard returns revenue, profile, rating, events, and occupancy f
   assert.equal(response.body.dashboard.summary.verificationStatus, "approved");
   assert.equal(response.body.dashboard.upcomingEvents.length, 2);
   assert.ok(response.body.dashboard.calendarOccupancy.length >= 1);
+  assert.equal(response.body.dashboard.popularServices.length, 4);
+  assert.equal(response.body.dashboard.customerDemographics.locations[0].customers, 1);
+  assert.equal(response.body.dashboard.repeatCustomerInsights.uniqueCustomers, 1);
+  assert.equal(response.body.dashboard.reviewTrends[0].averageRating, 5);
+});
+
+test("vendor analytics CSV export is scoped, downloadable, and includes trends", async () => {
+  const { vendorUser, customer } = await seedDashboardData();
+  const response = await request(app)
+    .get("/api/analytics/vendor/export")
+    .set("Authorization", auth(vendorUser));
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"], /text\/csv/);
+  assert.match(response.headers["content-disposition"], /vendor-analytics/);
+  assert.match(response.text, /"acceptance_rate","66.7"/);
+  assert.match(response.text, /"popular_service","bookings","revenue"/);
+
+  const forbidden = await request(app)
+    .get("/api/analytics/vendor/export")
+    .set("Authorization", auth(customer));
+  assert.equal(forbidden.status, 403);
 });
 
 test("admin dashboard returns platform-wide user, vendor, booking, graph, and report metrics", async () => {

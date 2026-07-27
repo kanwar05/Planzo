@@ -65,7 +65,7 @@ const vendorLinks = [
   { label: "Portfolio", to: "/vendor/profile-setup#portfolio", icon: Store },
   { label: "Messages", to: "/vendor/messages", icon: MessageCircle },
   { label: "Reviews", to: "/vendor/dashboard?view=reviews", icon: Star },
-  { label: "Analytics", to: "/vendor/dashboard?view=analytics", icon: LayoutDashboard },
+  { label: "Analytics", to: "/vendor/analytics", icon: LayoutDashboard },
   { label: "Payments", to: "/vendor/dashboard?view=payments", icon: CreditCard },
   { label: "Settings", to: "/vendor/settings", icon: Settings },
   { label: "Verification", to: "/vendor/verification", icon: ShieldCheck },

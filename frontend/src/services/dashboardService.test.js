@@ -3,6 +3,7 @@ import {
   getAdminDashboard,
   getCustomerDashboard,
   getVendorDashboard,
+  exportVendorAnalytics,
 } from "./dashboardService";
 import { api } from "./api";
 
@@ -36,6 +37,16 @@ describe("dashboardService", () => {
     });
     await expect(getAdminDashboard()).resolves.toEqual({
       summary: { totalUsers: 7 },
+    });
+  });
+
+  it("downloads the filtered vendor analytics CSV", async () => {
+    const blob = new Blob(["metric,value"]);
+    api.get.mockResolvedValueOnce({ data: blob });
+    await expect(exportVendorAnalytics({ startDate: "2026-01-01" })).resolves.toBe(blob);
+    expect(api.get).toHaveBeenCalledWith("/analytics/vendor/export", {
+      params: { startDate: "2026-01-01" },
+      responseType: "blob",
     });
   });
 });
