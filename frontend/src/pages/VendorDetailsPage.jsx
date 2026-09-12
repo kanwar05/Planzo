@@ -451,7 +451,7 @@ export default function VendorDetailsPage() {
                           <div className="flex flex-wrap justify-between gap-3">
                             <div>
                               <p className="font-extrabold">
-                                {review.customerId?.name || "Planzo customer"}
+                                {review.customerId?.name || "eventifyy customer"}
                               </p>
                               <p className="text-xs text-ink/40">
                                 {review.bookingId?.eventType || "Event"} · {formatDate(review.createdAt)}
@@ -579,7 +579,7 @@ export default function VendorDetailsPage() {
               {[
                 "Verified vendor profile",
                 "Fast response expected",
-                "Secure booking through Planzo",
+                "Secure booking through eventifyy",
               ].map((point) => (
                 <p key={point} className="flex items-center gap-2 text-sm font-semibold text-ink/60">
                   <Check className="h-4 w-4 text-sage" /> {point}

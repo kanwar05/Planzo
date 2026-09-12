@@ -100,7 +100,7 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="mt-7 text-center text-sm text-ink/50">
-        New to PLANZO?{" "}
+        New to eventifyy?{" "}
         <Link to="/register" className="font-bold text-coral">
           Create an account
         </Link>

@@ -9,7 +9,7 @@ const updateSettings = vi.fn();
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
-    user: { name: "Planzo User", email: "user@planzo.test", phone: "9999999991", role: "customer" },
+    user: { name: "eventifyy User", email: "user@eventifyy.test", phone: "9999999991", role: "customer" },
     updateUser,
   }),
 }));
@@ -34,7 +34,7 @@ vi.mock("../services/settingsService", () => ({
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateProfile.mockResolvedValue({ name: "Updated User", email: "user@planzo.test", phone: "9999999991" });
+    updateProfile.mockResolvedValue({ name: "Updated User", email: "user@eventifyy.test", phone: "9999999991" });
   });
 
   it("renders all account setting tabs and saves a validated profile", async () => {
@@ -45,7 +45,7 @@ describe("SettingsPage", () => {
     fireEvent.change(name, { target: { value: "Updated User" } });
     fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({
-      name: "Updated User", email: "user@planzo.test", phone: "9999999991",
+      name: "Updated User", email: "user@eventifyy.test", phone: "9999999991",
     }));
     expect(updateUser).toHaveBeenCalled();
   });

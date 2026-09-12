@@ -20,7 +20,7 @@ let vendorUser;
 let customer;
 let vendor;
 let vendorAgent;
-const password = "Planzo@123";
+const password = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "calendar-test-secret";
@@ -44,8 +44,8 @@ beforeEach(async () => {
     ),
   );
   [customer, vendorUser] = await User.create([
-    { name: "Calendar Customer", email: "customer@planzo.test", phone: "9999999911", password, role: "customer" },
-    { name: "Calendar Vendor", email: "vendor@planzo.test", phone: "9999999912", password, role: "vendor" },
+    { name: "Calendar Customer", email: "customer@eventifyy.test", phone: "9999999911", password, role: "customer" },
+    { name: "Calendar Vendor", email: "vendor@eventifyy.test", phone: "9999999912", password, role: "vendor" },
   ]);
   vendor = await Vendor.create({
     userId: vendorUser._id,
@@ -107,7 +107,7 @@ test("event mapping includes timezone, customer reminder, attendee, and stable m
     { method: "email", minutes: 1440 },
     { method: "popup", minutes: 60 },
   ]);
-  assert.equal(event.extendedProperties.private.planzoBookingId, String(booking._id));
+  assert.equal(event.extendedProperties.private.eventifyyBookingId, String(booking._id));
 });
 
 test("manual sync refreshes OAuth and inserts accepted bookings without exposing token", async () => {
@@ -142,6 +142,6 @@ test("ICS export contains accepted bookings", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers["content-type"], /text\/calendar/);
   assert.match(response.text, /BEGIN:VCALENDAR/);
-  assert.match(response.text, /SUMMARY:Wedding — Planzo/);
+  assert.match(response.text, /SUMMARY:Wedding — eventifyy/);
   assert.match(response.text, /DTSTART;TZID=Asia\/Kolkata:20301010T100000/);
 });

@@ -122,7 +122,7 @@ const ensureCloudinaryConfigured = (uploadHandler) => (req, res, next) => {
 
 export const uploadVendorImages = ensureCloudinaryConfigured(
   createUploader(
-    (file) => `planzo/vendors/${file.fieldname}`,
+    (file) => `eventifyy/vendors/${file.fieldname}`,
     10,
   ).fields([
     { name: "profileImage", maxCount: 1 },
@@ -132,16 +132,16 @@ export const uploadVendorImages = ensureCloudinaryConfigured(
 );
 
 export const uploadProfileImage = ensureCloudinaryConfigured(
-  createUploader("planzo/vendors/profile", 1).single("profileImage"),
+  createUploader("eventifyy/vendors/profile", 1).single("profileImage"),
 );
 
 export const uploadCoverImage = ensureCloudinaryConfigured(
-  createUploader("planzo/vendors/cover", 1).single("coverImage"),
+  createUploader("eventifyy/vendors/cover", 1).single("coverImage"),
 );
 
 // Keep the original field name for backwards compatibility with the frontend.
 export const uploadPortfolioImages = ensureCloudinaryConfigured(
-  createUploader("planzo/vendors/portfolio", 8).array("images", 8),
+  createUploader("eventifyy/vendors/portfolio", 8).array("images", 8),
 );
 
 export const uploadVerificationDocuments = (req, res, next) => {
@@ -149,7 +149,7 @@ export const uploadVerificationDocuments = (req, res, next) => {
 
   return ensureCloudinaryConfigured(
     createUploader(
-      "planzo/vendors/verification",
+      "eventifyy/vendors/verification",
       5,
       documentFileFilter,
       { resourceType: "raw", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
@@ -159,7 +159,7 @@ export const uploadVerificationDocuments = (req, res, next) => {
 
 export const uploadTypedVerificationDocuments = ensureCloudinaryConfigured(
   createUploader(
-    (file) => `planzo/vendors/verification/${file.fieldname}`,
+    (file) => `eventifyy/vendors/verification/${file.fieldname}`,
     5,
     documentFileFilter,
     { resourceType: "auto", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
@@ -184,7 +184,7 @@ export const uploadChatAttachments = (req, res, next) => {
   if (!req.is("multipart/form-data")) return next();
   return ensureCloudinaryConfigured(
     createUploader(
-      "planzo/chat",
+      "eventifyy/chat",
       5,
       chatFileFilter,
       { resourceType: "auto", allowedFormats: ["jpg", "jpeg", "png", "webp", "pdf", "doc", "docx", "txt", "csv", "xls", "xlsx"], maxFileSize: MAX_CHAT_FILE_SIZE },
@@ -193,7 +193,7 @@ export const uploadChatAttachments = (req, res, next) => {
 };
 
 const reviewImageUpload = createUploader(
-  "planzo/reviews",
+  "eventifyy/reviews",
   4,
 ).array("images", 4);
 

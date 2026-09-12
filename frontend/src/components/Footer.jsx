@@ -37,7 +37,7 @@ export default function Footer() {
           <h3 className="font-bold">Contact</h3>
           <div className="mt-5 space-y-4 text-sm text-white/55">
             <p className="flex gap-2">
-              <Mail className="h-4 w-4 shrink-0" /> planzo.event@gmail.com
+              <Mail className="h-4 w-4 shrink-0" /> eventifyy.event@gmail.com
             </p>
             <p className="flex gap-2">
               <MapPin className="h-4 w-4 shrink-0" /> Chandigarh, India
@@ -47,7 +47,7 @@ export default function Footer() {
       </div>
       <div className="border-t border-white/10">
         <div className="container-shell flex flex-col gap-2 py-5 text-xs text-white/35 sm:flex-row sm:justify-between">
-          <p>© 2026 PLANZO. All celebrations reserved.</p>
+          <p>© 2026 eventifyy. All celebrations reserved.</p>
           <p>Privacy · Terms · Safety</p>
         </div>
       </div>

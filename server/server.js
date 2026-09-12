@@ -20,11 +20,11 @@ async function startServer() {
     const server = createServer(app);
     initializeChatSocket(server, app);
     server.listen(port, () => {
-      console.log(`Planzo API listening on http://localhost:${port}`);
+      console.log(`eventifyy API listening on http://localhost:${port}`);
     });
 
     const shutdown = (signal) => {
-      console.log(`${signal} received. Closing Planzo API...`);
+      console.log(`${signal} received. Closing eventifyy API...`);
       if (notificationScheduler) {
         clearInterval(notificationScheduler);
       }

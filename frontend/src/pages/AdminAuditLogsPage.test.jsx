@@ -16,8 +16,8 @@ describe("AdminAuditLogsPage", () => {
     getAuditLogs.mockResolvedValue({
       logs: [{
         _id: "log-1", createdAt: "2026-07-26T10:00:00.000Z",
-        action: "role_changed", admin: { name: "Admin", email: "admin@planzo.test" },
-        targetType: "User", targetLabel: "user@planzo.test",
+        action: "role_changed", admin: { name: "Admin", email: "admin@eventifyy.test" },
+        targetType: "User", targetLabel: "user@eventifyy.test",
         ip: "127.0.0.1", browser: "Chrome", oldValue: { role: "customer" },
         newValue: { role: "vendor" }, reason: "Vendor approved",
       }],
@@ -28,7 +28,7 @@ describe("AdminAuditLogsPage", () => {
 
   it("renders audit data and applies search/action filters", async () => {
     render(<MemoryRouter><AdminAuditLogsPage /></MemoryRouter>);
-    expect(await screen.findByText("user@planzo.test")).toBeInTheDocument();
+    expect(await screen.findByText("user@eventifyy.test")).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText("Target, reason, IP, browser…"), { target: { value: "vendor" } });
     fireEvent.change(screen.getByLabelText("Action"), { target: { value: "role_changed" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -39,7 +39,7 @@ describe("AdminAuditLogsPage", () => {
 
   it("exports the active filtered result set", async () => {
     render(<MemoryRouter><AdminAuditLogsPage /></MemoryRouter>);
-    await screen.findByText("user@planzo.test");
+    await screen.findByText("user@eventifyy.test");
     fireEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
     await waitFor(() => expect(exportAuditLogsCsv).toHaveBeenCalledWith({
       search: "", action: "", from: "", to: "",

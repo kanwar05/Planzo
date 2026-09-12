@@ -277,7 +277,7 @@ function AvailabilityCalendar({ requests, selectedDate, onSelectDate }) {
 }
 
 export default function VendorDashboardPage() {
-  useDocumentTitle("Vendor Dashboard - Planzo");
+  useDocumentTitle("Vendor Dashboard - eventifyy");
   const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [profile, setProfile] = useState(null);

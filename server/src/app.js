@@ -112,13 +112,13 @@ app.use(express.urlencoded({ extended: true, limit: formBodyLimit }));
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Planzo API is running.",
+    message: "eventifyy API is running.",
   });
 });
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Planzo API is running",
+    message: "eventifyy API is running",
   });
 });
 app.use("/api/auth/login", authLimiter);

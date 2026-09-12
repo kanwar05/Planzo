@@ -110,7 +110,7 @@ export default function VendorCalendarPage() {
       <div>
         <h1 className="text-3xl font-extrabold">Calendar</h1>
         <p className="mt-1 text-sm text-ink/55">
-          Keep accepted Planzo bookings and customer reminders in sync.
+          Keep accepted eventifyy bookings and customer reminders in sync.
         </p>
       </div>
 

@@ -9,7 +9,7 @@ import Vendor from "../src/models/Vendor.js";
 
 let mongo;
 
-const strongPassword = "Planzo@123";
+const strongPassword = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "auth-test-secret";

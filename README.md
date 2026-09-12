@@ -1,4 +1,4 @@
-# PLANZO
+# eventifyy
 
 Event services marketplace where customers discover and book vendors, vendors manage bookings and showcase their work, and admins moderate the platform.
 
@@ -10,10 +10,10 @@ Submissions move through `pending`, `approved`, `rejected`, and `needs_resubmiss
 
 The API uses a dedicated `VendorVerification` model with typed documents, `verificationHistory`, `reviewedBy`, and `reviewedAt`. Vendor endpoints are `GET /api/vendor/verification/me` and `POST /api/vendor/verification/submit`; admin endpoints are under `/api/admin/verifications`. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` before accepting uploads.
 
-PLANZO is split into two independent applications:
+eventifyy is split into two independent applications:
 
 ```text
-Planzo/
+eventifyy/
 ├── frontend/   # React + Vite + Tailwind CSS
 └── server/     # Node.js + Express + MongoDB
 ```
@@ -157,13 +157,13 @@ See [`server/README.md`](server/README.md) for:
 - Cloudinary vendor image uploads
 - Example curl requests
 - Testing instructions
-# Planzo payments
+# eventifyy payments
 
 ## Realtime chat
 
-Planzo chat uses Socket.IO plus MongoDB-backed `Conversation` and `Message` records. Socket handshakes authenticate the existing HttpOnly `planzo_access` JWT cookie; REST endpoints under `/api/chat` use the same access rules. Booking conversations are restricted to the booking customer, vendor account, and admins. Direct one-to-one conversations can also be created with a participant ID.
+eventifyy chat uses Socket.IO plus MongoDB-backed `Conversation` and `Message` records. Socket handshakes authenticate the existing HttpOnly `eventifyy_access` JWT cookie; REST endpoints under `/api/chat` use the same access rules. Booking conversations are restricted to the booking customer, vendor account, and admins. Direct one-to-one conversations can also be created with a participant ID.
 
-Messages support Unicode emoji, up to five Cloudinary-backed image/file attachments of 10 MB each, full-text search, soft deletion, per-user conversation deletion, unread counters, delivery timestamps, seen receipts, typing events, online presence, and persisted last-seen timestamps. New messages also create Planzo notifications. Compound participant, booking, message-order, and text indexes support chat-list and history queries.
+Messages support Unicode emoji, up to five Cloudinary-backed image/file attachments of 10 MB each, full-text search, soft deletion, per-user conversation deletion, unread counters, delivery timestamps, seen receipts, typing events, online presence, and persisted last-seen timestamps. New messages also create eventifyy notifications. Compound participant, booking, message-order, and text indexes support chat-list and history queries.
 
 The responsive `/messages` UI provides a mobile conversation/chat split view, unread badges, presence and last-seen text, booking context, message search, attachment previews, emoji selection, typing feedback, receipts, deletion, and automatic scrolling. Configure `VITE_SOCKET_URL` only when the socket origin differs from the API origin; otherwise it is derived from `VITE_API_URL`.
 
@@ -175,7 +175,7 @@ Vendor profiles accept optional `latitude`, `longitude`, and `locationCity` valu
 
 The vendor directory includes debounced search, dual price sliders, category selection, autocomplete, browser-location radius search, availability dates, verification and experience filters, removable chips, responsive mobile filters, sorting, skeleton states, and intersection-observer infinite scrolling.
 
-Planzo uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
+eventifyy uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
 
 ```mermaid
 flowchart TD
@@ -200,7 +200,7 @@ Copy `server/.env.example` to `server/.env`, use Razorpay test-mode keys, and se
 
 All payment variables are documented in `server/.env.example`. Startup rejects percentage configurations that do not total 100, and production startup requires Razorpay credentials. Cancellation uses the free-window and fee settings; calculations should be recorded before refund initiation. Refunds are initiated by admins and finalized only by verified webhooks. A completed, fully paid, undisputed booking becomes payout-eligible after `VENDOR_PAYOUT_HOLD_DAYS`; platform fees and refund deductions are reflected separately.
 
-Each captured installment receives a server-generated unique receipt number and downloadable PDF. The final installment is labeled as the consolidated invoice. Invoice access is restricted to the customer, associated vendor, or admin. Planzo stores no card, UPI, wallet, or bank credentials. Secrets and provider signatures are omitted from API responses. Adding Stripe requires implementing the existing provider interface and selecting it in the factory; booking eligibility and monetary state logic remain unchanged.
+Each captured installment receives a server-generated unique receipt number and downloadable PDF. The final installment is labeled as the consolidated invoice. Invoice access is restricted to the customer, associated vendor, or admin. eventifyy stores no card, UPI, wallet, or bank credentials. Secrets and provider signatures are omitted from API responses. Adding Stripe requires implementing the existing provider interface and selecting it in the factory; booking eligibility and monetary state logic remain unchanged.
 
 ## Booking cancellation and refunds
 

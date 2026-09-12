@@ -21,7 +21,7 @@ export const exportCalendar = async () => {
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "planzo-bookings.ics";
+  anchor.download = "eventifyy-bookings.ics";
   anchor.click();
   URL.revokeObjectURL(url);
 };

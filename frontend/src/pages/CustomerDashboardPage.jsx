@@ -182,7 +182,7 @@ function MiniCalendar({ bookings }) {
 }
 
 export default function CustomerDashboardPage() {
-  useDocumentTitle("Customer Dashboard - Planzo");
+  useDocumentTitle("Customer Dashboard - eventifyy");
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const [bookings, setBookings] = useState([]);
@@ -1193,7 +1193,7 @@ export default function CustomerDashboardPage() {
                   <Bot className="h-5 w-5" />
                 </span>
                 <div>
-                  <h2 className="text-xl font-extrabold">Planzo AI</h2>
+                  <h2 className="text-xl font-extrabold">eventifyy AI</h2>
                   <p className="text-sm text-ink/45">Smart recommendations</p>
                 </div>
               </div>

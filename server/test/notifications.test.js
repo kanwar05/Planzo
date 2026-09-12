@@ -17,7 +17,7 @@ import {
 let mongo;
 let deliveryLog;
 
-const strongPassword = "Planzo@123";
+const strongPassword = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "notifications-test-secret";

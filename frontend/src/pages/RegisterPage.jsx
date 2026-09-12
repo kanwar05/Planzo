@@ -132,7 +132,7 @@ export default function RegisterPage() {
         </div>
         <label className="flex items-start gap-2 text-xs leading-5 text-ink/50">
           <input required type="checkbox" className="mt-1 accent-coral" />I agree
-          to PLANZO’s Terms of Service and Privacy Policy.
+          to eventifyy’s Terms of Service and Privacy Policy.
         </label>
         <Button type="submit" loading={loading} disabled={loading} className="w-full">
           {tab === "vendor"

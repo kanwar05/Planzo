@@ -62,7 +62,7 @@ function ChartPanel({ title, data, metric, color, type }) {
 }
 
 export default function AdminDashboardPage() {
-  useDocumentTitle("Admin Dashboard - Planzo");
+  useDocumentTitle("Admin Dashboard - eventifyy");
   const navigate = useNavigate();
   const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
