@@ -24,7 +24,7 @@ import { formatCurrency } from "../utils/format";
 const inputDate = (date) => date.toISOString().slice(0, 10);
 
 export default function VendorAnalyticsPage() {
-  useDocumentTitle("Vendor Analytics - eventifyy");
+  useDocumentTitle("Vendor Analytics - Planzo");
   const today = new Date();
   const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
   const [range, setRange] = useState({

@@ -9,7 +9,7 @@ export default function ServicesPage() {
   useDocumentTitle("Event services");
   return (
     <div className="services-page min-h-screen bg-[#FFF9F2]">
-      <section className="bg-[#FFE1D6] py-16 sm:py-20"><div className="container-shell text-[#4A2148]"><SectionHeading eyebrow="The eventifyy collection" title="The right expert for every detail." description="Browse trusted specialists, compare their work, and build your perfect event team." /></div></section>
+      <section className="bg-[#FFE1D6] py-16 sm:py-20"><div className="container-shell text-[#4A2148]"><SectionHeading eyebrow="The Planzo collection" title="The right expert for every detail." description="Browse trusted specialists, compare their work, and build your perfect event team." /></div></section>
       <section className="section-pad container-shell bg-[#FFF9F2]">
         <div className="grid gap-7 md:grid-cols-2 lg:grid-cols-3">
           {services.map(({ title, description, icon: Icon, image }, index) => (

@@ -20,7 +20,7 @@ const label = (action) => action.replaceAll("_", " ").replace(/\b\w/g, (letter) 
 const valuePreview = (value) => value == null ? "—" : JSON.stringify(value);
 
 export default function AdminAuditLogsPage() {
-  useDocumentTitle("Audit Logs - eventifyy Admin");
+  useDocumentTitle("Audit Logs - Planzo Admin");
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [filters, setFilters] = useState({ search: "", action: "", from: "", to: "" });

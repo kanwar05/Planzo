@@ -33,7 +33,7 @@ export default function ReviewList({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="font-extrabold">
-                {review.customerId?.name || "eventifyy customer"}
+                {review.customerId?.name || "Planzo customer"}
               </p>
               <p className="mt-1 text-xs text-ink/40">
                 {review.bookingId?.eventType || "Verified booking"} ·{" "}

@@ -866,7 +866,7 @@ export default function VendorProfilePage() {
           <Card className="p-6">
             <h2 className="text-xl font-extrabold">Pricing packages</h2>
             <p className="mt-2 text-sm text-ink/45">
-              eventifyy currently stores your starting price. Package-specific
+              Planzo currently stores your starting price. Package-specific
               fields can be added later without changing this setup flow.
             </p>
             <div className="mt-5 grid gap-3">

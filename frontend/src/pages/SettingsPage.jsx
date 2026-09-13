@@ -48,7 +48,7 @@ const Panel = ({ title, intro, children }) => (
 );
 
 export default function SettingsPage() {
-  useDocumentTitle("Account Settings - eventifyy");
+  useDocumentTitle("Account Settings - Planzo");
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const [tab, setTab] = useState("profile");
@@ -199,15 +199,15 @@ export default function SettingsPage() {
             </form>
           </Panel>}
           {tab === "notifications" && <PreferencePanel title="Notification preferences" section="notifications" values={settings.notifications} patch={patch} items={[["bookingUpdates","Booking updates"],["reviewReminders","Review reminders"],["promotions","Offers and promotions"],["productUpdates","Product updates"]]} />}
-          {tab === "email" && <PreferencePanel title="Email preferences" section="email" values={settings.email} patch={patch} items={[["enabled","Email notifications"],["bookingUpdates","Booking emails"],["promotions","Promotional emails"],["newsletter","eventifyy newsletter"]]} />}
+          {tab === "email" && <PreferencePanel title="Email preferences" section="email" values={settings.email} patch={patch} items={[["enabled","Email notifications"],["bookingUpdates","Booking emails"],["promotions","Promotional emails"],["newsletter","Planzo newsletter"]]} />}
           {tab === "sms" && <PreferencePanel title="SMS preferences" section="sms" values={settings.sms} patch={patch} items={[["enabled","SMS notifications"],["bookingUpdates","Booking texts"],["securityAlerts","Security alerts"],["promotions","Promotional texts"]]} />}
-          {tab === "privacy" && <Panel title="Privacy settings" intro="Control who can discover your profile and how eventifyy uses your activity.">
+          {tab === "privacy" && <Panel title="Privacy settings" intro="Control who can discover your profile and how Planzo uses your activity.">
             <div className="max-w-xl space-y-3">
-              <label className="block"><span className="label">Profile visibility</span><select className="field" value={settings.privacy.profileVisibility} onChange={(e) => patch("privacy","profileVisibility",e.target.value)}><option value="public">Public</option><option value="members">eventifyy members</option><option value="private">Private</option></select></label>
+              <label className="block"><span className="label">Profile visibility</span><select className="field" value={settings.privacy.profileVisibility} onChange={(e) => patch("privacy","profileVisibility",e.target.value)}><option value="public">Public</option><option value="members">Planzo members</option><option value="private">Private</option></select></label>
               {[["showOnlineStatus","Show online status"],["allowSearchEngines","Allow search engines"],["dataPersonalization","Personalized recommendations"]].map(([key,label]) => <Toggle key={key} label={label} checked={settings.privacy[key]} onChange={(v) => patch("privacy",key,v)} />)}
             </div>
           </Panel>}
-          {tab === "appearance" && <Panel title="Theme settings" intro="Choose how eventifyy looks on this device and reduce animation if preferred.">
+          {tab === "appearance" && <Panel title="Theme settings" intro="Choose how Planzo looks on this device and reduce animation if preferred.">
             <div className="max-w-xl space-y-5"><label className="block"><span className="label">Color theme</span><select className="field" value={settings.theme.mode} onChange={(e) => patch("theme","mode",e.target.value)}><option value="system">Use system setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label><Toggle label="Reduce motion" checked={settings.theme.reducedMotion} onChange={(v) => patch("theme","reducedMotion",v)} /></div>
           </Panel>}
           {tab === "sessions" && <Panel title="Connected devices" intro="Review active sessions and sign out devices you no longer recognize.">
