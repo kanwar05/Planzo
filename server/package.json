@@ -1,7 +1,7 @@
 {
-  "name": "planzo-server",
+  "name": "eventifyy-server",
   "version": "1.0.0",
-  "description": "REST API for the Planzo event services marketplace",
+  "description": "REST API for the eventifyy event services marketplace",
   "private": true,
   "type": "module",
   "main": "server.js",

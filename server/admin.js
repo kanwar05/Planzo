@@ -13,7 +13,7 @@ async function ensureAdminEntry() {
 
   await mongoose.connect(uri);
 
-  const targetEmail = 'planzo.event@gmail.com';
+  const targetEmail = 'eventifyy.event@gmail.com';
 
   const existing = await User.findOne({ email: targetEmail });
 

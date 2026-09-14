@@ -68,7 +68,7 @@ const formatBookingDetails = (booking) => {
       booking.customerEmail ||
       booking.phone ||
       booking.email ||
-      "available on your Planzo account",
+      "available on your eventifyy account",
   };
 };
 
@@ -113,7 +113,7 @@ const getReviewReminderDelayMs = () => {
 };
 
 function safeTitle(value) {
-  return value || "Planzo notification";
+  return value || "eventifyy notification";
 }
 
 export const setNotificationDeliveryOverrides = (overrides = null) => {
@@ -268,7 +268,7 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
       smsText: buildSmsBody([
-        `Planzo: booking created for ${details.eventName}.`,
+        `eventifyy: booking created for ${details.eventName}.`,
         `${details.vendorName}, ${details.dateLabel}, ${details.timeLabel}.`,
         `Booking ID: ${details.bookingId}`,
       ]),
@@ -291,7 +291,7 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
       smsText: buildSmsBody([
-        `Planzo: booking accepted by ${details.vendorName}.`,
+        `eventifyy: booking accepted by ${details.vendorName}.`,
         `${details.eventName}, ${details.dateLabel}, ${details.timeLabel}.`,
         `Booking ID: ${details.bookingId}. Status: Accepted`,
       ]),
@@ -312,7 +312,7 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
       smsText: buildSmsBody([
-        `Planzo: booking rejected by ${details.vendorName}.`,
+        `eventifyy: booking rejected by ${details.vendorName}.`,
         `${details.eventName}. Booking ID: ${details.bookingId}.`,
         reason ? `Reason: ${reason}` : "",
       ]),
@@ -336,7 +336,7 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines, footer: "This reminder is sent once." }),
       smsText: buildSmsBody([
-        `Planzo reminder: ${details.eventName} with ${details.vendorName}.`,
+        `eventifyy reminder: ${details.eventName} with ${details.vendorName}.`,
         `${details.dateLabel}, ${details.timeLabel}, ${details.venue}.`,
         `Booking ID: ${details.bookingId}`,
       ]),
@@ -357,13 +357,13 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
       smsText: buildSmsBody([
-        `Planzo reminder: review ${details.vendorName}.`,
+        `eventifyy reminder: review ${details.vendorName}.`,
         `${details.eventName}, ${details.dateLabel}. Booking ID: ${details.bookingId}`,
       ]),
     };
   },
   passwordReset: ({ resetLink, userName }) => {
-    const title = `Reset your Planzo password`;
+    const title = `Reset your eventifyy password`;
     const bodyLines = [
       `Hi ${userName || "there"}, use the link below to reset your password.`,
       resetLink,
@@ -377,17 +377,17 @@ export const notificationTemplates = {
         <!doctype html>
         <html>
           <body style="margin:0;background:#f7f2ec;font-family:Arial,sans-serif;color:#24172a;">
-            <div style="display:none;max-height:0;overflow:hidden;">Your secure Planzo password reset link expires in 15 minutes.</div>
+            <div style="display:none;max-height:0;overflow:hidden;">Your secure eventifyy password reset link expires in 15 minutes.</div>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f2ec;padding:32px 12px;">
               <tr><td align="center">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 16px 50px rgba(36,23,42,.10);">
                   <tr><td style="padding:30px 36px;background:#24172a;color:#fff;">
-                    <div style="font-size:24px;font-weight:800;letter-spacing:-.5px;">Planzo<span style="color:#ef6f61;">.</span></div>
+                    <div style="font-size:24px;font-weight:800;letter-spacing:-.5px;">eventifyy<span style="color:#ef6f61;">.</span></div>
                   </td></tr>
                   <tr><td style="padding:40px 36px;">
                     <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:#fff0ed;color:#c94f43;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Account recovery</div>
                     <h1 style="margin:20px 0 12px;font-size:30px;line-height:1.15;">Reset your password</h1>
-                    <p style="margin:0 0 18px;color:#665c6a;font-size:16px;line-height:1.7;">Hi ${escapeHtml(userName || "there")}, we received a request to reset your Planzo password.</p>
+                    <p style="margin:0 0 18px;color:#665c6a;font-size:16px;line-height:1.7;">Hi ${escapeHtml(userName || "there")}, we received a request to reset your eventifyy password.</p>
                     <p style="margin:0 0 26px;color:#665c6a;font-size:16px;line-height:1.7;">This single-use link expires in <strong>15 minutes</strong>.</p>
                     <a href="${escapeHtml(resetLink)}" style="display:inline-block;background:#ef6f61;color:#fff;text-decoration:none;font-weight:800;padding:15px 24px;border-radius:12px;">Choose a new password</a>
                     <p style="margin:28px 0 8px;color:#665c6a;font-size:13px;line-height:1.6;">Button not working? Copy this address:</p>
@@ -400,15 +400,15 @@ export const notificationTemplates = {
           </body>
         </html>`,
       smsText: buildSmsBody([
-        `Planzo password reset requested.`,
+        `eventifyy password reset requested.`,
         `If this wasn't you, contact support.`,
       ]),
     };
   },
   passwordChanged: ({ userName }) => {
-    const title = `Your Planzo password was changed`;
+    const title = `Your eventifyy password was changed`;
     const bodyLines = [
-      `Hi ${userName || "there"}, your Planzo password was changed successfully.`,
+      `Hi ${userName || "there"}, your eventifyy password was changed successfully.`,
       `If this wasn't you, contact support immediately.`,
     ];
 
@@ -416,7 +416,7 @@ export const notificationTemplates = {
       subject: title,
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
-      smsText: buildSmsBody([`Planzo: your password was changed successfully.`, `If this wasn't you, contact support immediately.`]),
+      smsText: buildSmsBody([`eventifyy: your password was changed successfully.`, `If this wasn't you, contact support immediately.`]),
     };
   },
   vendorApproved: ({ vendorName }) => {
@@ -430,7 +430,7 @@ export const notificationTemplates = {
       subject: title,
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
-      smsText: buildSmsBody([`Planzo: vendor profile approved for ${vendorName}.`]),
+      smsText: buildSmsBody([`eventifyy: vendor profile approved for ${vendorName}.`]),
     };
   },
   vendorRejected: ({ vendorName, reason = "" }) => {
@@ -445,7 +445,7 @@ export const notificationTemplates = {
       text: bodyLines.join("\n"),
       html: buildBaseHtml({ title, bodyLines }),
       smsText: buildSmsBody([
-        `Planzo: vendor profile rejected for ${vendorName}.`,
+        `eventifyy: vendor profile rejected for ${vendorName}.`,
         reason ? `Reason: ${reason}` : "",
       ]),
     };

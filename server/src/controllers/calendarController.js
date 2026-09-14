@@ -86,11 +86,11 @@ export const exportBookings = asyncHandler(async (req, res) => {
     const date = booking.eventDateOnly || booking.eventDate.toISOString().slice(0, 10);
     return [
       "BEGIN:VEVENT",
-      `UID:planzo-${booking._id}@planzo`,
+      `UID:eventifyy-${booking._id}@eventifyy`,
       `DTSTAMP:${new Date().toISOString().replaceAll(/[-:]/g, "").replace(".000", "")}`,
       `DTSTART;TZID=${escapeIcs(booking.timezone || "Asia/Kolkata")}:${icsDate(date, booking.eventStartTime || "09:00")}`,
       `DTEND;TZID=${escapeIcs(booking.timezone || "Asia/Kolkata")}:${icsDate(date, booking.eventEndTime || "10:00")}`,
-      `SUMMARY:${escapeIcs(`${booking.eventType} — Planzo`)}`,
+      `SUMMARY:${escapeIcs(`${booking.eventType} — eventifyy`)}`,
       `LOCATION:${escapeIcs(booking.eventLocation)}`,
       `DESCRIPTION:${escapeIcs(`Customer: ${booking.customerId?.name || "Customer"}\\nBooking: ${booking._id}`)}`,
       "END:VEVENT",
@@ -99,7 +99,7 @@ export const exportBookings = asyncHandler(async (req, res) => {
   const calendar = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Planzo//Bookings//EN",
+    "PRODID:-//eventifyy//Bookings//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     ...events,
@@ -109,7 +109,7 @@ export const exportBookings = asyncHandler(async (req, res) => {
   res
     .set({
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="planzo-bookings.ics"',
+      "Content-Disposition": 'attachment; filename="eventifyy-bookings.ics"',
     })
     .send(calendar);
 });

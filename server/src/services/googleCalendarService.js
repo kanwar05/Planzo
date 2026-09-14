@@ -124,7 +124,7 @@ export async function connectGoogleCalendar({ userId, code }) {
 }
 
 const eventIdFor = (booking) =>
-  `planzo${String(booking._id).toLowerCase().replace(/[^a-v0-9]/g, "")}`;
+  `eventifyy${String(booking._id).toLowerCase().replace(/[^a-v0-9]/g, "")}`;
 
 export function bookingToGoogleEvent(booking) {
   const date = booking.eventDateOnly || new Date(booking.eventDate).toISOString().slice(0, 10);
@@ -133,9 +133,9 @@ export function bookingToGoogleEvent(booking) {
   const vendor = booking.vendorId;
   return {
     id: booking.googleCalendarEventId || eventIdFor(booking),
-    summary: `${booking.eventType} — Planzo`,
+    summary: `${booking.eventType} — eventifyy`,
     description: [
-      `Planzo booking ${booking._id}`,
+      `eventifyy booking ${booking._id}`,
       customer?.name ? `Customer: ${customer.name}` : "",
       booking.specialRequirements ? `Notes: ${booking.specialRequirements}` : "",
     ].filter(Boolean).join("\n"),
@@ -158,8 +158,8 @@ export function bookingToGoogleEvent(booking) {
     },
     extendedProperties: {
       private: {
-        planzoBookingId: String(booking._id),
-        planzoVendorId: String(vendor?._id || vendor),
+        eventifyyBookingId: String(booking._id),
+        eventifyyVendorId: String(vendor?._id || vendor),
       },
     },
   };

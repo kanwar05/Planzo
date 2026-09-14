@@ -93,7 +93,7 @@ export default function Navbar() {
               <Button to="/login" variant="ghost">
                 Log in
               </Button>
-              <Button to="/register">Join PLANZO</Button>
+              <Button to="/register">Join Planzo</Button>
             </>
           )}
         </div>
@@ -143,7 +143,7 @@ export default function Navbar() {
                   <Button to="/login" variant="outline">
                     Log in
                   </Button>
-                  <Button to="/register">Join PLANZO</Button>
+                  <Button to="/register">Join Planzo</Button>
                 </>
               )}
             </div>

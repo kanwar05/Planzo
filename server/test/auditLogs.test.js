@@ -9,7 +9,7 @@ import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
 
 let mongo;
-const password = "Planzo@123";
+const password = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "audit-test-secret";
@@ -27,8 +27,8 @@ after(async () => {
 
 async function setup() {
   const [admin, customer] = await User.create([
-    { name: "Audit Admin", email: "admin@planzo.test", phone: "9999999991", password, role: "admin" },
-    { name: "Audit Customer", email: "customer@planzo.test", phone: "9999999992", password, role: "customer" },
+    { name: "Audit Admin", email: "admin@eventifyy.test", phone: "9999999991", password, role: "admin" },
+    { name: "Audit Customer", email: "customer@eventifyy.test", phone: "9999999992", password, role: "customer" },
   ]);
   const adminAgent = request.agent(app);
   await adminAgent.post("/api/auth/login").set("user-agent", "Mozilla/5.0 Chrome/120").send({ email: admin.email, password });
@@ -74,7 +74,7 @@ test("audit endpoint is admin-only and supports search and action filters", asyn
   });
   assert.equal(filtered.status, 200);
   assert.equal(filtered.body.logs.length, 1);
-  assert.equal(filtered.body.logs[0].targetLabel, "customer@planzo.test");
+  assert.equal(filtered.body.logs[0].targetLabel, "customer@eventifyy.test");
 
   const customerAgent = request.agent(app);
   const unsuspended = await User.findById(customer._id);

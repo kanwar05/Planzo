@@ -18,6 +18,11 @@
   .glass { @apply border border-white/30 bg-white/75 shadow-soft backdrop-blur-xl; }
   .field { @apply w-full rounded-2xl border border-ink/10 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-ink/35 focus:border-coral/60 focus:ring-4 focus:ring-coral/10; }
   .label { @apply mb-2 block text-sm font-semibold text-ink/75; }
+  .service-card { border-color: rgba(74, 33, 72, 0.12); }
+  .service-card:hover { box-shadow: 0 20px 45px rgba(74, 33, 72, 0.14); }
+  .services-page h2 { font-style: italic; }
+  .services-page p, .services-page a { font-style: normal; }
+  #how-it-works h2 { font-style: italic; }
 }
 
 button, a { -webkit-tap-highlight-color: transparent; }

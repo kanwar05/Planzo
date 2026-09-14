@@ -9,7 +9,7 @@ import User from "../src/models/User.js";
 
 let mongo;
 
-const strongPassword = "Planzo@123";
+const strongPassword = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "auth-test-secret";
@@ -43,8 +43,8 @@ test("register creates HttpOnly auth cookies and does not return JWTs", async ()
   assert.equal(response.status, 201);
   assert.equal(response.body.token, undefined);
   assert.equal(response.body.user.email, "customer@example.com");
-  assert.match(response.headers["set-cookie"].join(";"), /planzo_access=/);
-  assert.match(response.headers["set-cookie"].join(";"), /planzo_refresh=/);
+  assert.match(response.headers["set-cookie"].join(";"), /eventifyy_access=/);
+  assert.match(response.headers["set-cookie"].join(";"), /eventifyy_refresh=/);
   assert.match(response.headers["set-cookie"].join(";"), /HttpOnly/);
 });
 

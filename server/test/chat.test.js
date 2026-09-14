@@ -14,7 +14,7 @@ import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { initializeChatSocket } from "../src/realtime/chatSocket.js";
 
-let mongo; const password = "Planzo@123";
+let mongo; const password = "eventifyy@123";
 before(async () => { process.env.JWT_SECRET = "chat-test"; mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri()); await Promise.all([User.syncIndexes(), Vendor.syncIndexes(), Booking.syncIndexes(), Conversation.syncIndexes(), Message.syncIndexes()]); });
 beforeEach(async () => Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({}))));
 after(async () => { await mongoose.disconnect(); await mongo?.stop(); });

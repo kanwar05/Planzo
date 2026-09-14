@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 
-export const ACCESS_COOKIE_NAME = "planzo_access";
-export const REFRESH_COOKIE_NAME = "planzo_refresh";
+export const ACCESS_COOKIE_NAME = "eventifyy_access";
+export const REFRESH_COOKIE_NAME = "eventifyy_refresh";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 

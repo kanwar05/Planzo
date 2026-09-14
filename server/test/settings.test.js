@@ -9,7 +9,7 @@ import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
 
 let mongo;
-const password = "Planzo@123";
+const password = "eventifyy@123";
 
 before(async () => {
   process.env.JWT_SECRET = "settings-test-secret";

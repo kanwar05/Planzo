@@ -9,7 +9,7 @@ import Vendor from "../src/models/Vendor.js";
 import VendorVerification from "../src/models/VendorVerification.js";
 
 let mongo;
-const password = "Planzo@123";
+const password = "eventifyy@123";
 before(async () => { process.env.JWT_SECRET = "verification-module-secret"; mongo = await MongoMemoryServer.create(); await mongoose.connect(mongo.getUri()); await Promise.all([User.syncIndexes(), Vendor.syncIndexes(), VendorVerification.syncIndexes()]); });
 beforeEach(async () => Promise.all(Object.values(mongoose.connection.collections).map((collection) => collection.deleteMany({}))));
 after(async () => { await mongoose.disconnect(); await mongo?.stop(); });

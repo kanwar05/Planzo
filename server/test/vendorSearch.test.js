@@ -17,9 +17,9 @@ after(async () => { await mongoose.disconnect(); await mongo?.stop(); });
 
 async function seed() {
   const users = await User.create([
-    { name: "Vendor A", email: "search-a@example.com", phone: "9666666601", password: "Planzo@123", role: "vendor" },
-    { name: "Vendor B", email: "search-b@example.com", phone: "9666666602", password: "Planzo@123", role: "vendor" },
-    { name: "Customer", email: "search-c@example.com", phone: "9666666603", password: "Planzo@123", role: "customer" },
+    { name: "Vendor A", email: "search-a@example.com", phone: "9666666601", password: "eventifyy@123", role: "vendor" },
+    { name: "Vendor B", email: "search-b@example.com", phone: "9666666602", password: "eventifyy@123", role: "vendor" },
+    { name: "Customer", email: "search-c@example.com", phone: "9666666603", password: "eventifyy@123", role: "customer" },
   ]);
   const vendors = await Vendor.create([
     { userId: users[0]._id, businessName: "Delhi Decor", serviceCategory: "Decoration", description: "Premium decor", pricing: 80000, location: "Delhi, India", locationCity: "Delhi", locationPoint: { type: "Point", coordinates: [77.209, 28.6139] }, experience: 8, averageRating: 4.9, reviewCount: 20, verificationStatus: "approved", verified: true },

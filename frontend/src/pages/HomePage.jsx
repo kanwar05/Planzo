@@ -41,7 +41,7 @@ const testimonials = [
     name: "Nikhil Malhotra",
     event: "25th Anniversary · Delhi",
     quote:
-      "PLANZO turned a daunting family celebration into a clear, calm process. The shortlist was excellent.",
+      "Planzo turned a daunting family celebration into a clear, calm process. The shortlist was excellent.",
     image:
       "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
   },
@@ -253,7 +253,7 @@ export default function HomePage() {
         <div className="section-pad container-shell">
           <SectionHeading
             eyebrow="Simple by design"
-            title="How PLANZO works"
+            title="How Planzo works"
             description="Three easy steps from inspiration to confirmed."
             align="center"
           />

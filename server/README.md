@@ -1,6 +1,6 @@
-# Planzo Backend
+# eventifyy Backend
 
-REST API for Planzo, an event-services marketplace built with Node.js,
+REST API for eventifyy, an event-services marketplace built with Node.js,
 Express, MongoDB, Mongoose, JWT, and bcryptjs.
 
 ## Setup
@@ -182,7 +182,7 @@ and public ID are stored in MongoDB as:
 ```json
 {
   "url": "https://res.cloudinary.com/.../image/upload/...",
-  "publicId": "planzo/vendors/portfolio/example"
+  "publicId": "eventifyy/vendors/portfolio/example"
 }
 ```
 
@@ -221,7 +221,7 @@ Delete a portfolio image using its Cloudinary public ID (preferred) or URL:
 curl -X DELETE http://localhost:5001/api/vendors/portfolio \
   -H "Authorization: Bearer <vendor-token>" \
   -H "Content-Type: application/json" \
-  -d '{"publicId":"planzo/vendors/portfolio/example"}'
+  -d '{"publicId":"eventifyy/vendors/portfolio/example"}'
 ```
 
 Deleting a vendor profile also removes its profile, cover, and portfolio
@@ -392,7 +392,7 @@ Response:
         "reviewCount": 12,
         "profileImage": {
           "url": "https://res.cloudinary.com/.../image/upload/...",
-          "publicId": "planzo/vendors/profile/example"
+          "publicId": "eventifyy/vendors/profile/example"
         }
       }
     }
