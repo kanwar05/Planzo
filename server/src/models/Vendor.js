@@ -1,280 +1,60 @@
 import mongoose from "mongoose";
 
 export const SERVICE_CATEGORIES = [
-  "DJ",
-  "Catering",
-  "Decoration",
-  "Venue Booking",
-  "Mehndi Artist",
-  "Event Planner",
-  "Rental Services",
+  "DJ", "Catering", "Decoration", "Venue Booking", "Mehndi Artist",
+  "Photographer", "Event Planner", "Rental Services",
 ];
 
-const cloudinaryImageSchema = new mongoose.Schema(
-  {
-    url: {
-      type: String,
-      required: [true, "Image URL is required."],
-      trim: true,
-    },
-    publicId: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-  },
-  { _id: false },
-);
+const imageSchema = new mongoose.Schema({
+  url: { type: String, required: true, trim: true },
+  publicId: { type: String, default: "", trim: true },
+}, { _id: false });
 
-const geoPointSchema = new mongoose.Schema(
-  {
-    type: { type: String, enum: ["Point"], required: true },
-    coordinates: {
-      type: [Number],
-      required: true,
-      validate: { validator: (value) => Array.isArray(value) && value.length === 2, message: "Coordinates must contain longitude and latitude." },
-    },
-  },
-  { _id: false },
-);
+// These are opt-in business contacts, never a copy of private User fields.
+const contactSchema = new mongoose.Schema({
+  phone: { type: String, trim: true, maxlength: 30, default: "" },
+  email: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
+}, { _id: false });
 
-const packageSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Package name is required."],
-      trim: true,
-      maxlength: [50, "Package name cannot exceed 50 characters."],
-    },
-    description: {
-      type: String,
-      trim: true,
-      maxlength: [300, "Package description cannot exceed 300 characters."],
-      default: "",
-    },
-    price: {
-      type: Number,
-      required: [true, "Package price is required."],
-      min: [0, "Package price cannot be negative."],
-    },
+const vendorSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
+  businessName: { type: String, required: true, trim: true, maxlength: 120 },
+  serviceCategory: { type: String, required: true, enum: SERVICE_CATEGORIES },
+  description: { type: String, required: true, trim: true, maxlength: 2000 },
+  pricing: { type: Number, required: true, min: 0 },
+  location: { type: String, required: true, trim: true, maxlength: 160 },
+  servicesOffered: {
+    type: [{ type: String, trim: true, maxlength: 120 }], default: [],
+    validate: { validator: (items) => items.length <= 20, message: "Use at most 20 services." },
   },
-  { _id: false },
-);
-
-const verificationDocumentSchema = new mongoose.Schema(
-  {
-    url: {
-      type: String,
-      required: [true, "Document URL is required."],
-      trim: true,
-    },
-    publicId: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    originalName: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    mimeType: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now,
-    },
+  contactDetails: { type: contactSchema, default: () => ({}), select: false },
+  profileImage: { type: imageSchema, default: null },
+  coverImage: { type: imageSchema, default: null },
+  portfolioImages: {
+    type: [imageSchema], default: [],
+    validate: { validator: (images) => images.length <= 8, message: "A portfolio can contain at most 8 images." },
   },
-  { _id: false },
-);
+  verified: { type: Boolean, default: false },
+  verificationStatus: { type: String, enum: ["pending", "approved", "rejected"], default() { return this.verified ? "approved" : "pending"; } },
+  verificationRejectionReason: { type: String, default: "", trim: true, maxlength: 1000 },
+  suspended: { type: Boolean, default: false },
+  suspendedAt: { type: Date, default: null },
+}, { timestamps: true, versionKey: false });
 
-const vendorSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      unique: true,
-      index: true,
-    },
-    businessName: {
-      type: String,
-      required: [true, "Business name is required."],
-      trim: true,
-      maxlength: [120, "Business name cannot exceed 120 characters."],
-    },
-    serviceCategory: {
-      type: String,
-      required: [true, "Service category is required."],
-      enum: SERVICE_CATEGORIES,
-    },
-    description: {
-      type: String,
-      required: [true, "Description is required."],
-      trim: true,
-      maxlength: [2000, "Description cannot exceed 2000 characters."],
-    },
-    experience: {
-      type: Number,
-      min: [0, "Experience cannot be negative."],
-      default: 0,
-    },
-    pricing: {
-      type: Number,
-      required: [true, "Pricing is required."],
-      min: [0, "Pricing cannot be negative."],
-    },
-    packages: {
-      type: [packageSchema],
-      default: [],
-      validate: {
-        validator: (packages) => packages.length <= 10,
-        message: "A vendor can have at most 10 packages.",
-      },
-    },
-    location: {
-      type: String,
-      required: [true, "Location is required."],
-      trim: true,
-      maxlength: [160, "Location cannot exceed 160 characters."],
-    },
-    locationCity: { type: String, trim: true, index: true, default: "" },
-    locationPoint: { type: geoPointSchema, default: undefined },
-    profileImage: {
-      type: cloudinaryImageSchema,
-      default: null,
-    },
-    coverImage: {
-      type: cloudinaryImageSchema,
-      default: null,
-    },
-    portfolioImages: {
-      type: [cloudinaryImageSchema],
-      default: [],
-      validate: {
-        validator: (images) => images.length <= 8,
-        message: "A portfolio can contain at most 8 images.",
-      },
-    },
-    rating: {
-      type: Number,
-      min: 0,
-      max: 5,
-      default: 0,
-    },
-    reviewsCount: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-    averageRating: {
-      type: Number,
-      min: 0,
-      max: 5,
-      default: 0,
-    },
-    reviewCount: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-    verified: {
-      type: Boolean,
-      default: false,
-    },
-    verificationStatus: {
-      type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
-      index: true,
-    },
-    verificationDocuments: {
-      type: [verificationDocumentSchema],
-      default: [],
-    },
-    verificationRejectionReason: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    verificationSubmittedAt: {
-      type: Date,
-      default: null,
-    },
-    reported: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    reportReasons: {
-      type: [String],
-      default: [],
-    },
-    suspended: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    suspendedAt: {
-      type: Date,
-      default: null,
-    },
-  },
-  {
-    timestamps: true,
-    versionKey: false,
-  },
-);
-
-// Convert portfolios created before Cloudinary support into the new object shape
-// as documents are hydrated, so existing profiles remain readable and editable.
-vendorSchema.pre("init", function normalizeLegacyPortfolio(data) {
-  if (Array.isArray(data.portfolioImages)) {
-    data.portfolioImages = data.portfolioImages
-      .map((image) =>
-        typeof image === "string" ? { url: image, publicId: "" } : image,
-      )
-      .filter((image) => image?.url);
-  }
-
+vendorSchema.pre("init", function normalizeLegacy(data) {
+  if (!data.verificationStatus) data.verificationStatus = data.verified ? "approved" : "pending";
+  data.portfolioImages = (data.portfolioImages || []).map((image) =>
+    typeof image === "string" ? { url: image, publicId: "" } : image,
+  ).filter((image) => image?.url);
   for (const field of ["profileImage", "coverImage"]) {
-    if (typeof data[field] === "string") {
-      data[field] = { url: data[field], publicId: "" };
-    }
+    if (typeof data[field] === "string") data[field] = { url: data[field], publicId: "" };
   }
 });
-
-vendorSchema.pre("save", function syncVerificationState(next) {
-  if (this.location && !this.locationCity) this.locationCity = this.location.split(",")[0].trim();
-  if (!this.verificationStatus) {
-    this.verificationStatus = this.verified ? "approved" : "pending";
-  }
-
-  if (this.verificationStatus === "approved") {
-    this.verified = true;
-    this.verificationRejectionReason = "";
-  } else {
-    this.verified = false;
-  }
-
-  if (!this.verificationRejectionReason) {
-    this.verificationRejectionReason = "";
-  }
-
+vendorSchema.pre("save", function syncApproval(next) {
+  this.verified = this.verificationStatus === "approved";
+  if (this.verified) this.verificationRejectionReason = "";
   next();
 });
-
-vendorSchema.index({
-  businessName: "text",
-  serviceCategory: "text",
-  description: "text",
-  location: "text",
-});
-vendorSchema.index({ locationPoint: "2dsphere" });
-vendorSchema.index({ reported: 1, serviceCategory: 1, verificationStatus: 1, pricing: 1, averageRating: -1, experience: -1 });
-vendorSchema.index({ reported: 1, createdAt: -1 });
+vendorSchema.index({ verificationStatus: 1, suspended: 1, serviceCategory: 1, pricing: 1 });
 
 export default mongoose.model("Vendor", vendorSchema);

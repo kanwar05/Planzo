@@ -1,204 +1,102 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import multer from "multer";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
-import cloudinary, {
-  isCloudinaryConfigured,
-} from "../config/cloudinary.js";
+import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-const IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const DOCUMENT_EXTENSIONS = new Set([...IMAGE_EXTENSIONS, ".pdf"]);
-const DOCUMENT_MIME_TYPES = new Set([
-  ...IMAGE_MIME_TYPES,
-  "application/pdf",
-]);
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const MAX_CHAT_FILE_SIZE = 10 * 1024 * 1024;
-const CHAT_EXTENSIONS = new Set([...DOCUMENT_EXTENSIONS, ".doc", ".docx", ".txt", ".csv", ".xls", ".xlsx"]);
-const CHAT_MIME_TYPES = new Set([...DOCUMENT_MIME_TYPES, "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+const imageTypes = new Map([[".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".png", "image/png"], [".webp", "image/webp"]]);
+const ownedAsset = Symbol("uploadedCloudinaryAsset");
 
-const getCloudinaryResourceType = (file) => {
-  const extension = path.extname(file.originalname || "").toLowerCase();
-  return IMAGE_EXTENSIONS.has(extension) ? "image" : "raw";
-};
-
-const createStorage = (folder, options = {}) =>
-  new CloudinaryStorage({
-    cloudinary,
-    params: async (req, file) => ({
-      folder: typeof folder === "function" ? folder(file) : folder,
-      resource_type: options.resourceType || "image",
-      allowed_formats: options.allowedFormats || ["jpg", "jpeg", "png", "webp"],
-      ...(options.resourceType === "image"
-        ? { transformation: [{ quality: "auto", fetch_format: "auto" }] }
-        : {}),
-    }),
-  });
-
-const imageFileFilter = (req, file, callback) => {
-  const extension = path.extname(file.originalname).toLowerCase();
-
-  if (
-    !IMAGE_EXTENSIONS.has(extension) ||
-    !IMAGE_MIME_TYPES.has(file.mimetype)
-  ) {
-    return callback(
-      new ApiError(400, "Only JPG, JPEG, PNG, and WEBP images are allowed."),
-    );
-  }
-
-  return callback(null, true);
-};
-
-const documentFileFilter = (req, file, callback) => {
-  const extension = path.extname(file.originalname).toLowerCase();
-
-  if (
-    !DOCUMENT_EXTENSIONS.has(extension) ||
-    !DOCUMENT_MIME_TYPES.has(file.mimetype)
-  ) {
-    return callback(
-      new ApiError(400, "Only JPG, JPEG, PNG, WEBP, and PDF files are allowed."),
-    );
-  }
-
-  return callback(null, true);
-};
-
-const createUploader = (folder, files, fileFilter = imageFileFilter, options = {}) =>
-  multer({
-    storage: createStorage(folder, options),
-    limits: {
-      fileSize: options.maxFileSize || MAX_IMAGE_SIZE,
-      files,
-      fields: 10,
-      parts: files + 10,
+function imageStorage(folder) {
+  return {
+    _handleFile(req, file, callback) {
+      const targetFolder = typeof folder === "function" ? folder(file) : folder;
+      const publicId = `${targetFolder}/${randomUUID()}`;
+      let completed = false;
+      let inputFailed = false;
+      let stream;
+      const remove = async () => cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+      const cleanFailure = () => remove().catch(() => {
+        console.error("Cloudinary could not clean up an incomplete business photo.");
+      });
+      const detach = () => {
+        req.removeListener("aborted", abortInput);
+        req.res?.removeListener("close", abortResponse);
+        file.stream.removeListener("error", abortInput);
+      };
+      const abortInput = () => {
+        if (inputFailed || completed) return;
+        inputFailed = true;
+        detach();
+        stream?.destroy();
+        void cleanFailure();
+      };
+      const abortResponse = () => { if (!req.res.writableEnded) abortInput(); };
+      const finish = async (error, result) => {
+        // Multer handles source/request errors itself. A late provider result still needs cleanup.
+        if (inputFailed) { await cleanFailure(); return; }
+        if (completed) return;
+        completed = true;
+        detach();
+        if (!error && (typeof result?.secure_url !== "string" || !result.secure_url.startsWith("https://") || result.public_id !== publicId)) {
+          error = new ApiError(502, "Image hosting returned an invalid upload response.");
+        }
+        if (error) {
+          await cleanFailure();
+          callback(new ApiError(502, "The business photo could not be uploaded."));
+          return;
+        }
+        callback(null, { path: result.secure_url, filename: publicId, size: result.bytes, [ownedAsset]: publicId });
+      };
+      req.once("aborted", abortInput);
+      req.res?.once("close", abortResponse);
+      file.stream.once("error", abortInput);
+      try {
+        stream = cloudinary.uploader.upload_stream({
+          public_id: publicId,
+          resource_type: "image", // Cloudinary decodes the image, rejecting disguised files.
+          allowed_formats: ["jpg", "jpeg", "png", "webp"],
+          overwrite: false,
+          transformation: [{ quality: "auto" }],
+        }, (error, result) => { void finish(error, result); });
+        stream.once("error", (error) => { void finish(error); });
+        file.stream.pipe(stream);
+      } catch (error) {
+        void finish(error);
+      }
     },
-    fileFilter,
-  });
+    _removeFile(req, file, callback) {
+      // Never accept deletion targets from multipart fields or client-supplied filenames.
+      const publicId = file[ownedAsset];
+      if (!publicId) return callback(null);
+      delete file[ownedAsset];
+      delete file.path;
+      delete file.filename;
+      Promise.resolve().then(() => cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true }))
+        .then(() => callback(null), callback);
+    },
+  };
+}
 
-const cleanupRequestUploads = async (req) => {
-  const files = [
-    ...(req.file ? [req.file] : []),
-    ...(Array.isArray(req.files)
-      ? req.files
-      : Object.values(req.files || {}).flat()),
-  ];
+const uploader = (folder, files) => multer({
+  storage: imageStorage(folder),
+  limits: { fileSize: 5 * 1024 * 1024, files, fields: 0, parts: files },
+  fileFilter(req, file, callback) {
+    const expected = imageTypes.get(path.extname(file.originalname || "").toLowerCase());
+    if (!expected || expected !== file.mimetype) return callback(new ApiError(400, "Only JPG, JPEG, PNG, and WEBP images are allowed."));
+    return callback(null, true);
+  },
+});
 
-  await Promise.allSettled(
-    files
-      .map((file) => ({ publicId: file.filename, resourceType: getCloudinaryResourceType(file) }))
-      .filter((file) => file.publicId)
-      .map((file) =>
-        cloudinary.uploader.destroy(file.publicId, {
-          resource_type: file.resourceType,
-          invalidate: true,
-        }),
-      ),
-  );
+const configuredUpload = (handler) => (req, res, next) => {
+  if (!isCloudinaryConfigured()) return next(new ApiError(503, "Cloudinary image uploads are not configured."));
+  handler(req, res, next);
 };
 
-const ensureCloudinaryConfigured = (uploadHandler) => (req, res, next) => {
-  if (!isCloudinaryConfigured()) {
-    return next(
-      new ApiError(503, "Cloudinary image uploads are not configured."),
-    );
-  }
-
-  return uploadHandler(req, res, async (error) => {
-    if (error) {
-      await cleanupRequestUploads(req);
-      return next(error);
-    }
-
-    return next();
-  });
-};
-
-export const uploadVendorImages = ensureCloudinaryConfigured(
-  createUploader(
-    (file) => `eventifyy/vendors/${file.fieldname}`,
-    10,
-  ).fields([
-    { name: "profileImage", maxCount: 1 },
-    { name: "coverImage", maxCount: 1 },
-    { name: "portfolioImages", maxCount: 8 },
-  ]),
-);
-
-export const uploadProfileImage = ensureCloudinaryConfigured(
-  createUploader("eventifyy/vendors/profile", 1).single("profileImage"),
-);
-
-export const uploadCoverImage = ensureCloudinaryConfigured(
-  createUploader("eventifyy/vendors/cover", 1).single("coverImage"),
-);
-
-// Keep the original field name for backwards compatibility with the frontend.
-export const uploadPortfolioImages = ensureCloudinaryConfigured(
-  createUploader("eventifyy/vendors/portfolio", 8).array("images", 8),
-);
-
-export const uploadVerificationDocuments = (req, res, next) => {
-  if (!req.is("multipart/form-data")) return next();
-
-  return ensureCloudinaryConfigured(
-    createUploader(
-      "eventifyy/vendors/verification",
-      5,
-      documentFileFilter,
-      { resourceType: "raw", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
-    ).array("documents", 5),
-  )(req, res, next);
-};
-
-export const uploadTypedVerificationDocuments = ensureCloudinaryConfigured(
-  createUploader(
-    (file) => `eventifyy/vendors/verification/${file.fieldname}`,
-    5,
-    documentFileFilter,
-    { resourceType: "auto", allowedFormats: ["pdf", "jpg", "jpeg", "png", "webp"] },
-  ).fields([
-    { name: "governmentId", maxCount: 1 },
-    { name: "businessLicense", maxCount: 1 },
-    { name: "gstCertificate", maxCount: 1 },
-    { name: "panCard", maxCount: 1 },
-    { name: "profilePhoto", maxCount: 1 },
-  ]),
-);
-
-const chatFileFilter = (req, file, callback) => {
-  const extension = path.extname(file.originalname || "").toLowerCase();
-  if (!CHAT_EXTENSIONS.has(extension) || !CHAT_MIME_TYPES.has(file.mimetype)) {
-    return callback(new ApiError(400, "Unsupported chat attachment type."));
-  }
-  return callback(null, true);
-};
-
-export const uploadChatAttachments = (req, res, next) => {
-  if (!req.is("multipart/form-data")) return next();
-  return ensureCloudinaryConfigured(
-    createUploader(
-      "eventifyy/chat",
-      5,
-      chatFileFilter,
-      { resourceType: "auto", allowedFormats: ["jpg", "jpeg", "png", "webp", "pdf", "doc", "docx", "txt", "csv", "xls", "xlsx"], maxFileSize: MAX_CHAT_FILE_SIZE },
-    ).array("attachments", 5),
-  )(req, res, next);
-};
-
-const reviewImageUpload = createUploader(
-  "eventifyy/reviews",
-  4,
-).array("images", 4);
-
-export const uploadReviewImages = (req, res, next) => {
-  if (!req.is("multipart/form-data")) return next();
-
-  return ensureCloudinaryConfigured(reviewImageUpload)(req, res, next);
-};
+// Preserve image field names and asset folders for existing profiles.
+export const uploadVendorImages = configuredUpload(uploader((file) => `eventifyy/vendors/${file.fieldname}`, 10).fields([
+  { name: "profileImage", maxCount: 1 }, { name: "coverImage", maxCount: 1 }, { name: "portfolioImages", maxCount: 8 },
+]));
+export const uploadProfileImage = configuredUpload(uploader("eventifyy/vendors/profile", 1).single("profileImage"));
+export const uploadCoverImage = configuredUpload(uploader("eventifyy/vendors/cover", 1).single("coverImage"));
+export const uploadPortfolioImages = configuredUpload(uploader("eventifyy/vendors/portfolio", 8).array("images", 8));

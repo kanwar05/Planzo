@@ -4,145 +4,71 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import morgan from "morgan";
-import analyticsRoutes from "./routes/analyticsRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
-import favoriteRoutes from "./routes/favoriteRoutes.js";
-import notificationRoutes from "./routes/notificationRoutes.js";
-import reviewRoutes from "./routes/reviewRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
-import paymentRoutes from "./routes/paymentRoutes.js";
-import paymentAdminRoutes from "./routes/paymentAdminRoutes.js";
-import vendorPaymentRoutes from "./routes/vendorPaymentRoutes.js";
-import vendorVerificationRoutes from "./routes/vendorVerificationRoutes.js";
-import cancellationRoutes from "./routes/cancellationRoutes.js";
-import chatRoutes from "./routes/chatRoutes.js";
-import calendarRoutes from "./routes/calendarRoutes.js";
-import settingsRoutes from "./routes/settingsRoutes.js";
-import { razorpayWebhook } from "./controllers/webhookController.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
 const app = express();
-
 const isProduction = process.env.NODE_ENV === "production";
-const defaultClientUrl = isProduction ? "" : "http://localhost:5173";
-const allowedOrigins = (process.env.CLIENT_URL || defaultClientUrl)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "1mb";
-const formBodyLimit = process.env.FORM_BODY_LIMIT || "1mb";
-
-const rateLimitHandler = (req, res) => {
-  res.status(429).json({
-    success: false,
-    message: "Too many requests. Please try again later.",
-  });
-};
-
-const skipRateLimitInTests = (req) =>
-  process.env.NODE_ENV === "test" &&
-  req.get("x-enable-rate-limit-test") !== "true";
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_MAX) || 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: skipRateLimitInTests,
-  handler: rateLimitHandler,
+const allowedOrigins = (process.env.CLIENT_URL || (isProduction ? "" : "http://localhost:5173"))
+  .split(",").map((origin) => origin.trim()).filter(Boolean);
+const rateLimitHandler = (req, res) => res.status(429).json({
+  success: false, message: "Too many requests. Please try again later.",
 });
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: skipRateLimitInTests,
-  handler: rateLimitHandler,
-});
-
-const forgotPasswordLimiter = rateLimit({
-  windowMs: Number(process.env.PASSWORD_RESET_RATE_WINDOW_MS) || 60 * 60 * 1000,
-  max: Number(process.env.PASSWORD_RESET_REQUEST_MAX) || 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: skipRateLimitInTests,
-  handler: rateLimitHandler,
-});
-
-const resetPasswordLimiter = rateLimit({
-  windowMs: Number(process.env.PASSWORD_RESET_RATE_WINDOW_MS) || 60 * 60 * 1000,
-  max: Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: skipRateLimitInTests,
+const limiter = (windowMs, limit) => rateLimit({
+  windowMs, limit, standardHeaders: true, legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === "test" && req.get("x-enable-rate-limit-test") !== "true",
   handler: rateLimitHandler,
 });
 
 app.disable("x-powered-by");
-app.set("trust proxy", 1);
+app.set("trust proxy", Number(process.env.TRUST_PROXY || 0));
 app.use(helmet());
-if (process.env.NODE_ENV !== "test") {
-  app.use(morgan(isProduction ? "combined" : "dev"));
-}
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      const error = new Error("This origin is not allowed by CORS.");
-      error.statusCode = 403;
-      return callback(error);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
-app.use(apiLimiter);
+if (process.env.NODE_ENV !== "test") app.use(morgan(isProduction ? "combined" : "dev"));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    const error = new Error("This origin is not allowed by CORS.");
+    error.statusCode = 403;
+    return callback(error);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+app.use(limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300));
 app.use(cookieParser());
-app.post("/api/payments/webhooks/razorpay", express.raw({ type: "application/json", limit: "1mb" }), razorpayWebhook);
-app.use(express.json({ limit: jsonBodyLimit }));
-app.use(express.urlencoded({ extended: true, limit: formBodyLimit }));
+// CORS validates Origin above. Require it for production cookie mutations as
+// SameSite=None may be needed when the UI and API use different hosts.
+app.use((req, res, next) => {
+  const unsafe = !["GET", "HEAD", "OPTIONS"].includes(req.method);
+  const cookieAuth = req.cookies?.eventifyy_access || req.cookies?.eventifyy_refresh;
+  if (unsafe && !req.get("origin") && (
+    req.get("sec-fetch-site") === "cross-site" ||
+    (process.env.NODE_ENV === "production" && cookieAuth && !req.get("authorization"))
+  )) return res.status(403).json({ success: false, message: "A trusted Origin is required for this request." });
+  return next();
+});
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+app.use(["/api/auth", "/api/bookings", "/api/admin"], (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "eventifyy API is running.",
-  });
-});
-app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "eventifyy API is running",
-  });
-});
-app.use("/api/auth/login", authLimiter);
-app.use("/api/auth/register", authLimiter);
-app.use("/api/auth/forgot-password", forgotPasswordLimiter);
-app.use("/api/auth/reset-password", resetPasswordLimiter);
+app.get(["/", "/api/health"], (req, res) => res.json({ success: true, message: "Planzo API is running." }));
+const authLimiter = limiter(15 * 60 * 1000, Number(process.env.AUTH_RATE_LIMIT_MAX) || 10);
+const recoveryLimiter = limiter(60 * 60 * 1000, Number(process.env.PASSWORD_RESET_REQUEST_MAX) || 3);
+const confirmationLimiter = limiter(60 * 60 * 1000, Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10);
+app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
+app.use(["/api/auth/forgot-password", "/api/auth/email-change"], recoveryLimiter);
+app.use(["/api/auth/reset-password", "/api/auth/email-change/confirm"], confirmationLimiter);
 app.use("/api/auth", authRoutes);
-app.use("/api/analytics", analyticsRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/admin", paymentAdminRoutes);
 app.use("/api/vendors", vendorRoutes);
-app.use("/api/vendor", vendorRoutes);
-app.use("/api/vendor/payments", vendorPaymentRoutes);
-app.use("/api/vendor/verification", vendorVerificationRoutes);
-app.use("/api/payments", paymentRoutes);
 app.use("/api/bookings", bookingRoutes);
-app.use("/api/bookings", cancellationRoutes);
-app.use("/api/favorites", favoriteRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/reviews", reviewRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/calendar", calendarRoutes);
-app.use("/api/settings", settingsRoutes);
-
 app.use(notFound);
 app.use(errorHandler);
 

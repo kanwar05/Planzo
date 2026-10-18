@@ -36,9 +36,14 @@ export function errorHandler(error, req, res, next) {
     message = "Request body contains invalid JSON.";
   }
 
+  if (error.type === "entity.too.large") {
+    statusCode = 413;
+    message = "Request body is too large.";
+  }
+
   if (error.code === "LIMIT_FILE_SIZE") {
     statusCode = 400;
-    message = "Each portfolio image must be 5MB or smaller.";
+    message = "Each business photo must be 5MB or smaller.";
   }
 
   if (
@@ -53,12 +58,17 @@ export function errorHandler(error, req, res, next) {
   }
 
   if (
-    ["LIMIT_PART_COUNT", "LIMIT_FIELD_COUNT", "LIMIT_FIELD_KEY"].includes(
+    ["LIMIT_PART_COUNT", "LIMIT_FIELD_COUNT", "LIMIT_FIELD_KEY", "LIMIT_FIELD_VALUE"].includes(
       error.code,
     )
   ) {
     statusCode = 400;
     message = "The multipart upload contains too many fields.";
+  }
+
+  if (statusCode >= 500 && process.env.NODE_ENV === "production" && !error.statusCode) {
+    message = "Internal server error.";
+    errors = undefined;
   }
 
   const response = {

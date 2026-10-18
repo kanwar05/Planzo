@@ -1,211 +1,74 @@
-# eventifyy
+# Planzo
 
-Event services marketplace where customers discover and book vendors, vendors manage bookings and showcase their work, and admins moderate the platform.
+Planzo is a MERN event-services marketplace for discovering approved vendors and sending booking requests. It keeps the existing React/Vite/Tailwind frontend and Express/Mongoose backend.
 
-## Vendor verification
+## MVP features
 
-Vendors use the guided flow at `/vendor/verification` to upload a Government ID, Business License, PAN Card, and Profile Photo; a GST Certificate is optional. PDF, JPG, PNG, and WEBP files up to 5 MB are accepted and stored in type-specific Cloudinary folders. Duplicate files across document types are rejected.
+- Customers register, sign in, search vendors, request bookings, follow status, cancel eligible requests, and manage their account.
+- Vendors manage business information, services, starting prices, photos, intentionally shared business contacts, booking requests, and unavailable dates.
+- Admins view users and bookings, approve/reject profiles, suspend accounts, and view basic counts.
+- Search supports vendor/service name, category, city, and starting-price range. Categories include photography.
+- Booking states are pending, accepted, rejected, cancelled, and completed. Accepted/completed bookings reserve one vendor date.
+- A customer's accepted/completed booking reveals only business contacts the vendor explicitly provided for sharing. Public APIs never return them or private account contacts.
+- HTTP-only cookie authentication, rotating refresh tokens, strong password hashing, single-use password recovery, and verified email changes remain.
 
-Submissions move through `pending`, `approved`, `rejected`, and `needs_resubmission`. Vendors can see the current status and review reason and replace documents after rejection or a resubmission request. Pending and approved submissions are locked. Administrators review image/PDF previews at `/admin/vendors/unverified`, approve, reject with a reason, or request resubmission with a reason.
+Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
 
-The API uses a dedicated `VendorVerification` model with typed documents, `verificationHistory`, `reviewedBy`, and `reviewedAt`. Vendor endpoints are `GET /api/vendor/verification/me` and `POST /api/vendor/verification/submit`; admin endpoints are under `/api/admin/verifications`. Configure `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` before accepting uploads.
+## Local setup
 
-eventifyy is split into two independent applications:
+Use Node.js 22 or newer and MongoDB 6 or newer. Run a supported MongoDB release in production.
 
-```text
-eventifyy/
-├── frontend/   # React + Vite + Tailwind CSS
-└── server/     # Node.js + Express + MongoDB
-```
-
-## Features
-
-### Customer
-- Browse and search vendors by category, location, and service type
-- View vendor profiles with detailed info, ratings, availability, and portfolio
-- Book services with date/time selection and availability checking
-- Manage bookings with real-time status updates
-- Leave reviews with star ratings, text, and up to 4 images
-- Save favorite vendors and manage saved list
-- Receive real-time notifications for booking updates
-
-### Vendor
-- Create and manage vendor profile with service details, pricing, and portfolio
-- Set recurring business hours, holidays, blocked dates, and time slot duration
-- Manage incoming booking requests (accept/reject/complete)
-- View customer reviews and respond publicly
-- Track bookings and manage availability
-- Receive notifications for new bookings and reviews
-- Connect Google Calendar, automatically sync accepted bookings and cancellations, and export ICS files
-
-### Admin
-- Verify vendor profiles before they appear in search
-- Flag inappropriate reviews with moderation reasons
-- Suspend vendors when reports are substantiated
-- View all bookings and filter by status
-- Monitor reviews and reported vendors
-- Dashboard with platform statistics
-
-## Quick Start
-
-### Start the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend runs at `http://localhost:5173` by default.
-
-### Start the backend
-
-```bash
+```sh
 cd server
+npm ci
 cp .env.example .env
-npm install
+# Set MONGODB_URI and a random JWT_SECRET of at least 32 characters.
 npm run dev
 ```
 
-Backend runs at `http://localhost:5001` by default.
+In a second terminal:
 
-The frontend expects the API at `http://localhost:5001/api`. Override it with
-`VITE_API_URL` in `frontend/.env` when needed.
-
-## Google Calendar integration
-
-Vendors manage Calendar from `/vendor/calendar`. Accepted bookings are created
-in the vendor's primary Google Calendar, updates are reconciled automatically,
-and cancellations remove the event. The customer is included as an attendee and
-receives Google Calendar updates plus 24-hour email and 1-hour popup reminders.
-Vendors can also run an immediate sync or export accepted/completed bookings as
-an interoperable `.ics` file.
-
-Setup:
-
-1. In Google Cloud Console, enable the Google Calendar API and configure the
-   OAuth consent screen.
-2. Create an OAuth 2.0 **Web application** client.
-3. Add
-   `http://localhost:5001/api/calendar/google/callback` for development (and the
-   exact HTTPS production callback) to Authorized redirect URIs.
-4. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`,
-   `GOOGLE_CALENDAR_REDIRECT_URI`, and a long random
-   `GOOGLE_TOKEN_ENCRYPTION_KEY` in `server/.env`.
-5. Ensure `CLIENT_URL` is the frontend origin. Restart the API.
-
-The backend requests only `calendar.events`, uses an expiring signed OAuth
-`state`, requests offline access, and encrypts refresh tokens at rest with
-AES-256-GCM. Access tokens are obtained only when needed and are not persisted.
-`CALENDAR_SYNC_INTERVAL_MS` controls the reconciliation interval (15 minutes by
-default). Booking operations remain successful if Google is unavailable; the
-sync error is recorded and retried by the scheduler or **Sync now**.
-
-Calendar API routes:
-
-- `GET /api/calendar/status`
-- `POST /api/calendar/google/connect`
-- `GET /api/calendar/google/callback`
-- `POST /api/calendar/sync`
-- `DELETE /api/calendar/connection`
-- `GET /api/calendar/export`
-
-## Key Features In Detail
-
-### Notifications
-- Real-time notification system across all user roles
-- Customer notifications: booking status updates (accepted/rejected/completed), review replies
-- Vendor notifications: new booking requests, reviews
-- Admin notifications: reports and moderation tasks
-- Mark notifications as read, delete, or clear all
-
-### Bookings & Availability
-- Smart availability system with recurring business hours, holidays, and blocked time slots
-- Automatic conflict detection prevents double-booking
-- Booking status flow: pending → accepted/rejected → completed
-- Customers can only cancel pending/accepted bookings
-- Vendors manage incoming requests with clear authorization
-
-### Reviews & Ratings
-- One review per completed booking per customer
-- Up to 4 images per review (Cloudinary-backed)
-- Star ratings (1-5) with text comments
-- Automatic vendor rating recalculation on every review change
-- Vendors can reply publicly to reviews
-- Admins can flag reviews with moderation reasons
-
-### Admin Moderation
-- Review flagging with audit trail (status, flagged date, reason)
-- Vendor suspension tracking (suspended status, suspension date)
-- Report management: dismiss or suspend vendors
-- Comprehensive admin dashboard with statistics
-
-### Image Management
-- All vendor images (profile, cover, portfolio) hosted on Cloudinary
-- Review images with Cloudinary storage
-- Automatic cleanup when deleting profiles or reviews
-- Up to 8 portfolio images per vendor
-- Secure image deletion from Cloudinary on profile removal
-
-## Documentation
-
-See [`server/README.md`](server/README.md) for:
-- Environment variables setup
-- Complete API routes reference
-- Authorization rules by role
-- Availability system details
-- Cloudinary vendor image uploads
-- Example curl requests
-- Testing instructions
-# eventifyy payments
-
-## Realtime chat
-
-eventifyy chat uses Socket.IO plus MongoDB-backed `Conversation` and `Message` records. Socket handshakes authenticate the existing HttpOnly `eventifyy_access` JWT cookie; REST endpoints under `/api/chat` use the same access rules. Booking conversations are restricted to the booking customer, vendor account, and admins. Direct one-to-one conversations can also be created with a participant ID.
-
-Messages support Unicode emoji, up to five Cloudinary-backed image/file attachments of 10 MB each, full-text search, soft deletion, per-user conversation deletion, unread counters, delivery timestamps, seen receipts, typing events, online presence, and persisted last-seen timestamps. New messages also create eventifyy notifications. Compound participant, booking, message-order, and text indexes support chat-list and history queries.
-
-The responsive `/messages` UI provides a mobile conversation/chat split view, unread badges, presence and last-seen text, booking context, message search, attachment previews, emoji selection, typing feedback, receipts, deletion, and automatic scrolling. Configure `VITE_SOCKET_URL` only when the socket origin differs from the API origin; otherwise it is derived from `VITE_API_URL`.
-
-## Production vendor search
-
-`GET /api/vendors` uses a faceted MongoDB aggregation for instant text search, multiple categories, price, rating, experience, verified status, city, date availability, and GeoJSON radius filters. Sorting supports highest rated, lowest price, newest, popularity, most booked, and distance. Results use bounded pagination with `hasNextPage`; booking counts and popularity scores are calculated inside the pipeline.
-
-Vendor profiles accept optional `latitude`, `longitude`, and `locationCity` values. Radius filtering requires stored coordinates and the `lat`, `lng`, and `radiusKm` query parameters. `GET /api/vendors/search/meta?q=` supplies cached city autocomplete suggestions. Composite and `2dsphere` indexes support the main access paths. Search responses use a bounded 30-second application cache and short browser/CDN cache headers; vendor profile mutations invalidate cached results.
-
-The vendor directory includes debounced search, dual price sliders, category selection, autocomplete, browser-location radius search, availability dates, verification and experience filters, removable chips, responsive mobile filters, sorting, skeleton states, and intersection-observer infinite scrolling.
-
-eventifyy uses a provider-neutral payment service with Razorpay as the India provider. Booking and controller code never calls the Razorpay SDK directly; `PaymentProvider`, `RazorpayProvider`, and the factory isolate provider-specific orders, signatures, webhooks, refunds, and payouts. Amounts are integer paise.
-
-```mermaid
-flowchart TD
-    A[Customer creates booking] --> B[Vendor accepts booking]
-    B --> C[Customer pays 25 percent]
-    C --> D[Booking financially confirmed]
-    D --> E[Event day arrives]
-    E --> F[Customer pays 40 percent]
-    F --> G[Total paid becomes 65 percent]
-    G --> H[Vendor completes event]
-    H --> I[Customer pays final 35 percent]
-    I --> J[Booking fully paid]
-    J --> K[Payout hold period]
-    K --> L[Vendor payout processed]
+```sh
+cd frontend
+npm ci
+cp .env.example .env
+npm run dev
 ```
 
-Payment attempts live in the dedicated ledger. Captured entries project booking status as `pending` → `deposit_paid` → `partially_paid` → `paid`; refunds project `partially_refunded` or `refunded`. A later failure never erases captured progress. Payout state is separate and moves through `not_eligible`, `pending`, `processing`, and terminal/hold states.
+On Windows PowerShell use `Copy-Item .env.example .env` and `npm.cmd` if script execution policy blocks `npm.ps1`.
 
-## Razorpay setup and local testing
+Defaults: frontend http://localhost:5173, API http://localhost:5001/api. Health: `GET /api/health`.
 
-Copy `server/.env.example` to `server/.env`, use Razorpay test-mode keys, and set a distinct webhook secret. In the Razorpay dashboard, point the webhook to `https://YOUR_API/api/payments/webhooks/razorpay` and enable payment, refund, order, and payout events. The endpoint verifies the raw body and `X-Razorpay-Signature`; do not proxy it through middleware that rewrites JSON. Run `npm run payments:backfill` in `server` once for legacy bookings, then run backend tests with `npm test` and frontend tests/build with `npm test` and `npm run build` in `frontend`. Automated tests mock provider behavior and must not use live credentials.
+Configure SMTP to exercise password recovery and email-address verification. Raw email tokens are never returned through the API, including development. Configure all three Cloudinary values to enable vendor photo uploads; browsing existing photos does not require upload credentials.
 
-All payment variables are documented in `server/.env.example`. Startup rejects percentage configurations that do not total 100, and production startup requires Razorpay credentials. Cancellation uses the free-window and fee settings; calculations should be recorded before refund initiation. Refunds are initiated by admins and finalized only by verified webhooks. A completed, fully paid, undisputed booking becomes payout-eligible after `VENDOR_PAYOUT_HOLD_DAYS`; platform fees and refund deductions are reflected separately.
+## Administrator provisioning
 
-Each captured installment receives a server-generated unique receipt number and downloadable PDF. The final installment is labeled as the consolidated invoice. Invoice access is restricted to the customer, associated vendor, or admin. eventifyy stores no card, UPI, wallet, or bank credentials. Secrets and provider signatures are omitted from API responses. Adding Stripe requires implementing the existing provider interface and selecting it in the factory; booking eligibility and monetary state logic remain unchanged.
+Set `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PHONE`, and a strong `ADMIN_PASSWORD` in the server environment, then run `npm run admin:create`. Clear provisioning credentials after use. The command refuses to overwrite an existing account or promote it by email. Public registration never creates administrators.
 
-## Booking cancellation and refunds
+## Verification
 
-Customers, vendors, and admins cancel through `POST /api/bookings/:id/cancel` with a required reason. The immutable cancellation record stores the actor and role, timestamp, policy snapshot, calculated percentage and amount, late fee, dispute details, reviewer, and timeline. Key status and amount fields are also projected onto `Booking` for customer and vendor dashboards.
+```sh
+cd server
+npm run check
+npm test
 
-Customer cancellations receive a full refund before `CANCELLATION_FREE_WINDOW_HOURS`, a configurable partial refund between that window and `CANCELLATION_PARTIAL_WINDOW_HOURS`, and no refund closer to or after the event. The late fee is deducted from partial refunds. Vendor and admin cancellations calculate a full refund of captured funds. All monetary values are integer paise.
+cd ../frontend
+npm test
+npm run build
+```
 
-Eligible refunds enter `pending_review`. Admins review them at `/admin/cancellations` and approve or reject with a reason. Approval distributes the refund safely across captured installments; Razorpay webhooks finalize `partially_refunded` or `refunded`. Customers and vendors can dispute non-final outcomes, and vendors can retrieve their cancellation history from `GET /api/bookings/vendor-history`.
+Backend tests use isolated MongoMemoryServer databases, never the configured application database. The test runner downloads a test binary into ignored `server/.cache/mongodb` when needed. To use an installed MongoDB executable, set `MONGOMS_SYSTEM_BINARY` and matching `MONGOMS_VERSION` before `npm test`.
+
+## Deployment
+
+1. Back up existing data and follow [the migration guide](docs/MVP_MIGRATION.md). Run `npm run data:audit` before rollout; it is read-only.
+2. Set production `MONGODB_URI`, a random `JWT_SECRET`, HTTPS `CLIENT_URL` origins, and SMTP delivery configuration. Set Cloudinary credentials for photo uploads.
+3. Use HTTPS. Choose `COOKIE_SAME_SITE=none` for cross-site UI/API deployments, or `lax` for same-site deployments. Production cookies are Secure and HttpOnly.
+4. Set `TRUST_PROXY` to the actual number of trusted proxy hops; the default is zero. Keep the API behind that proxy if enabling proxy trust.
+5. Build the frontend with its deployed `VITE_API_URL`. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
+6. Install backend production dependencies with `npm ci --omit=dev`, then run `npm start`. Startup validates configuration and waits for core indexes before listening.
+7. Remove retired integration secrets/webhooks and old scheduled tasks from the deployment. No background jobs run in the MVP.
+
+The API checks browser origins for cookie mutations; non-browser cookie clients in production must send an allowed Origin header. Password changes, email confirmation, deactivation, and suspension revoke existing credentials. Deactivation retains account and booking history.
+
+[API reference](server/README.md) · [Migration guide](docs/MVP_MIGRATION.md) · [Refactor and validation report](docs/MVP_REFACTOR.md)

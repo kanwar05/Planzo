@@ -4,5 +4,7 @@ dist/
 .vite-cache/
 .env
 .env.local
+.cache/
+coverage/
 *.log
 .DS_Store

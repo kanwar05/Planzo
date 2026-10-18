@@ -1,6 +1,4 @@
 import Booking from "../models/Booking.js";
-import Favorite from "../models/Favorite.js";
-import Review from "../models/Review.js";
 import Vendor from "../models/Vendor.js";
 import Availability from "../models/Availability.js";
 import cloudinary, {
@@ -12,58 +10,41 @@ import {
   pick,
   requireFields,
   toNonNegativeNumber,
+  validateEmail,
   validateObjectId,
 } from "../utils/validation.js";
-import { clearVendorSearchCache, getVendorSearchMeta, searchVendors } from "../services/vendorSearchService.js";
+import { getVendorSearchMeta, searchVendors, hasActiveVendorOwner, vendorView } from "../services/vendorSearchService.js";
 
-const EDITABLE_FIELDS = [
-  "businessName",
-  "serviceCategory",
-  "description",
-  "experience",
-  "pricing",
-  "packages",
-  "location",
-  "locationCity",
-];
+const EDITABLE_FIELDS = ["businessName", "serviceCategory", "description", "pricing", "location", "servicesOffered", "contactDetails"];
 
 function normalizeVendorInput(body) {
   const data = pick(body, EDITABLE_FIELDS);
-
-  if (data.experience !== undefined) {
-    data.experience = toNonNegativeNumber(data.experience, "Experience");
-  }
-  if (data.pricing !== undefined) {
-    data.pricing = toNonNegativeNumber(data.pricing, "Pricing");
-  }
-  if (data.packages !== undefined) {
-    if (!Array.isArray(data.packages)) {
-      throw new ApiError(400, "Packages must be an array.");
+  for (const key of ["businessName", "serviceCategory", "description", "location"]) {
+    if (data[key] !== undefined) {
+      if (typeof data[key] !== "string" || !data[key].trim()) throw new ApiError(400, `${key} must be a non-empty string.`);
+      data[key] = data[key].trim();
     }
-    if (data.packages.length > 10) {
-      throw new ApiError(400, "A vendor can have at most 10 packages.");
+  }
+  if (data.pricing !== undefined) data.pricing = toNonNegativeNumber(data.pricing, "Pricing");
+  if (data.servicesOffered !== undefined) {
+    if (!Array.isArray(data.servicesOffered) || data.servicesOffered.length > 20 ||
+        data.servicesOffered.some((item) => typeof item !== "string" || !item.trim() || item.trim().length > 120)) {
+      throw new ApiError(400, "Provide at most 20 service names, each up to 120 characters.");
     }
-    data.packages = data.packages.map((pkg) => {
-      if (!pkg.name || typeof pkg.name !== "string") {
-        throw new ApiError(400, "Each package must have a valid name.");
-      }
-      if (pkg.price === undefined || pkg.price === null) {
-        throw new ApiError(400, "Each package must have a price.");
-      }
-      const price = toNonNegativeNumber(pkg.price, "Package price");
-      return {
-        name: pkg.name.trim(),
-        description: pkg.description ? String(pkg.description).trim() : "",
-        price,
-      };
-    });
+    data.servicesOffered = [...new Set(data.servicesOffered.map((item) => item.trim()))];
   }
-  if (body.latitude !== undefined || body.longitude !== undefined) {
-    const latitude = Number(body.latitude); const longitude = Number(body.longitude);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new ApiError(400, "Valid latitude and longitude are required.");
-    data.locationPoint = { type: "Point", coordinates: [longitude, latitude] };
+  if (data.contactDetails !== undefined) {
+    const contact = data.contactDetails;
+    if (!contact || typeof contact !== "object" || Array.isArray(contact)) throw new ApiError(400, "Contact details must be an object.");
+    for (const field of ["email", "phone"]) {
+      if (contact[field] !== undefined && typeof contact[field] !== "string") throw new ApiError(400, "Business contacts must be text.");
+    }
+    const email = (contact.email || "").trim().toLowerCase();
+    const phone = (contact.phone || "").trim();
+    if (email) validateEmail(email);
+    if (phone && !/^[+()0-9 .-]{7,30}$/.test(phone)) throw new ApiError(400, "Please provide a valid business phone number.");
+    data.contactDetails = { email, phone };
   }
-  if (data.location && !data.locationCity) data.locationCity = data.location.split(",")[0].trim();
   return data;
 }
 
@@ -76,20 +57,6 @@ const destroyCloudinaryImages = async (files = []) => {
   );
 };
 
-const destroyCloudinaryDocuments = async (documents = []) => {
-  await Promise.allSettled(
-    documents
-      .map((document) => document?.publicId)
-      .filter(Boolean)
-      .map((publicId) =>
-        cloudinary.uploader.destroy(publicId, {
-          resource_type: "raw",
-          invalidate: true,
-        }),
-      ),
-  );
-};
-
 const toCloudinaryImage = (file) => ({
   url: file.path,
   publicId: file.filename,
@@ -97,30 +64,6 @@ const toCloudinaryImage = (file) => ({
 
 const flattenUploadedFiles = (files) =>
   Array.isArray(files) ? files : Object.values(files || {}).flat();
-
-const normalizeVerificationDocuments = (documents = []) => {
-  if (Array.isArray(documents)) {
-    return documents
-      .filter((doc) => doc?.url)
-      .map((doc) => ({
-        url: doc.url,
-        publicId: doc.publicId || "",
-        originalName: doc.originalName || "",
-        mimeType: doc.mimeType || "",
-        uploadedAt: doc.uploadedAt || new Date(),
-      }));
-  }
-
-  if (typeof documents === "string") {
-    try {
-      return normalizeVerificationDocuments(JSON.parse(documents));
-    } catch {
-      throw new ApiError(400, "Verification documents must be valid JSON.");
-    }
-  }
-
-  return [];
-};
 
 const destroyCloudinaryAsset = async (publicId, label = "image") => {
   if (!publicId) return;
@@ -157,7 +100,7 @@ const removeReplacedAssets = async (images) => {
 };
 
 export const requireVendorProfile = asyncHandler(async (req, res, next) => {
-  const vendor = await Vendor.findOne({ userId: req.user._id });
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
 
   if (!vendor) {
     throw new ApiError(
@@ -216,7 +159,7 @@ export const updateVendorImages = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Vendor images uploaded successfully.",
-    vendor,
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
@@ -242,7 +185,7 @@ const replaceSingleVendorImage = (field, label) =>
     res.status(200).json({
       success: true,
       message: `${label} uploaded successfully.`,
-      vendor,
+      vendor: vendorView(vendor, { owner: true }),
     });
   });
 
@@ -257,7 +200,7 @@ export const replaceCoverImage = replaceSingleVendorImage(
 
 const deleteSingleVendorImage = (field, label) =>
   asyncHandler(async (req, res) => {
-    const vendor = await Vendor.findOne({ userId: req.user._id });
+    const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
 
     if (!vendor) throw new ApiError(404, "Vendor profile not found.");
     if (!vendor[field]) throw new ApiError(404, `${label} not found.`);
@@ -269,7 +212,7 @@ const deleteSingleVendorImage = (field, label) =>
     res.status(200).json({
       success: true,
       message: `${label} deleted successfully.`,
-      vendor,
+      vendor: vendorView(vendor, { owner: true }),
     });
   });
 
@@ -281,48 +224,6 @@ export const removeCoverImage = deleteSingleVendorImage(
   "coverImage",
   "Cover image",
 );
-
-export const submitVerificationDocuments = asyncHandler(async (req, res) => {
-  const files = req.files || [];
-  const rawDocuments = req.body?.documents;
-  const uploadedDocuments = files.length
-    ? files.map((file) => ({
-        url: file.path,
-        publicId: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-      }))
-    : normalizeVerificationDocuments(rawDocuments);
-
-  if (!uploadedDocuments.length) {
-    throw new ApiError(400, "Upload at least one verification document.");
-  }
-
-  const vendor = req.vendorProfile;
-  const replacedDocuments = [...(vendor.verificationDocuments || [])];
-  vendor.verificationDocuments = uploadedDocuments;
-  vendor.verificationStatus = "pending";
-  vendor.verificationRejectionReason = "";
-  vendor.verificationSubmittedAt = new Date();
-  vendor.verified = false;
-
-  try {
-    await vendor.save();
-  } catch (error) {
-    if (files.length) {
-      await destroyCloudinaryDocuments(uploadedDocuments);
-    }
-    throw error;
-  }
-
-  await destroyCloudinaryDocuments(replacedDocuments);
-
-  res.status(200).json({
-    success: true,
-    message: "Verification documents submitted successfully.",
-    vendor,
-  });
-});
 
 export const addPortfolioImages = asyncHandler(async (req, res) => {
   const files = req.files || [];
@@ -354,7 +255,7 @@ export const addPortfolioImages = asyncHandler(async (req, res) => {
       },
       { $push: { portfolioImages: { $each: uploadedImages } } },
       { new: true, runValidators: true },
-    );
+    ).select("+contactDetails");
 
     if (!vendor) {
       await destroyCloudinaryImages(files);
@@ -364,7 +265,7 @@ export const addPortfolioImages = asyncHandler(async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Portfolio images uploaded successfully.",
-      vendor,
+      vendor: vendorView(vendor, { owner: true }),
     });
   } catch (error) {
     if (!(error instanceof ApiError)) {
@@ -384,12 +285,11 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "publicId or imageUrl is required.");
   }
 
-  const vendor = await Vendor.findOne({ userId: req.user._id });
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
 
   if (!vendor) {
     throw new ApiError(404, "Vendor profile not found.");
   }
-  clearVendorSearchCache();
 
   const image = vendor.portfolioImages.find(
     (item) =>
@@ -413,7 +313,7 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Portfolio image deleted successfully.",
-    vendor,
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
@@ -426,7 +326,7 @@ export const createVendorProfile = asyncHandler(async (req, res) => {
     "location",
   ]);
 
-  const existingProfile = await Vendor.findOne({ userId: req.user._id });
+  const existingProfile = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
   if (existingProfile) {
     throw new ApiError(
       409,
@@ -438,18 +338,17 @@ export const createVendorProfile = asyncHandler(async (req, res) => {
     ...normalizeVendorInput(req.body),
     userId: req.user._id,
   });
-  clearVendorSearchCache();
 
   res.status(201).json({
     success: true,
     message: "Vendor profile created successfully.",
-    vendor,
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
 export const getVendors = asyncHandler(async (req, res) => {
   const result = await searchVendors(req.query);
-  res.set("Cache-Control", "public, max-age=15, stale-while-revalidate=30");
+  res.set("Cache-Control", "no-store");
 
   res.status(200).json({
     success: true,
@@ -460,32 +359,24 @@ export const getVendors = asyncHandler(async (req, res) => {
 
 export const getVendorSearchMetadata = asyncHandler(async (req, res) => {
   const result = await getVendorSearchMeta(String(req.query.q || "").trim());
-  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
+
   res.json({ success: true, ...result });
 });
 
 export const getVendorById = asyncHandler(async (req, res) => {
   validateObjectId(req.params.id, "vendor id");
-
-  const vendor = await Vendor.findById(req.params.id).populate(
-    "userId",
-    "name email phone",
-  );
-
-  if (!vendor) throw new ApiError(404, "Vendor not found.");
-
-  res.status(200).json({ success: true, vendor });
+  const vendor = await Vendor.findById(req.params.id);
+  if (!(await hasActiveVendorOwner(vendor))) throw new ApiError(404, "Vendor not found.");
+  res.set("Cache-Control", "no-store");
+  res.status(200).json({ success: true, vendor: vendorView(vendor) });
 });
 
 export const getMyVendorProfile = asyncHandler(async (req, res) => {
-  const vendor = await Vendor.findOne({ userId: req.user._id }).populate(
-    "userId",
-    "name email phone",
-  );
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
 
   if (!vendor) throw new ApiError(404, "Vendor profile not found.");
 
-  res.status(200).json({ success: true, vendor });
+  res.status(200).json({ success: true, vendor: vendorView(vendor, { owner: true }) });
 });
 
 export const updateVendorProfile = asyncHandler(async (req, res) => {
@@ -495,50 +386,41 @@ export const updateVendorProfile = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Provide at least one vendor field to update.");
   }
 
-  const vendor = await Vendor.findOneAndUpdate(
-    { userId: req.user._id },
-    updates,
-    { new: true, runValidators: true },
-  );
-
-  if (!vendor) {
-    throw new ApiError(404, "Vendor profile not found.");
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
+  if (!vendor) throw new ApiError(404, "Vendor profile not found.");
+  Object.assign(vendor, updates);
+  if (vendor.verificationStatus === "rejected") {
+    vendor.verificationStatus = "pending";
+    vendor.verificationRejectionReason = "";
   }
+  await vendor.save();
 
-  clearVendorSearchCache();
   res.status(200).json({
     success: true,
     message: "Vendor profile updated successfully.",
-    vendor,
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
 export const deleteVendorProfile = asyncHandler(async (req, res) => {
-  const vendor = await Vendor.findOne({ userId: req.user._id });
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select("+contactDetails");
 
   if (!vendor) {
     throw new ApiError(404, "Vendor profile not found.");
   }
 
-  const activeBookings = await Booking.exists({
+  const bookingHistory = await Booking.exists({
     vendorId: vendor._id,
-    status: { $in: ["pending", "accepted"] },
   });
 
-  if (activeBookings) {
+  if (bookingHistory) {
     throw new ApiError(
       409,
-      "Resolve or cancel active bookings before deleting the vendor profile.",
+      "Profiles with booking history cannot be deleted. Contact support to deactivate the account.",
     );
   }
 
-  const reviews = await Review.find({ vendorId: vendor._id }).select("images");
-  const images = [
-    vendor.profileImage,
-    vendor.coverImage,
-    ...vendor.portfolioImages,
-    ...reviews.flatMap((review) => review.images),
-  ].filter((image) => image?.publicId);
+  const images = [vendor.profileImage, vendor.coverImage, ...vendor.portfolioImages].filter((image) => image?.publicId);
 
   if (images.length) {
     if (!isCloudinaryConfigured()) {
@@ -563,12 +445,9 @@ export const deleteVendorProfile = asyncHandler(async (req, res) => {
   }
 
   await Promise.all([
-    Favorite.deleteMany({ vendorId: vendor._id }),
-    Review.deleteMany({ vendorId: vendor._id }),
     Availability.deleteOne({ vendorId: vendor._id }),
     vendor.deleteOne(),
   ]);
-  clearVendorSearchCache();
 
   res.status(200).json({
     success: true,

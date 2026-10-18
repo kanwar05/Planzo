@@ -29,7 +29,7 @@ export default function LoginPage() {
         password: form.get("password"),
       });
       const defaultPath =
-        user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+        user.role === "admin" ? "/admin" : user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
       const requestedPath = location.state?.from?.pathname;
       navigate(requestedPath || defaultPath, { replace: true });
     } catch (requestError) {
@@ -42,6 +42,7 @@ export default function LoginPage() {
   return (
     <div className="w-full">
       <Toast message={error} type="error" onClose={() => setError("")} />
+      {location.state?.message && <p role="status" className="mb-5 rounded-2xl bg-sage/10 p-4 text-sm text-ink/70">{location.state.message}</p>}
       <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-coral">
         Good to see you
       </p>
@@ -51,12 +52,14 @@ export default function LoginPage() {
       </p>
       <form onSubmit={submit} className="mt-9 space-y-5">
         <div>
-          <label className="label">Email address</label>
+          <label htmlFor="login-email" className="label">Email address</label>
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
             <input
               required
               name="email"
+              id="login-email"
+              autoComplete="email"
               type="email"
               className="field !pl-11"
               placeholder="you@example.com"
@@ -64,12 +67,14 @@ export default function LoginPage() {
           </div>
         </div>
         <div>
-          <label className="label">Password</label>
+          <label htmlFor="login-password" className="label">Password</label>
           <div className="relative">
             <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
             <input
               required
               name="password"
+              id="login-password"
+              autoComplete="current-password"
               type={show ? "text" : "password"}
               className="field !px-11"
               placeholder="Enter your password"
@@ -77,6 +82,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShow(!show)}
+              aria-label={show ? "Hide password" : "Show password"}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-ink/40"
             >
               {show ? (
@@ -88,9 +94,6 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <label className="flex items-center gap-2 font-semibold text-ink/60">
-            <input type="checkbox" className="accent-coral" /> Remember me
-          </label>
           <Link to="/forgot-password" className="font-bold text-coral">
             Forgot password?
           </Link>

@@ -73,15 +73,15 @@ export default function RegisterPage() {
       <form onSubmit={submit} className="mt-7 grid gap-4">
         <div className={tab === "vendor" ? "grid gap-4 sm:grid-cols-2" : ""}>
           <div>
-            <label className="label">Full name</label>
-            <input required name="name" className="field" placeholder="Your name" />
+            <label className="label" htmlFor="register-name">Full name</label>
+            <input required name="name" id="register-name" className="field" placeholder="Your name" />
           </div>
           {tab === "vendor" && (
             <div>
-              <label className="label">Business name</label>
+              <label className="label" htmlFor="register-businessName">Business name</label>
               <input
                 required
-                name="businessName"
+                name="businessName" id="register-businessName"
                 className="field"
                 placeholder="Studio or brand name"
               />
@@ -89,20 +89,20 @@ export default function RegisterPage() {
           )}
         </div>
         <div>
-          <label className="label">Email address</label>
+          <label className="label" htmlFor="register-email">Email address</label>
           <input
             required
-            name="email"
+            name="email" id="register-email"
             type="email"
             className="field"
             placeholder="you@example.com"
           />
         </div>
         <div>
-          <label className="label">Phone number</label>
+          <label className="label" htmlFor="register-phone">Phone number</label>
           <input
             required
-            name="phone"
+            name="phone" id="register-phone"
             type="tel"
             className="field"
             placeholder="+91 98765 43210"
@@ -110,8 +110,8 @@ export default function RegisterPage() {
         </div>
         {tab === "vendor" && (
           <div>
-            <label className="label">Service category</label>
-            <select name="serviceCategory" className="field" required>
+            <label className="label" htmlFor="register-serviceCategory">Service category</label>
+            <select name="serviceCategory" id="register-serviceCategory" className="field" required>
               <option value="">Select a service</option>
               {services.map((item) => (
                 <option key={item.slug}>{item.title}</option>
@@ -120,20 +120,16 @@ export default function RegisterPage() {
           </div>
         )}
         <div>
-          <label className="label">Password</label>
+          <label className="label" htmlFor="register-password">Password</label>
           <input
             required
-            name="password"
+            name="password" id="register-password"
             type="password"
             minLength="8"
             className="field"
             placeholder="Uppercase, number, and symbol"
           />
         </div>
-        <label className="flex items-start gap-2 text-xs leading-5 text-ink/50">
-          <input required type="checkbox" className="mt-1 accent-coral" />I agree
-          to Planzo’s Terms of Service and Privacy Policy.
-        </label>
         <Button type="submit" loading={loading} disabled={loading} className="w-full">
           {tab === "vendor"
             ? "Create vendor account"

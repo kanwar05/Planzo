@@ -1,440 +1,98 @@
-# eventifyy Backend
-
-REST API for eventifyy, an event-services marketplace built with Node.js,
-Express, MongoDB, Mongoose, JWT, and bcryptjs.
-
-## Setup
-
-Requirements:
-
-- Node.js 18 or newer
-- A local MongoDB instance or MongoDB Atlas connection string
-
-```bash
-cd server
-npm install
-cp .env.example .env
-```
-
-Update `.env` with your MongoDB URI and a long, random `JWT_SECRET`, then run:
-
-```bash
-npm run dev
-```
-
-The API defaults to `http://localhost:5001`. Test it at:
-
-```bash
-curl http://localhost:5001/api/health
-```
-
-## Environment variables
-
-| Variable | Purpose |
-| --- | --- |
-| `NODE_ENV` | `development`, `test`, or `production` |
-| `PORT` | API port; defaults to `5001` |
-| `MONGODB_URI` | MongoDB connection string |
-| `JWT_SECRET` | Secret used to sign access tokens |
-| `JWT_EXPIRES_IN` | Token lifetime; defaults to `7d` |
-| `CLIENT_URL` | Allowed frontend origin; comma-separate multiple origins |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary account cloud name |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret; never expose it in the frontend |
-| `SMTP_HOST` | SMTP server host for transactional email |
-| `SMTP_PORT` | SMTP server port; defaults to 587 |
-| `SMTP_USER` | SMTP username, if your provider requires auth |
-| `SMTP_PASS` | SMTP password, if your provider requires auth |
-| `SMTP_FROM` | Sender address used for email notifications |
-| `PASSWORD_RESET_REQUEST_MAX` | Reset emails allowed per IP/hour; defaults to 3 |
-| `PASSWORD_RESET_ATTEMPT_MAX` | Token attempts allowed per IP/hour; defaults to 10 |
-| `PASSWORD_RESET_RATE_WINDOW_MS` | Optional rate-limit window override |
-| `TWILIO_ACCOUNT_SID` | Twilio account SID for transactional SMS |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token for transactional SMS |
-| `TWILIO_PHONE_NUMBER` | Verified Twilio phone number used as the SMS sender |
-| `BOOKING_REMINDER_HOURS` | How long before a booking to send the reminder; defaults to 24 |
-| `ENABLE_EMAIL` | Set to `false` to disable email delivery |
-| `ENABLE_SMS` | Set to `true` to enable SMS delivery |
-| `NOTIFICATION_JOB_INTERVAL_MS` | How often reminder jobs run in the background; defaults to 1 hour |
-
-Legacy aliases `SMTP_SECURE`, `TWILIO_FROM_NUMBER`, `BOOKING_REMINDER_LEAD_MS`, and `REVIEW_REMINDER_DELAY_MS` remain supported for existing deployments.
-
-Vendor image uploads are sent directly from the API to Cloudinary. Keep all
-Cloudinary credentials in `server/.env`; only committed placeholders belong in
-`.env.example`.
-
-Transactional email and SMS are also optional but recommended. If SMTP or
-Twilio is not configured, the API keeps working and skips those delivery
-channels.
-
-## Authentication
-
-Protected routes require:
-
-```text
-Authorization: Bearer <token>
-```
-
-Public registration accepts `customer` and `vendor` roles. Admin accounts
-should be provisioned directly by a trusted administrator.
-
-## API routes
-
-### Auth
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `POST /api/auth/forgot-password`
-- `POST /api/auth/reset-password`
-
-Password reset responses do not reveal whether an email is registered. Reset
-links contain a random 384-bit token; only its SHA-256 hash is stored. Links
-expire after 15 minutes and are atomically consumed on first use. A successful
-reset revokes every refresh token and sends a password-changed notification.
-The raw token is returned only while `NODE_ENV` is not `production`, to support
-local and automated testing.
-
-### Vendors
-
-- `POST /api/vendors/profile` — vendor only
-- `GET /api/vendors/me` — current vendor's profile
-- `GET /api/vendors`
-- `GET /api/vendors/:id`
-- `GET /api/vendors/:id/availability`
-- `GET /api/vendors/:vendorId/reviews`
-- `POST /api/vendors/availability` — vendor only
-- `PUT /api/vendors/availability` — vendor only
-- `DELETE /api/vendors/availability` — vendor only
-- `PATCH /api/vendors/profile` — profile owner only
-- `DELETE /api/vendors/profile` — profile owner only
-- `POST /api/vendors/images` — upload any combination of vendor images
-- `PUT /api/vendors/profile-image` — replace the profile image
-- `DELETE /api/vendors/profile-image` — delete the profile image
-- `PUT /api/vendors/cover-image` — replace the cover image
-- `DELETE /api/vendors/cover-image` — delete the cover image
-- `POST /api/vendors/portfolio` — add portfolio images
-- `DELETE /api/vendors/portfolio` — delete one portfolio image
-
-Vendor listing supports `category`, `location`, `search`, `verified`, `page`,
-`limit`, and `sort=price_asc|price_desc` query parameters.
-
-The availability routes are also exposed at `/api/vendor/...` for clients that
-prefer the singular route shape, for example `GET /api/vendor/:id/availability`.
-
-### Vendor availability
-
-Vendor availability supports recurring weekly business hours, blocked full
-dates, holiday dates, blocked time slots, vacations, timezone, and slot
-duration. Customers can read public availability for a vendor; only the vendor
-who owns the profile can create, update, or delete their settings.
-
-Fetch availability and generated slots for a date:
-
-```bash
-curl "http://localhost:5001/api/vendors/<vendor-id>/availability?date=2026-08-20"
-```
-
-Create or replace availability settings:
-
-```bash
-curl -X PUT http://localhost:5001/api/vendors/availability \
-  -H "Authorization: Bearer <vendor-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "timezone": "Asia/Kolkata",
-    "slotDurationMinutes": 60,
-    "businessHours": [
-      { "dayOfWeek": 1, "isOpen": true, "startTime": "10:00", "endTime": "18:00" }
-    ],
-    "blockedDates": [
-      { "date": "2026-08-15", "type": "holiday", "reason": "Holiday" }
-    ],
-    "blockedTimeSlots": [
-      { "date": "2026-08-20", "startTime": "13:00", "endTime": "14:00" }
-    ],
-    "vacations": [
-      { "startDate": "2026-09-01", "endDate": "2026-09-05", "reason": "Vacation" }
-    ]
-  }'
-```
-
-Delete one availability item:
-
-```bash
-curl -X DELETE http://localhost:5001/api/vendors/availability \
-  -H "Authorization: Bearer <vendor-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"blockedTimeSlot","id":"<item-id>"}'
-```
-
-All image mutation routes require a vendor JWT:
-
-```text
-Authorization: Bearer <vendor-token>
-Content-Type: multipart/form-data
-```
-
-Only JPEG, PNG, and WEBP files are accepted. Each image can be at most 5 MB,
-and a vendor can store at most eight portfolio images. Cloudinary's secure URL
-and public ID are stored in MongoDB as:
-
-```json
-{
-  "url": "https://res.cloudinary.com/.../image/upload/...",
-  "publicId": "eventifyy/vendors/portfolio/example"
-}
-```
-
-The combined upload endpoint accepts these multipart fields:
-
-| Field | Maximum |
-| --- | ---: |
-| `profileImage` | 1 |
-| `coverImage` | 1 |
-| `portfolioImages` | 8 |
-
-```bash
-curl -X POST http://localhost:5001/api/vendors/images \
-  -H "Authorization: Bearer <vendor-token>" \
-  -F "profileImage=@./profile.jpg" \
-  -F "coverImage=@./cover.webp" \
-  -F "portfolioImages=@./event-1.jpg" \
-  -F "portfolioImages=@./event-2.jpg"
-```
-
-Uploading a new profile or cover image replaces the database reference and
-removes the previous asset from Cloudinary. The dedicated portfolio endpoint
-is retained for the existing frontend and accepts files using the `images`
-field:
-
-```bash
-curl -X POST http://localhost:5001/api/vendors/portfolio \
-  -H "Authorization: Bearer <vendor-token>" \
-  -F "images=@./event-1.jpg" \
-  -F "images=@./event-2.jpg"
-```
-
-Delete a portfolio image using its Cloudinary public ID (preferred) or URL:
-
-```bash
-curl -X DELETE http://localhost:5001/api/vendors/portfolio \
-  -H "Authorization: Bearer <vendor-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"publicId":"eventifyy/vendors/portfolio/example"}'
-```
-
-Deleting a vendor profile also removes its profile, cover, and portfolio
-assets from Cloudinary. If cleanup fails, the profile is kept and the API
-returns a clear `502` response instead of silently orphaning assets.
-
-### Vendor analytics
-
-- `GET /api/analytics/vendor` — vendor dashboard JSON
-- `GET /api/analytics/vendor/export` — matching CSV download
-
-Both endpoints accept `startDate` and `endDate` (`YYYY-MM-DD`). The dashboard
-includes revenue and booking series, acceptance/cancellation/conversion rates,
-month-over-month growth, popular event services, customer locations, repeat
-customer insights, and active-review trends. Revenue represents accepted
-booking value for trends and completed booking value for total earnings.
-
-### Bookings
-
-- `POST /api/bookings` — customer only
-- `GET /api/bookings/my-bookings` — customer only
-- `GET /api/bookings/vendor-requests` — vendor only
-- `PATCH /api/bookings/:id/status`
-- `GET /api/bookings/:bookingId/review` — booking customer, vendor, or admin
-
-Customers can cancel their own bookings. Vendors can accept, reject, or
-complete requests sent to their vendor profile. Invalid status transitions
-are rejected.
-
-New booking requests must include `eventStartTime` and `eventEndTime` in
-`HH:mm` format. The API rejects unavailable dates, blocked slots, vacation
-dates, times outside business hours, and overlapping active bookings.
-
-### Reviews and ratings
-
-- `POST /api/reviews` — customer only
-- `GET /api/vendors/:vendorId/reviews` — public
-- `GET /api/bookings/:bookingId/review` — booking participant or admin
-- `PATCH /api/reviews/:id` — review owner only
-- `DELETE /api/reviews/:id` — review owner only
-- `PATCH /api/reviews/:id/reply` — reviewed vendor only
-- `POST /api/reviews/:id/report` — authenticated user; one report per user
-- `POST /api/reviews/:id/appeal` — review author or reviewed vendor
-- `GET /api/reviews/:id/history` — author, vendor, or admin
-- `GET /api/admin/reviews?queue=true` — moderation queue
-- `PATCH /api/admin/reviews/:id/moderate` — approve, hide, or soft-remove
-- `PATCH /api/admin/reviews/:id/images` — approve or reject uploaded images
-- `PATCH /api/admin/reviews/:id/appeal` — approve or reject an appeal
-
-Customers can create one review per completed booking. The API verifies the
-booking owner and vendor, so ratings cannot be posted directly against an
-unrelated vendor. Ratings are whole numbers from 1 through 5. Comments are
-required and may contain up to 2,000 characters.
-
-Create a text-only review:
-
-```bash
-curl -X POST http://localhost:5001/api/reviews \
-  -H "Authorization: Bearer <customer-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "bookingId": "<completed-booking-id>",
-    "rating": 5,
-    "comment": "Excellent service and communication."
-  }'
-```
-
-To attach up to four optional JPEG, PNG, or WEBP images, send multipart data.
-Each image can be at most 5 MB:
-
-```bash
-curl -X POST http://localhost:5001/api/reviews \
-  -H "Authorization: Bearer <customer-token>" \
-  -F "bookingId=<completed-booking-id>" \
-  -F "rating=5" \
-  -F "comment=Excellent service and communication." \
-  -F "images=@./review-1.jpg"
-```
-
-Review image objects store Cloudinary `url` and `publicId` values. Removed
-images are deleted from Cloudinary. On every review create, rating update, or
-delete, the API recalculates the vendor's `averageRating` and `reviewCount`
-from review records; clients cannot set those fields.
-
-Review text is checked for configurable profanity (`REVIEW_PROFANITY_WORDS`),
-repetition, multiple links, and excessive capitals. Matches are queued rather
-than published. Only active reviews affect public ratings. Uploaded images begin
-in `pending` and are visible publicly only after approval. Reports, status
-changes, appeals, image decisions, and vendor-response edits retain history;
-admin removal is intentionally soft so that evidence and appeals are preserved.
-
-Vendors can publish or update their response:
-
-```bash
-curl -X PATCH http://localhost:5001/api/reviews/<review-id>/reply \
-  -H "Authorization: Bearer <vendor-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Thank you for choosing us."}'
-```
-
-### Favorites / saved vendors
-
-- `POST /api/favorites/:vendorId` — customer only
-- `DELETE /api/favorites/:vendorId` — customer only
-- `GET /api/favorites` — customer only
-- `GET /api/favorites/check/:vendorId` — customer only
-
-All favorites routes require a customer JWT:
-
-```text
-Authorization: Bearer <customer-token>
-```
-
-Customers can save a vendor once, remove saved vendors, fetch their own saved
-vendor list, and check whether a specific vendor is saved. Vendors cannot use
-these endpoints. Invalid vendor IDs return `400`, missing vendors return `404`,
-and duplicate saves return `409`.
-
-Save a vendor:
-
-```bash
-curl -X POST http://localhost:5001/api/favorites/<vendor-id> \
-  -H "Authorization: Bearer <customer-token>"
-```
-
-Check saved state:
-
-```bash
-curl http://localhost:5001/api/favorites/check/<vendor-id> \
-  -H "Authorization: Bearer <customer-token>"
-```
-
-Response:
-
-```json
-{
-  "isFavorited": true
-}
-```
-
-Fetch saved vendors:
-
-```bash
-curl http://localhost:5001/api/favorites \
-  -H "Authorization: Bearer <customer-token>"
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "count": 1,
-  "favorites": [
-    {
-      "_id": "favorite-id",
-      "createdAt": "2026-06-24T10:00:00.000Z",
-      "vendorId": {
-        "_id": "vendor-id",
-        "businessName": "Celebration Studio",
-        "serviceCategory": "Decoration",
-        "category": "Decoration",
-        "location": "Delhi",
-        "pricing": 50000,
-        "startingPrice": 50000,
-        "rating": 4.8,
-        "averageRating": 4.8,
-        "reviewCount": 12,
-        "profileImage": {
-          "url": "https://res.cloudinary.com/.../image/upload/...",
-          "publicId": "eventifyy/vendors/profile/example"
-        }
-      }
-    }
-  ]
-}
-```
-
-Remove a saved vendor:
-
-```bash
-curl -X DELETE http://localhost:5001/api/favorites/<vendor-id> \
-  -H "Authorization: Bearer <customer-token>"
-```
-
-Favorites are stored with indexes on `customerId`, `vendorId`, and a unique
-compound index on `{ customerId, vendorId }`. Fetching favorites uses one
-populated query to avoid N+1 lookups. Deleting a vendor profile also removes
-related favorites.
-
-## Tests
-
-```bash
-cd server
-npm test
-
-cd ../frontend
-npm test
-```
-
-The backend integration test uses an isolated in-memory MongoDB instance and
-does not write to the configured development database.
-
-## Example registration
-
-```bash
-curl -X POST http://localhost:5001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Riya Sharma",
-    "email": "riya@example.com",
-    "phone": "+91 98765 43210",
-    "password": "secret123",
-    "role": "customer"
-  }'
-```
+# Planzo API
+
+Express REST API backed by Mongoose. See the root README for setup and deployment.
+
+## Configuration
+
+See [.env.example](.env.example). Startup requires a valid MongoDB URI and JWT secret of at least 32 characters. Production additionally requires HTTPS frontend origins and account-recovery SMTP configuration. Cloudinary configuration is optional for read-only browsing, required for photo uploads. Partial Cloudinary or SMTP credential sets are rejected.
+
+Cookie names retain the legacy `eventifyy_access` and `eventifyy_refresh` names for compatibility. Tokens are HttpOnly, Secure in production, and refreshed through opaque, hashed, rotating refresh credentials. Only nonsensitive account fields are returned. Bearer access tokens are supported for API clients. Admin accounts are provisioned with `npm run admin:create`.
+
+JSON responses use `success`, optional `message`, and the relevant resource. Errors use the same shape and appropriate HTTP status. Private account, booking, and admin responses disable caching. Public vendor responses use explicit field allowlists.
+
+## Authentication and account
+
+| Method | Path | Access / purpose |
+| --- | --- | --- |
+| POST | /api/auth/register | Public; name, email, phone, password, role customer/vendor |
+| POST | /api/auth/login | Public; email and password |
+| POST | /api/auth/refresh | Valid refresh cookie; atomically rotates credentials |
+| POST | /api/auth/logout | Revokes refresh cookie and clears cookies |
+| GET | /api/auth/me | Current active user |
+| PATCH | /api/auth/profile | Current user; name and phone, no direct email changes |
+| PATCH | /api/auth/password | Current user; currentPassword and newPassword |
+| POST | /api/auth/forgot-password | Public; generic response, single-use email link |
+| POST | /api/auth/reset-password | Public; token and password |
+| POST | /api/auth/email-change | Current user; email and currentPassword; sends new-address link |
+| POST | /api/auth/email-change/confirm | Public; token; replaces verified address and revokes credentials |
+| DELETE | /api/auth/account | Current customer/vendor; password; guarded deactivation, preserves history |
+
+Passwords require 8–128 characters including lowercase, uppercase, a digit and a symbol. Account email links expire after 15 minutes; only hashes are stored. No raw tokens appear in responses or logs. Failed SMTP recovery delivery retains a generic response and invalidates the undelivered token. The first configured CLIENT_URL origin is the email-link destination.
+
+## Vendor marketplace and profile
+
+| Method | Path | Access / purpose |
+| --- | --- | --- |
+| GET | /api/vendors | Public approved/active profiles; search, category, city, minPrice, maxPrice, page, limit |
+| GET | /api/vendors/categories | Public categories |
+| GET | /api/vendors/search/meta | Category metadata alias |
+| GET | /api/vendors/:id | Public approved/active profile |
+| GET | /api/vendors/me | Vendor's own profile and sharing contacts |
+| POST | /api/vendors/profile | Vendor creates profile |
+| PATCH | /api/vendors/profile | Vendor edits profile; rejected profiles return to pending |
+| DELETE | /api/vendors/profile | Vendor only; blocked when booking history exists |
+| POST | /api/vendors/images | Vendor multipart profileImage, coverImage, portfolioImages |
+| PUT / DELETE | /api/vendors/profile-image | Vendor replaces/removes profile photo |
+| PUT / DELETE | /api/vendors/cover-image | Vendor replaces/removes cover photo |
+| POST / DELETE | /api/vendors/portfolio | Vendor adds photos (images field) / removes an owned image |
+
+Profile fields: businessName, serviceCategory, description, location, pricing, servicesOffered, contactDetails. Sharing contacts are optional phone/email and never copied from User. Public APIs omit contactDetails entirely. Existing profileImage, coverImage and portfolioImages records remain readable.
+
+Images accept JPEG, PNG or WEBP up to 5MB each, with at most eight portfolio photos. Server-side streams send them to Cloudinary as decoded images under server-generated IDs. Client fields cannot control upload/deletion targets.
+
+## Date availability
+
+| Method | Path | Access / purpose |
+| --- | --- | --- |
+| GET | /api/vendors/:id/availability | Public approved vendor's unavailable and booked dates |
+| GET | /api/vendors/availability | Vendor's own availability, including pending profiles |
+| PUT / POST | /api/vendors/availability | Vendor saves unavailableDates / availableDates arrays |
+| DELETE | /api/vendors/availability | Vendor resets explicit dates; reserved bookings remain |
+
+Dates use YYYY-MM-DD. All dates are open unless explicitly unavailable or reserved by an accepted/completed booking. availableDates is informational, not an exclusive allowlist. Recurring hours, slots, holidays, vacation rules, and external calendar operations are gone.
+
+## Booking requests
+
+| Method | Path | Access / purpose |
+| --- | --- | --- |
+| POST | /api/bookings | Customer submits vendorId, eventDate, eventLocation, eventType, description, optional notes |
+| GET | /api/bookings/my-bookings | Customer's bookings only |
+| GET | /api/bookings/vendor-requests | Vendor's incoming bookings only |
+| PATCH | /api/bookings/:id/status | Authorized participant/admin changes status; optional reason |
+
+Pending → accepted/rejected/cancelled. Accepted → completed/cancelled. Rejected, cancelled and completed are final.
+
+Customers can only cancel their own pending/accepted bookings. Vendors accept/reject their own incoming pending requests and complete accepted requests. Admins manage allowed transitions. The database enforces one accepted/completed booking per vendor/date, and conditional updates reject stale transitions. Pending requests do not reserve dates. Basic date checks currently use the UTC date boundary on the API.
+
+Only the associated customer receives intentionally shared vendor contacts on accepted/completed bookings. Vendors and admins can view sharing contacts for authorized management. Customer email/phone and vendor private account contact information are not exposed in booking payloads.
+
+## Administration
+
+All routes below require an active admin account.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | /api/admin/stats | Basic customer/vendor/booking/status counts |
+| GET | /api/admin/users | Paginated registered users, optional role filter |
+| GET | /api/admin/vendors | Paginated vendor profiles, optional status filter |
+| GET | /api/admin/vendors/unverified | Pending approval profiles |
+| PATCH | /api/admin/vendors/:vendorId/verify | Approve business profile |
+| PATCH | /api/admin/vendors/:vendorId/reject | Reject profile, optional reason |
+| PATCH | /api/admin/users/:userId/suspension | suspended boolean and required reason when suspending |
+| PATCH | /api/admin/vendors/:vendorId/suspension | Suspend/restore vendor owner account |
+| GET | /api/admin/bookings | Paginated bookings, optional status filter |
+| PATCH | /api/admin/bookings/:bookingId | Allowed booking status transition |
+
+## Tests and data
+
+Run `npm run check` and `npm test`. Run `npm run data:audit` for a read-only legacy-data report; it never updates documents or removes collections. Review [migration requirements](../docs/MVP_MIGRATION.md) before deploying to an existing database.
