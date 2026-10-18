@@ -1,34 +1,17 @@
-const FALLBACK_IMAGES = {
-  DJ: "https://images.unsplash.com/photo-1598387993441-a364f854c3e1?auto=format&fit=crop&w=1200&q=80",
-  Catering:
-    "https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1200&q=80",
-  Decoration:
-    "https://images.unsplash.com/photo-1507504031003-b417219a0fde?auto=format&fit=crop&w=1200&q=80",
-  "Event Planner":
-    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
-  "Venue Booking":
-    "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1200&q=80",
+import celebrationImage from "../assets/planzo-hero-event.jpg";
+import cateringImage from "../assets/services/catering.jpg";
+import venueImage from "../assets/services/venue.jpg";
+import djImage from "../assets/services/dj.jpg";
+import decorationImage from "../assets/services/decoration.jpg";
+const fallbacks = {
+  DJ: djImage,
+  Catering: cateringImage,
+  Decoration: decorationImage,
+  "Venue Booking": venueImage
 };
-
-const getImageUrl = (image) =>
-  typeof image === "string" ? image : image?.url;
-
-export const getVendorImage = (vendor) =>
-  getImageUrl(vendor?.profileImage) ||
-  getImageUrl(vendor?.portfolioImages?.[0]) ||
-  getImageUrl(vendor?.coverImage) ||
-  FALLBACK_IMAGES[vendor?.serviceCategory] ||
-  "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80";
-
-export const getVendorGallery = (vendor) => {
-  const images = [
-    getImageUrl(vendor?.coverImage),
-    ...(vendor?.portfolioImages?.map(getImageUrl) || []),
-    getImageUrl(vendor?.profileImage),
-  ].filter(
-    (image, index, collection) =>
-      image && collection.indexOf(image) === index,
-  );
-
-  return images.length ? images : [getVendorImage(vendor)];
+const getImageUrl = image => {
+  const url = typeof image === "string" ? image : image?.url;
+  return typeof url === "string" && /^https?:\/\//i.test(url) ? url : "";
 };
+export const getVendorImage = vendor => getImageUrl(vendor?.profileImage) || getImageUrl(vendor?.portfolioImages?.[0]) || getImageUrl(vendor?.coverImage) || fallbacks[vendor?.serviceCategory] || celebrationImage;
+export const getVendorGallery = vendor => [getImageUrl(vendor?.coverImage), ...(vendor?.portfolioImages?.map(getImageUrl) || []), getImageUrl(vendor?.profileImage)].filter((url, index, collection) => url && collection.indexOf(url) === index);

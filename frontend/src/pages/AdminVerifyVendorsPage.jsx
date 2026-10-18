@@ -1,160 +1,122 @@
-import { useEffect, useState } from "react";
-import { Check, ExternalLink, FileText, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import Pagination from "../components/Pagination";
 import Toast from "../components/Toast";
-import {
-  getVerifications,
-  reviewVerification,
-} from "../services/verificationService";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { getAdminVendors, reviewVendor } from "../services/adminService";
 import { getApiError } from "../utils/apiError";
-
-const LABELS = {
-  governmentId: "Government ID",
-  businessLicense: "Business License",
-  gstCertificate: "GST Certificate",
-  panCard: "PAN Card",
-  profilePhoto: "Profile Photo",
-};
-
+import { formatCurrency } from "../utils/format";
+import { getVendorGallery } from "../utils/vendor";
 export default function AdminVerifyVendorsPage() {
-  const [items, setItems] = useState([]);
+  useDocumentTitle("Vendor approvals");
+  const [vendors, setVendors] = useState([]);
+  const [status, setStatus] = useState("pending");
+  const [reasons, setReasons] = useState({});
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [reasonFor, setReasonFor] = useState(null);
-  const [reason, setReason] = useState("");
-  const load = () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    getVerifications({ status: "pending" })
-      .then((data) => setItems(data.verifications))
-      .catch((e) => setError(getApiError(e, "Unable to load submissions.")))
-      .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
-  const review = async (item, status) => {
-    if (status !== "approved" && reasonFor !== `${item._id}:${status}`) {
-      setReasonFor(`${item._id}:${status}`);
-      setReason("");
+    setError("");
+    try {
+      const data = await getAdminVendors({
+        status,
+        page,
+        limit: 8
+      });
+      setVendors(data.vendors || []);
+      setPagination(data.pagination || {});
+    } catch (err) {
+      setError(getApiError(err, "Unable to load vendors."));
+    } finally {
+      setLoading(false);
+    }
+  }, [status, page]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const review = async (id, approved) => {
+    if (!approved && !reasons[id]?.trim()) {
+      setError("Provide a reason so the vendor can improve their profile.");
       return;
     }
-    if (status !== "approved" && !reason.trim())
-      return setError("Enter a reason for the vendor.");
+    setBusy(id);
+    setError("");
     try {
-      await reviewVerification(item._id, status, reason);
-      setItems((list) => list.filter((entry) => entry._id !== item._id));
-      setReasonFor(null);
-      setMessage("Review saved.");
-    } catch (e) {
-      setError(getApiError(e, "Review failed."));
+      await reviewVendor(id, approved, reasons[id]?.trim());
+      await load();
+      setMessage(approved ? "Vendor approved." : "Vendor rejected.");
+    } catch (err) {
+      setError(getApiError(err, "Unable to review vendor."));
+    } finally {
+      setBusy("");
     }
   };
-  return (
-    <section className="section-pad container-shell">
-      <Toast
-        message={error || message}
-        type={error ? "error" : "success"}
-        onClose={() => {
-          setError("");
-          setMessage("");
-        }}
-      />
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-4xl font-extrabold">Vendor verification review</h1>
-        <p className="mt-2 text-ink/50">
-          Preview submitted documents and record an auditable decision.
-        </p>
-        {loading ? (
-          <div className="mt-8">
-            <LoadingSkeleton />
+  return <div className="space-y-7">
+    <Toast message={message} onClose={() => setMessage("")} />
+    <header>
+      <p className="text-xs font-bold uppercase tracking-wider text-coral">Marketplace quality</p>
+      <h1 className="mt-2 text-3xl font-extrabold">Vendor approvals</h1>
+      <p className="mt-3 text-sm text-ink/55">Only approved vendors appear in the public marketplace.</p>
+    </header>
+    <label className="block max-w-xs">
+      <span className="label">Approval status</span>
+      <select className="field" value={status} onChange={event => {
+        setStatus(event.target.value);
+        setPage(1);
+      }}>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </label>
+    {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+      {error}
+    </p>}
+    {loading ? <LoadingSkeleton /> : <>
+      <div className="space-y-5">
+        {vendors.length ? vendors.map(vendor => <article key={vendor._id} className="rounded-3xl border bg-white p-6 shadow-soft">
+          <div className="flex flex-wrap justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-extrabold">
+                {vendor.businessName}
+              </h2>
+              <p className="mt-2 text-sm text-ink/55">{vendor.serviceCategory} · {vendor.location} · {formatCurrency(vendor.pricing || 0)}</p>
+              <p className="mt-2 break-all text-xs text-ink/50">Owner: {vendor.userId?.name || "Unavailable"} ({vendor.userId?.email || "No email"})</p>
+            </div>
+            <span className="text-xs font-bold capitalize text-coral">
+              {vendor.verificationStatus}
+            </span>
           </div>
-        ) : !items.length ? (
-          <div className="mt-8">
-            <EmptyState
-              title="No pending submissions"
-              description="The verification queue is clear."
-            />
+          <p className="mt-5 whitespace-pre-line text-sm leading-7 text-ink/65">
+            {vendor.description}
+          </p>
+          {vendor.servicesOffered?.length > 0 && <p className="mt-3 text-sm text-ink/55">Services: {vendor.servicesOffered.join(", ")}</p>}
+          <div className="mt-5 flex gap-3 overflow-x-auto">
+            {getVendorGallery(vendor).map(url => <a key={url} href={url} target="_blank" rel="noreferrer">
+              <img src={url} alt={`Work by ${vendor.businessName}`} className="h-28 w-40 max-w-none rounded-2xl object-cover" />
+            </a>)}
           </div>
-        ) : (
-          <div className="mt-8 space-y-6">
-            {items.map((item) => (
-              <div
-                key={item._id}
-                className="rounded-[1.75rem] border bg-white p-6 shadow-soft"
-              >
-                <div className="flex flex-wrap justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-extrabold">
-                      {item.vendor?.businessName}
-                    </h2>
-                    <p className="text-sm text-ink/50">
-                      {item.vendor?.userId?.name} · {item.vendor?.userId?.email}
-                    </p>
-                  </div>
-                  <p className="text-sm text-ink/50">
-                    Submitted {new Date(item.submittedAt).toLocaleString()}
-                  </p>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {Object.entries(item.documents || {})
-                    .filter(([, doc]) => doc)
-                    .map(([type, doc]) => (
-                      <a
-                        key={type}
-                        href={doc.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group rounded-2xl border p-3 hover:border-plum/40"
-                      >
-                        {doc.mimeType?.startsWith("image/") ? (
-                          <img
-                            src={doc.url}
-                            alt={LABELS[type]}
-                            className="h-36 w-full rounded-xl object-cover"
-                          />
-                        ) : (
-                          <div className="grid h-36 place-items-center rounded-xl bg-sand">
-                            <FileText className="h-10 w-10 text-plum" />
-                          </div>
-                        )}
-                        <p className="mt-2 flex items-center justify-between text-sm font-bold">
-                          {LABELS[type]}
-                          <ExternalLink className="h-4 w-4" />
-                        </p>
-                      </a>
-                    ))}
-                </div>
-                {reasonFor?.startsWith(item._id) && (
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="Explain what must be corrected"
-                    className="field mt-5 min-h-24"
-                  />
-                )}
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Button onClick={() => review(item, "approved")}>
-                    <Check className="h-4 w-4" /> Approve
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => review(item, "needs_resubmission")}
-                  >
-                    <RefreshCw className="h-4 w-4" /> Request resubmission
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => review(item, "rejected")}
-                  >
-                    <X className="h-4 w-4" /> Reject
-                  </Button>
-                </div>
-              </div>
-            ))}
+          {vendor.verificationRejectionReason && <p className="mt-4 text-sm text-red-700">Rejection reason: {vendor.verificationRejectionReason}</p>}
+          <label className="mt-5 block">
+            <span className="label">Review reason (required for rejection)</span>
+            <textarea className="field" rows={2} value={reasons[vendor._id] || ""} maxLength={1000} onChange={event => setReasons(current => ({
+              ...current,
+              [vendor._id]: event.target.value
+            }))} />
+          </label>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {vendor.verificationStatus !== "approved" && <Button loading={busy === vendor._id} disabled={Boolean(busy)} onClick={() => review(vendor._id, true)}>Approve vendor</Button>}
+            {vendor.verificationStatus !== "rejected" && <Button variant="outline" disabled={Boolean(busy)} onClick={() => review(vendor._id, false)}>Reject vendor</Button>}
           </div>
-        )}
+        </article>) : <EmptyState title="No vendors to review" description="Business profiles with this status will appear here." />}
       </div>
-    </section>
-  );
+      <Pagination pagination={pagination} page={page} onPage={setPage} />
+    </>}
+  </div>;
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   changePassword,
+  confirmEmailChange,
   deleteAccount,
   forgotPassword,
   getMe,
@@ -8,8 +9,8 @@ import {
   logout,
   refresh,
   register,
+  requestEmailChange,
   resetPassword,
-  updateNotificationPreferences,
   updateProfile,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -25,11 +26,8 @@ router.post("/reset-password", resetPassword);
 router.get("/me", protect, getMe);
 router.patch("/profile", protect, updateProfile);
 router.patch("/password", protect, changePassword);
-router.patch(
-  "/notification-preferences",
-  protect,
-  updateNotificationPreferences,
-);
+router.post("/email-change", protect, requestEmailChange);
+router.post("/email-change/confirm", confirmEmailChange);
 router.delete("/account", protect, deleteAccount);
 
 export default router;

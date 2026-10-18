@@ -9,7 +9,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const cookieOptions = (maxAge) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  sameSite: process.env.COOKIE_SAME_SITE || (process.env.NODE_ENV === "production" ? "none" : "lax"),
   path: "/",
   maxAge,
 });
@@ -24,17 +24,17 @@ export default function generateToken(userId) {
   return generateAccessToken(userId);
 }
 
-export function generateAccessToken(userId) {
+export function generateAccessToken(userId, authVersion = 0) {
   requireJwtSecret();
 
-  return jwt.sign({ id: userId, type: "access" }, process.env.JWT_SECRET, {
+  return jwt.sign({ id: userId, type: "access", authVersion }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
   });
 }
 
 export function verifyAccessToken(token) {
   requireJwtSecret();
-  const payload = jwt.verify(token, process.env.JWT_SECRET);
+  const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
 
   if (payload.type && payload.type !== "access") {
     throw new Error("Invalid token type.");

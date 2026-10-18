@@ -3,6 +3,7 @@ import {
   createAvailability,
   deleteAvailability,
   getAvailability,
+  getMyAvailability,
   updateAvailability,
 } from "../controllers/availabilityController.js";
 import {
@@ -19,7 +20,6 @@ import {
   replaceCoverImage,
   replaceProfileImage,
   requireVendorProfile,
-  submitVerificationDocuments,
   updateVendorProfile,
   updateVendorImages,
 } from "../controllers/vendorController.js";
@@ -31,15 +31,15 @@ import {
   uploadCoverImage,
   uploadPortfolioImages,
   uploadProfileImage,
-  uploadVerificationDocuments,
   uploadVendorImages,
 } from "../middleware/upload.js";
-import { getVendorReviews } from "../controllers/reviewController.js";
 
 const router = Router();
 
 router.get("/", getVendors);
 router.get("/search/meta", getVendorSearchMetadata);
+router.get("/categories", getVendorSearchMetadata);
+router.get("/availability", protect, authorizeRoles("vendor"), getMyAvailability);
 router.get("/:id/availability", getAvailability);
 router.post(
   "/availability",
@@ -59,7 +59,6 @@ router.delete(
   authorizeRoles("vendor"),
   deleteAvailability,
 );
-router.get("/:vendorId/reviews", getVendorReviews);
 router.get(
   "/me",
   protect,
@@ -83,14 +82,6 @@ router.delete(
   protect,
   authorizeRoles("vendor"),
   deleteVendorProfile,
-);
-router.post(
-  "/verification-documents",
-  protect,
-  authorizeRoles("vendor"),
-  requireVendorProfile,
-  uploadVerificationDocuments,
-  submitVerificationDocuments,
 );
 router.post(
   "/images",

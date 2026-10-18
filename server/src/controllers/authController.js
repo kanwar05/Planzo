@@ -1,9 +1,6 @@
+import bcrypt from "bcryptjs";
 import RefreshToken from "../models/RefreshToken.js";
-import Availability from "../models/Availability.js";
 import Booking from "../models/Booking.js";
-import Favorite from "../models/Favorite.js";
-import Notification from "../models/Notification.js";
-import Review from "../models/Review.js";
 import User from "../models/User.js";
 import Vendor from "../models/Vendor.js";
 import ApiError from "../utils/ApiError.js";
@@ -17,16 +14,18 @@ import {
   REFRESH_COOKIE_NAME,
   setAuthCookies,
 } from "../utils/generateToken.js";
-import { recalculateVendorRating } from "../utils/reviewRating.js";
-import {
-  requireFields,
-  validateEmail,
-} from "../utils/validation.js";
-import {
-  sendPasswordResetConfirmation,
-  sendPasswordResetNotification,
-} from "../services/transactionalNotificationService.js";
-import { recordAudit } from "../services/auditService.js";
+import { requireFields, validateEmail } from "../utils/validation.js";
+import { sendEmailChange, sendPasswordReset } from "../services/accountEmailService.js";
+
+const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
+const ACTIVE_ACCOUNT = { accountStatus: { $ne: "deactivated" }, suspendedAt: null };
+const credentialTokenFields = {
+  passwordResetTokenHash: 1,
+  passwordResetExpiresAt: 1,
+  pendingEmail: 1,
+  emailChangeTokenHash: 1,
+  emailChangeExpiresAt: 1,
+};
 
 function serializeUser(user) {
   return {
@@ -35,84 +34,83 @@ function serializeUser(user) {
     email: user.email,
     phone: user.phone,
     role: user.role,
-    notificationPreferences: user.notificationPreferences,
     createdAt: user.createdAt,
   };
 }
 
-function validatePasswordStrength(password) {
-  const value = String(password);
-  const problems = [];
+function textField(body, field) {
+  if (typeof body[field] !== "string") {
+    throw new ApiError(400, `${field} must be a string.`);
+  }
+  return body[field].trim();
+}
 
-  if (value.length < 8) problems.push("at least 8 characters");
-  if (!/[a-z]/.test(value)) problems.push("one lowercase letter");
-  if (!/[A-Z]/.test(value)) problems.push("one uppercase letter");
-  if (!/\d/.test(value)) problems.push("one number");
-  if (!/[^A-Za-z0-9]/.test(value)) problems.push("one special character");
-
-  if (problems.length) {
-    throw new ApiError(
-      400,
-      `Password must include ${problems.join(", ")}.`,
-    );
+function validateProfile(name, phone) {
+  if (name.length < 2 || name.length > 80) {
+    throw new ApiError(400, "Name must be between 2 and 80 characters.");
+  }
+  if (!/^[+()\d\s.\-]{7,20}$/.test(phone)) {
+    throw new ApiError(400, "Provide a valid phone number between 7 and 20 characters.");
   }
 }
 
-function getDevice(req) {
-  const agent = req.get("user-agent") || "";
-  const browser =
-    /Edg\//.test(agent) ? "Edge" :
-    /Chrome\//.test(agent) ? "Chrome" :
-    /Firefox\//.test(agent) ? "Firefox" :
-    /Safari\//.test(agent) ? "Safari" : "Unknown browser";
-  const type = /Mobile|Android|iPhone|iPad/i.test(agent)
-    ? "Mobile device"
-    : /Windows/i.test(agent) ? "Windows computer"
-    : /Macintosh|Mac OS/i.test(agent) ? "Mac computer"
-    : /Linux/i.test(agent) ? "Linux computer" : "Unknown device";
-  return { type, browser, ip: req.ip || "Unknown" };
+function passwordField(body, field) {
+  if (typeof body[field] !== "string") {
+    throw new ApiError(400, `${field} must be a string.`);
+  }
+  return body[field];
 }
 
-async function createRefreshToken(userId, req) {
+function validatePasswordStrength(password) {
+  const problems = [];
+  if (password.length < 8) problems.push("at least 8 characters");
+  if (!/[a-z]/.test(password)) problems.push("one lowercase letter");
+  if (!/[A-Z]/.test(password)) problems.push("one uppercase letter");
+  if (!/\d/.test(password)) problems.push("one number");
+  if (!/[^A-Za-z0-9]/.test(password)) problems.push("one special character");
+  if (problems.length) {
+    throw new ApiError(400, `Password must include ${problems.join(", ")}.`);
+  }
+  // bcrypt only considers the first 72 bytes; never silently truncate a password.
+  if (Buffer.byteLength(password, "utf8") > 72) {
+    throw new ApiError(400, "Password cannot exceed 72 bytes.");
+  }
+}
+
+function assertActive(user) {
+  if (user.accountStatus === "deactivated") {
+    throw new ApiError(403, "This account is deactivated. Contact support to reactivate it.");
+  }
+  if (user.suspendedAt) throw new ApiError(403, "This account is suspended.");
+}
+
+function versionFilter(user) {
+  const version = user.authVersion || 0;
+  return version === 0
+    ? { $or: [{ authVersion: 0 }, { authVersion: { $exists: false } }] }
+    : { authVersion: version };
+}
+
+async function createRefreshToken(user) {
   const refreshToken = createOpaqueToken();
   await RefreshToken.create({
-    userId,
+    userId: user._id,
+    authVersion: user.authVersion || 0,
     tokenHash: hashToken(refreshToken),
     expiresAt: getRefreshTokenExpiryDate(),
-    device: getDevice(req),
-    lastUsedAt: new Date(),
   });
-
   return refreshToken;
 }
 
-async function startSession(req, res, user, statusCode, message) {
-  const accessToken = generateAccessToken(user._id);
-  const refreshToken = await createRefreshToken(user._id, req);
-
+async function startSession(res, user, statusCode, message) {
+  const accessToken = generateAccessToken(user._id, user.authVersion || 0);
+  const refreshToken = await createRefreshToken(user);
   setAuthCookies(res, { accessToken, refreshToken });
-
-  res.status(statusCode).json({
-    success: true,
-    message,
-    user: serializeUser(user),
-  });
+  res.status(statusCode).json({ success: true, message, user: serializeUser(user) });
 }
 
 function getRefreshTokenFromRequest(req) {
   return req.cookies?.[REFRESH_COOKIE_NAME] || "";
-}
-
-async function revokeRefreshToken(token) {
-  if (!token) return;
-
-  await RefreshToken.findOneAndUpdate(
-    {
-      tokenHash: hashToken(token),
-      revokedAt: null,
-    },
-    { revokedAt: new Date() },
-  );
 }
 
 async function revokeAllUserRefreshTokens(userId) {
@@ -122,373 +120,252 @@ async function revokeAllUserRefreshTokens(userId) {
   );
 }
 
+function readCredentialToken(body, message) {
+  const token = textField(body, "token");
+  if (!/^[a-f0-9]{96}$/i.test(token)) throw new ApiError(400, message);
+  return token;
+}
+
 export const register = asyncHandler(async (req, res) => {
   requireFields(req.body, ["name", "email", "phone", "password"]);
-
-  const name = String(req.body.name).trim();
-  const email = String(req.body.email).trim().toLowerCase();
-  const phone = String(req.body.phone).trim();
-  const password = String(req.body.password);
+  const name = textField(req.body, "name");
+  const email = textField(req.body, "email").toLowerCase();
+  const phone = textField(req.body, "phone");
+  const password = passwordField(req.body, "password");
   const role = req.body.role || "customer";
-
   validateEmail(email);
+  validateProfile(name, phone);
   validatePasswordStrength(password);
-
   if (!["customer", "vendor"].includes(role)) {
-    throw new ApiError(
-      400,
-      "Public registration supports customer or vendor accounts only.",
-    );
+    throw new ApiError(400, "Public registration supports customer or vendor accounts only.");
   }
-
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
+  if (await User.exists({ email })) {
     throw new ApiError(409, "An account with this email already exists.");
   }
-
   const user = await User.create({ name, email, phone, password, role });
-  await startSession(req, res, user, 201, "Account created successfully.");
+  await startSession(res, user, 201, "Account created successfully.");
 });
 
 export const login = asyncHandler(async (req, res) => {
   requireFields(req.body, ["email", "password"]);
-
-  const email = String(req.body.email).trim().toLowerCase();
+  const email = textField(req.body, "email").toLowerCase();
+  const password = passwordField(req.body, "password");
   validateEmail(email);
-
   const user = await User.findOne({ email }).select("+password");
-  const passwordMatches =
-    user && (await user.comparePassword(String(req.body.password)));
-
-  if (!user || !passwordMatches) {
+  if (!user || !(await user.comparePassword(password))) {
     throw new ApiError(401, "Invalid email or password.");
   }
-  if (user.accountStatus === "deactivated") {
-    throw new ApiError(403, "This account is deactivated. Contact support to reactivate it.");
-  }
-  if (user.suspendedAt) {
-    throw new ApiError(403, "This account is suspended.");
-  }
-
-  await recordAudit(req, {
-    action: "login",
-    actor: user._id,
-    admin: null,
-    targetType: "User",
-    targetId: user._id,
-    targetLabel: user.email,
-    newValue: { status: "success", role: user.role },
-    reason: "Successful login",
-  });
-  await startSession(req, res, user, 200, "Logged in successfully.");
+  assertActive(user);
+  await startSession(res, user, 200, "Logged in successfully.");
 });
 
 export const refresh = asyncHandler(async (req, res) => {
-  const currentRefreshToken = getRefreshTokenFromRequest(req);
-  if (!currentRefreshToken) {
-    throw new ApiError(401, "Refresh token is missing.");
-  }
-
-  const tokenRecord = await RefreshToken.findOne({
-    tokenHash: hashToken(currentRefreshToken),
+  const token = getRefreshTokenFromRequest(req);
+  if (!token) throw new ApiError(401, "Refresh token is missing.");
+  // Atomic consumption makes each refresh token usable once, including concurrent requests.
+  const tokenRecord = await RefreshToken.findOneAndUpdate({
+    tokenHash: hashToken(token),
     revokedAt: null,
     expiresAt: { $gt: new Date() },
-  });
-
+  }, { $set: { revokedAt: new Date() } });
   if (!tokenRecord) {
     clearAuthCookies(res);
     throw new ApiError(401, "Invalid or expired refresh token.");
   }
-
   const user = await User.findById(tokenRecord.userId);
-  if (!user) {
-    tokenRecord.revokedAt = new Date();
-    await tokenRecord.save();
+  if (!user || (tokenRecord.authVersion || 0) !== (user.authVersion || 0)) {
     clearAuthCookies(res);
-    throw new ApiError(401, "The user for this token no longer exists.");
+    throw new ApiError(401, "This session is no longer valid. Please log in again.");
   }
-
-  tokenRecord.revokedAt = new Date();
-  tokenRecord.lastUsedAt = new Date();
-  await tokenRecord.save();
-
-  const accessToken = generateAccessToken(user._id);
-  const refreshToken = await createRefreshToken(user._id, req);
-  setAuthCookies(res, { accessToken, refreshToken });
-
-  res.status(200).json({
-    success: true,
-    message: "Session refreshed successfully.",
-    user: serializeUser(user),
-  });
+  if (user.accountStatus === "deactivated" || user.suspendedAt) {
+    await revokeAllUserRefreshTokens(user._id);
+    clearAuthCookies(res);
+    assertActive(user);
+  }
+  await startSession(res, user, 200, "Session refreshed successfully.");
 });
 
 export const logout = asyncHandler(async (req, res) => {
-  await revokeRefreshToken(getRefreshTokenFromRequest(req));
+  const token = getRefreshTokenFromRequest(req);
+  if (token) {
+    await RefreshToken.updateOne(
+      { tokenHash: hashToken(token), revokedAt: null },
+      { revokedAt: new Date() },
+    );
+  }
   clearAuthCookies(res);
-
-  res.status(200).json({
-    success: true,
-    message: "Logged out successfully.",
-  });
+  res.status(200).json({ success: true, message: "Logged out successfully." });
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   requireFields(req.body, ["email"]);
-
-  const email = String(req.body.email).trim().toLowerCase();
+  const email = textField(req.body, "email").toLowerCase();
   validateEmail(email);
-
-  const user = await User.findOne({ email }).select(
-    "+passwordResetTokenHash +passwordResetExpiresAt name email phone notificationPreferences",
-  );
-
   const response = {
     success: true,
-    message:
-      "If an account exists for that email, password reset instructions have been sent.",
+    message: "If an account exists for that email, password reset instructions have been sent.",
   };
-
-  if (!user) {
-    return res.status(200).json(response);
-  }
-
+  const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
+  if (!user) return res.status(200).json(response);
   const resetToken = createOpaqueToken();
-  user.passwordResetTokenHash = hashToken(resetToken);
-  user.passwordResetExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  await user.save({ validateBeforeSave: false });
-
-  if (process.env.NODE_ENV !== "production") {
-    response.resetToken = resetToken;
+  const tokenHash = hashToken(resetToken);
+  const issued = await User.updateOne({ _id: user._id, email, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
+    $set: {
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+    },
+  });
+  if (!issued.matchedCount) return res.status(200).json(response);
+  try {
+    await sendPasswordReset({ user, token: resetToken });
+  } catch {
+    // Keep the response identical for existing and missing accounts. Never log reset links.
+    await User.updateOne({ _id: user._id, passwordResetTokenHash: tokenHash }, {
+      $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 },
+    });
+    console.error("Account recovery email could not be delivered. Check SMTP configuration.");
   }
-
-  await sendPasswordResetNotification({ user, resetToken });
-
   return res.status(200).json(response);
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
   requireFields(req.body, ["token", "password"]);
-
-  const password = String(req.body.password);
+  const token = readCredentialToken(req.body, "Password reset token is invalid or expired.");
+  const password = passwordField(req.body, "password");
   validatePasswordStrength(password);
-
-  const token = String(req.body.token).trim();
-  if (!/^[a-f0-9]{96}$/i.test(token)) {
-    throw new ApiError(400, "Password reset token is invalid or expired.");
-  }
-
-  // Consume the token atomically before changing the password. Two concurrent
-  // requests can never successfully use the same reset link.
+  const passwordHash = await bcrypt.hash(password, 12);
+  // Hash first, then consume the token and replace the password in one database operation.
   const user = await User.findOneAndUpdate({
     passwordResetTokenHash: hashToken(token),
     passwordResetExpiresAt: { $gt: new Date() },
+    ...ACTIVE_ACCOUNT,
   }, {
-    $unset: {
-      passwordResetTokenHash: 1,
-      passwordResetExpiresAt: 1,
-    },
-    $set: { passwordResetConsumedAt: new Date() },
-  }, {
-    new: true,
-  }).select("+password +passwordResetConsumedAt");
-
-  if (!user) {
-    throw new ApiError(400, "Password reset token is invalid or expired.");
-  }
-
-  user.password = password;
-  user.passwordChangedAt = new Date();
-  await user.save();
-
-  await RefreshToken.updateMany(
-    { userId: user._id, revokedAt: null },
-    { revokedAt: new Date() },
-  );
+    $set: { password: passwordHash, passwordChangedAt: new Date() },
+    $inc: { authVersion: 1 },
+    $unset: credentialTokenFields,
+  }, { new: true });
+  if (!user) throw new ApiError(400, "Password reset token is invalid or expired.");
+  await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-
-  await sendPasswordResetConfirmation({ user });
-
-  res.status(200).json({
-    success: true,
-    message: "Password reset successfully. Please log in again.",
-  });
+  res.status(200).json({ success: true, message: "Password reset successfully. Please log in again." });
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {
-  requireFields(req.body, ["name", "email", "phone"]);
-
-  const name = String(req.body.name).trim();
-  const email = String(req.body.email).trim().toLowerCase();
-  const phone = String(req.body.phone).trim();
-
-  validateEmail(email);
-
-  if (name.length < 2 || name.length > 80) {
-    throw new ApiError(400, "Name must be between 2 and 80 characters.");
+  requireFields(req.body, ["name", "phone"]);
+  const name = textField(req.body, "name");
+  const phone = textField(req.body, "phone");
+  validateProfile(name, phone);
+  if (req.body.email !== undefined && textField(req.body, "email").toLowerCase() !== req.user.email) {
+    throw new ApiError(400, "Use email change verification to update your email address.");
   }
-  if (phone.length < 7 || phone.length > 20) {
-    throw new ApiError(400, "Phone number must be between 7 and 20 characters.");
-  }
-
-  const existingUser = await User.findOne({
-    email,
-    _id: { $ne: req.user._id },
-  });
-  if (existingUser) {
-    throw new ApiError(409, "An account with this email already exists.");
-  }
-
   req.user.name = name;
-  req.user.email = email;
   req.user.phone = phone;
   await req.user.save();
+  res.status(200).json({ success: true, message: "Profile updated successfully.", user: serializeUser(req.user) });
+});
 
-  res.status(200).json({
-    success: true,
-    message: "Profile updated successfully.",
-    user: serializeUser(req.user),
+export const requestEmailChange = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["email", "currentPassword"]);
+  const email = textField(req.body, "email").toLowerCase();
+  validateEmail(email);
+  const user = await User.findById(req.user._id).select("+password");
+  if (!user || !(await user.comparePassword(passwordField(req.body, "currentPassword")))) {
+    throw new ApiError(401, "Current password is incorrect.");
+  }
+  if (email === user.email) throw new ApiError(400, "Provide a different email address.");
+  if (await User.exists({ email })) throw new ApiError(409, "An account with this email already exists.");
+  const token = createOpaqueToken();
+  const tokenHash = hashToken(token);
+  const updated = await User.updateOne({ _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
+    $set: {
+      pendingEmail: email,
+      emailChangeTokenHash: tokenHash,
+      emailChangeExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+    },
   });
+  if (!updated.matchedCount) throw new ApiError(401, "Your account changed. Please log in again.");
+  try {
+    await sendEmailChange({ user, email, token });
+  } catch {
+    await User.updateOne({ _id: user._id, emailChangeTokenHash: tokenHash }, {
+      $unset: { pendingEmail: 1, emailChangeTokenHash: 1, emailChangeExpiresAt: 1 },
+    });
+    throw new ApiError(503, "Verification email could not be sent. Please try again later.");
+  }
+  res.status(200).json({ success: true, message: "A verification link has been sent to your new email address. Your current email remains active until you confirm it." });
+});
+
+export const confirmEmailChange = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["token"]);
+  const token = readCredentialToken(req.body, "Email verification token is invalid or expired.");
+  const filter = {
+    emailChangeTokenHash: hashToken(token),
+    emailChangeExpiresAt: { $gt: new Date() },
+    ...ACTIVE_ACCOUNT,
+  };
+  const pending = await User.findOne(filter).select("+pendingEmail");
+  if (!pending?.pendingEmail) throw new ApiError(400, "Email verification token is invalid or expired.");
+  const user = await User.findOneAndUpdate({ ...filter, _id: pending._id, ...versionFilter(pending) }, {
+    $set: { email: pending.pendingEmail },
+    $inc: { authVersion: 1 },
+    $unset: credentialTokenFields,
+  }, { new: true, runValidators: true });
+  if (!user) throw new ApiError(400, "Email verification token is invalid or expired.");
+  await revokeAllUserRefreshTokens(user._id);
+  clearAuthCookies(res);
+  res.status(200).json({ success: true, message: "Email verified and updated. Please log in with your new email address." });
 });
 
 export const changePassword = asyncHandler(async (req, res) => {
   requireFields(req.body, ["currentPassword", "newPassword"]);
-
   const user = await User.findById(req.user._id).select("+password");
-  const passwordMatches = await user.comparePassword(
-    String(req.body.currentPassword),
-  );
-
-  if (!passwordMatches) {
+  if (!user || !(await user.comparePassword(passwordField(req.body, "currentPassword")))) {
     throw new ApiError(401, "Current password is incorrect.");
   }
-
-  const newPassword = String(req.body.newPassword);
+  const newPassword = passwordField(req.body, "newPassword");
   validatePasswordStrength(newPassword);
-
-  user.password = newPassword;
-  user.passwordChangedAt = new Date();
-  await user.save();
-
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const result = await User.updateOne({ _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
+    $set: { password: passwordHash, passwordChangedAt: new Date() },
+    $inc: { authVersion: 1 },
+    $unset: credentialTokenFields,
+  });
+  if (!result.matchedCount) throw new ApiError(401, "Your account changed. Please log in again.");
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-
-  await sendPasswordResetConfirmation({ user });
-
-  res.status(200).json({
-    success: true,
-    message: "Password changed successfully. Please log in again.",
-  });
-});
-
-export const updateNotificationPreferences = asyncHandler(async (req, res) => {
-  const allowedFields = ["bookingUpdates", "reviewReminders", "promotions"];
-  const updates = {};
-
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updates[`notificationPreferences.${field}`] = Boolean(req.body[field]);
-    }
-  }
-
-  if (!Object.keys(updates).length) {
-    throw new ApiError(400, "Provide at least one notification preference.");
-  }
-
-  const user = await User.findByIdAndUpdate(req.user._id, updates, {
-    new: true,
-    runValidators: true,
-  });
-
-  res.status(200).json({
-    success: true,
-    message: "Notification preferences updated.",
-    user: serializeUser(user),
-  });
+  res.status(200).json({ success: true, message: "Password changed successfully. Please log in again." });
 });
 
 export const deleteAccount = asyncHandler(async (req, res) => {
   requireFields(req.body, ["password"]);
-
   const user = await User.findById(req.user._id).select("+password");
-  const passwordMatches = await user.comparePassword(String(req.body.password));
-
-  if (!passwordMatches) {
+  if (!user || !(await user.comparePassword(passwordField(req.body, "password")))) {
     throw new ApiError(401, "Password is incorrect.");
   }
-
+  if (user.role === "admin") throw new ApiError(403, "Administrator accounts must be managed by another administrator.");
   const vendor = await Vendor.findOne({ userId: user._id });
-  const activeBookingFilter = vendor
-    ? {
-        $or: [
-          { customerId: user._id, status: { $in: ["pending", "accepted"] } },
-          { vendorId: vendor._id, status: { $in: ["pending", "accepted"] } },
-        ],
-      }
+  const filter = vendor
+    ? { $or: [{ customerId: user._id }, { vendorId: vendor._id }], status: { $in: ["pending", "accepted"] } }
     : { customerId: user._id, status: { $in: ["pending", "accepted"] } };
-
-  const activeBookings = await Booking.exists(activeBookingFilter);
-  if (activeBookings) {
-    throw new ApiError(
-      409,
-      "Cancel or complete active bookings before deleting your account.",
-    );
+  if (await Booking.exists(filter)) {
+    throw new ApiError(409, "Cancel or complete active bookings before deactivating your account.");
   }
-
-  const reviews = await Review.find({ customerId: user._id }).select("vendorId");
-  const affectedVendorIds = [
-    ...new Set(reviews.map((review) => String(review.vendorId))),
-  ];
-
-  // Cleanup operations
-  const cleanupPromises = [
-    // Delete customer's favorites
-    Favorite.deleteMany({ customerId: user._id }),
-    // Delete customer's reviews
-    Review.deleteMany({ customerId: user._id }),
-    // Delete customer's bookings (non-active)
-    Booking.deleteMany({ customerId: user._id, status: { $nin: ["pending", "accepted"] } }),
-    // Delete notifications for this user
-    Notification.deleteMany({ userId: user._id }),
-    // Revoke all refresh tokens
-    revokeAllUserRefreshTokens(user._id),
-  ];
-
-  // If user is a vendor, add vendor-specific cleanup
-  if (vendor) {
-    cleanupPromises.push(
-      // Delete vendor profile
-      vendor.deleteOne(),
-      // Delete bookings to this vendor (from other customers)
-      Booking.deleteMany({ vendorId: vendor._id, status: { $nin: ["pending", "accepted"] } }),
-      // Delete favorites pointing to this vendor
-      Favorite.deleteMany({ vendorId: vendor._id }),
-      // Delete reviews of this vendor
-      Review.deleteMany({ vendorId: vendor._id }),
-      // Delete vendor availability
-      Availability.deleteOne({ vendorId: vendor._id }),
-    );
-  }
-
-  await Promise.all(cleanupPromises);
-
-  // Recalculate ratings for vendors affected by customer's deleted reviews
-  await Promise.all(
-    affectedVendorIds.map((vendorId) => recalculateVendorRating(vendorId)),
-  );
-
-  await user.deleteOne();
-  clearAuthCookies(res);
-
-  res.status(200).json({
-    success: true,
-    message: "Account deleted successfully.",
+  // Preserve users, vendor profiles and booking history; this endpoint deactivates access.
+  await User.updateOne({ _id: user._id }, {
+    $set: { accountStatus: "deactivated", deactivatedAt: new Date() },
+    $inc: { authVersion: 1 },
+    $unset: credentialTokenFields,
   });
+  if (vendor) {
+    vendor.suspended = true;
+    vendor.suspendedAt = new Date();
+    await vendor.save();
+  }
+  await revokeAllUserRefreshTokens(user._id);
+  clearAuthCookies(res);
+  res.status(200).json({ success: true, message: "Account deactivated. Booking history has been retained." });
 });
 
 export const getMe = asyncHandler(async (req, res) => {
-  res.status(200).json({
-    success: true,
-    user: serializeUser(req.user),
-  });
+  res.status(200).json({ success: true, user: serializeUser(req.user) });
 });

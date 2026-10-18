@@ -27,7 +27,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Password is required."],
-      minlength: [6, "Password must be at least 6 characters."],
+      minlength: [8, "Password must be at least 8 characters."],
       select: false,
     },
     role: {
@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema(
       enum: ["customer", "vendor", "admin"],
       default: "customer",
     },
-    lastSeenAt: { type: Date, default: null },
+    authVersion: { type: Number, default: 0, min: 0 },
     accountStatus: {
       type: String,
       enum: ["active", "deactivated"],
@@ -54,33 +54,25 @@ const userSchema = new mongoose.Schema(
       select: false,
       default: undefined,
     },
-    passwordResetConsumedAt: {
-      type: Date,
-      select: false,
-      default: undefined,
-    },
+    pendingEmail: { type: String, select: false, default: undefined },
+    emailChangeTokenHash: { type: String, select: false, default: undefined },
+    emailChangeExpiresAt: { type: Date, select: false, default: undefined },
     passwordChangedAt: {
       type: Date,
       default: undefined,
-    },
-    notificationPreferences: {
-      bookingUpdates: {
-        type: Boolean,
-        default: true,
-      },
-      reviewReminders: {
-        type: Boolean,
-        default: true,
-      },
-      promotions: {
-        type: Boolean,
-        default: false,
-      },
     },
   },
   {
     timestamps: true,
     versionKey: false,
+    toJSON: {
+      transform(doc, value) {
+        for (const field of ["password", "authVersion", "passwordResetTokenHash", "passwordResetExpiresAt", "passwordResetConsumedAt", "pendingEmail", "emailChangeTokenHash", "emailChangeExpiresAt", "notificationPreferences", "lastSeenAt"]) {
+          delete value[field];
+        }
+        return value;
+      },
+    },
   },
 );
 

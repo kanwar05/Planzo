@@ -44,7 +44,7 @@ export default function ResetPasswordPage() {
         <div className="text-center">
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-8 w-8" /></span>
           <h1 className="mt-5 text-4xl font-extrabold">Password changed.</h1>
-          <p className="mt-3 text-sm leading-6 text-ink/50">Your password was updated and existing sessions were signed out. We also sent you a confirmation.</p>
+          <p className="mt-3 text-sm leading-6 text-ink/50">Your password was updated and existing sessions were signed out.</p>
           <Button className="mt-7 w-full" onClick={() => navigate("/login", { replace: true })}>Continue to login</Button>
         </div>
       ) : (
@@ -60,12 +60,12 @@ export default function ResetPasswordPage() {
       ) : (
       <form onSubmit={submit} className="mt-9 space-y-5">
         <div>
-          <label className="label">New password</label>
+          <label className="label" htmlFor="reset-password">New password</label>
           <div className="relative">
             <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
             <input
               required
-              name="password"
+              name="password" id="reset-password" autoComplete="new-password"
               type="password"
               minLength="8"
               className="field !pl-11"
@@ -74,10 +74,10 @@ export default function ResetPasswordPage() {
           </div>
         </div>
         <div>
-          <label className="label">Confirm new password</label>
+          <label className="label" htmlFor="reset-confirmation">Confirm new password</label>
           <div className="relative">
             <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
-            <input required name="confirmPassword" type="password" minLength="8" className="field !pl-11" placeholder="Enter it again" />
+            <input required name="confirmPassword" id="reset-confirmation" autoComplete="new-password" type="password" minLength="8" className="field !pl-11" placeholder="Enter it again" />
           </div>
         </div>
         <Button type="submit" loading={loading} disabled={loading} className="w-full">

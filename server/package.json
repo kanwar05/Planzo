@@ -1,23 +1,24 @@
 {
-  "name": "eventifyy-server",
+  "name": "planzo-server",
   "version": "1.0.0",
-  "description": "REST API for the eventifyy event services marketplace",
+  "description": "Planzo event-services booking-request marketplace API",
   "private": true,
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js",
+    "dev": "node --watch server.js",
     "start": "node server.js",
-    "check": "node --check server.js && find src -name '*.js' -exec node --check {} \\;",
-    "payments:backfill": "node scripts/backfillPaymentFields.js",
-    "test": "NODE_ENV=test node --test --test-concurrency=1"
+    "check": "node scripts/check.js",
+    "data:audit": "node scripts/auditData.js",
+    "admin:create": "node admin.js",
+    "test": "node scripts/test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -28,16 +29,10 @@
     "mongoose": "^8.9.3",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
-    "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^6.9.16",
-    "pdfkit": "^0.19.1",
-    "razorpay": "^2.9.6",
-    "socket.io": "^4.8.3"
+    "nodemailer": "^10.1.2"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.4",
-    "nodemon": "^3.1.9",
-    "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2"
   }
 }

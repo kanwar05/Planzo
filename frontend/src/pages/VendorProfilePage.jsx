@@ -1,901 +1,235 @@
-import {
-  BadgeCheck,
-  BriefcaseBusiness,
-  Building2,
-  CheckCircle2,
-  Clock3,
-  FileText,
-  ImagePlus,
-  IndianRupee,
-  Layers3,
-  MapPin,
-  Save,
-  Sparkles,
-  ShieldAlert,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import Toast from "../components/Toast";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import {
-  createVendorProfile,
-  getMyVendorProfile,
-  updateVendorProfile,
-} from "../services/vendorService";
-import {
-  deletePortfolioImage,
-  uploadPortfolioImages,
-  uploadVerificationDocuments,
-} from "../services/uploadService";
+import { createVendorProfile, getMyVendorProfile, updateVendorProfile } from "../services/vendorService";
+import { deletePortfolioImage, uploadPortfolioImages } from "../services/uploadService";
 import { getApiError } from "../utils/apiError";
-import { formatCurrency } from "../utils/format";
-
-const initialForm = {
+const blank = {
   businessName: "",
   serviceCategory: "",
   description: "",
-  experience: "",
   pricing: "",
   location: "",
+  servicesOffered: "",
+  contactPhone: "",
+  contactEmail: ""
 };
-
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const ALLOWED_DOCUMENT_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const MAX_PORTFOLIO_IMAGES = 8;
-
-const normalizePortfolioImages = (images = []) =>
-  images
-    .map((image) =>
-      typeof image === "string" ? { url: image, publicId: "" } : image,
-    )
-    .filter((image) => image?.url);
-
-const normalizeVerificationDocuments = (documents = []) =>
-  (documents || [])
-    .filter((doc) => doc?.url)
-    .map((doc) => ({
-      url: doc.url,
-      publicId: doc.publicId || "",
-      originalName: doc.originalName || doc.url.split("/").pop() || "Document",
-      mimeType: doc.mimeType || "",
-    }));
-
+const imageUrl = image => typeof image === "string" ? image : image?.url;
+const toForm = profile => ({
+  businessName: profile.businessName || "",
+  serviceCategory: profile.serviceCategory || "",
+  description: profile.description || "",
+  pricing: profile.pricing ?? "",
+  location: profile.location || "",
+  servicesOffered: (profile.servicesOffered || []).join("\n"),
+  contactPhone: profile.contactDetails?.phone || "",
+  contactEmail: profile.contactDetails?.email || ""
+});
 export default function VendorProfilePage() {
-  useDocumentTitle("Vendor profile setup");
+  useDocumentTitle("Business profile");
   const location = useLocation();
-  const [profileExists, setProfileExists] = useState(false);
+  const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
-    ...initialForm,
+    ...blank,
     businessName: location.state?.businessName || "",
-    serviceCategory: location.state?.serviceCategory || "",
+    serviceCategory: location.state?.serviceCategory || ""
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [portfolioImages, setPortfolioImages] = useState([]);
-  const [verificationDocuments, setVerificationDocuments] = useState([]);
-  const [verificationStatus, setVerificationStatus] = useState("pending");
-  const [verificationReason, setVerificationReason] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [selectedVerificationFiles, setSelectedVerificationFiles] = useState([]);
-  const selectedFilesRef = useRef([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingVerification, setUploadingVerification] = useState(false);
-  const [deletingUrl, setDeletingUrl] = useState("");
-  const [toast, setToast] = useState({ message: "", type: "success" });
-
+  const [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [fileKey, setFileKey] = useState(0);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   useEffect(() => {
-    getMyVendorProfile()
-      .then((profile) => {
-        setProfileExists(true);
-        setForm({
-          businessName: profile.businessName,
-          serviceCategory: profile.serviceCategory,
-          description: profile.description,
-          experience: profile.experience,
-          pricing: profile.pricing,
-          location: profile.location,
-        });
-        setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
-        setVerificationDocuments(
-          normalizeVerificationDocuments(profile.verificationDocuments),
-        );
-        setVerificationStatus(profile.verificationStatus || "pending");
-        setVerificationReason(profile.verificationRejectionReason || "");
-      })
-      .catch((error) => {
-        if (error.response?.status !== 404) {
-          setToast({
-            message: getApiError(error, "Unable to load your vendor profile."),
-            type: "error",
-          });
-        }
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    selectedFilesRef.current = selectedFiles;
-  }, [selectedFiles]);
-
-  useEffect(
-    () => () => {
-      selectedFilesRef.current.forEach((item) =>
-        URL.revokeObjectURL(item.previewUrl),
-      );
-    },
-    [],
-  );
-
-  const completion = useMemo(() => {
-    const checks = [
-      form.businessName,
-      form.serviceCategory,
-      form.location,
-      form.description,
-      form.experience !== "",
-      form.pricing !== "",
-      portfolioImages.length,
-    ];
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [form, portfolioImages.length]);
-
-  const change = (event) => {
-    setForm((current) => ({
-      ...current,
-      [event.target.name]: event.target.value,
-    }));
-  };
-
-  const submit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setToast({ message: "", type: "success" });
-
-    const payload = {
-      ...form,
-      experience: Number(form.experience),
-      pricing: Number(form.pricing),
+    let active = true;
+    getMyVendorProfile().then(data => {
+      if (active && data) {
+        setProfile(data);
+        setForm(toForm(data));
+      }
+    }).catch(err => {
+      if (active && err.response?.status !== 404) setLoadError(getApiError(err, "Unable to load your profile."));
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
     };
-
-    try {
-      const profile = profileExists
-        ? await updateVendorProfile(payload)
-        : await createVendorProfile(payload);
-      setProfileExists(true);
-      setToast({
-        message: "Vendor profile saved successfully.",
-        type: "success",
-      });
-      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
-      setVerificationDocuments(
-        normalizeVerificationDocuments(profile.verificationDocuments),
-      );
-      setVerificationStatus(profile.verificationStatus || "pending");
-      setVerificationReason(profile.verificationRejectionReason || "");
-    } catch (error) {
-      setToast({
-        message: getApiError(error, "Unable to save your vendor profile."),
-        type: "error",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const selectImages = (event) => {
-    const files = Array.from(event.target.files || []);
-    event.target.value = "";
-
-    if (!files.length) return;
-
-    const invalidType = files.find(
-      (file) => !ALLOWED_IMAGE_TYPES.has(file.type),
-    );
-    if (invalidType) {
-      setToast({
-        message: "Only JPG, JPEG, PNG, and WEBP images are allowed.",
-        type: "error",
-      });
-      return;
-    }
-
-    const oversized = files.find((file) => file.size > MAX_IMAGE_SIZE);
-    if (oversized) {
-      setToast({
-        message: "Each portfolio image must be 5MB or smaller.",
-        type: "error",
-      });
-      return;
-    }
-
-    if (
-      portfolioImages.length + selectedFiles.length + files.length >
-      MAX_PORTFOLIO_IMAGES
-    ) {
-      setToast({
-        message: "You can add up to 8 portfolio images in total.",
-        type: "error",
-      });
-      return;
-    }
-
-    setSelectedFiles((current) => [
+  }, []);
+  const field = name => ({
+    value: form[name],
+    onChange: event => setForm(current => ({
       ...current,
-      ...files.map((file) => ({
-        file,
-        previewUrl: URL.createObjectURL(file),
-      })),
-    ]);
+      [name]: event.target.value
+    }))
+  });
+  const save = async event => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const servicesOffered = form.servicesOffered.split("\n").map(item => item.trim()).filter(Boolean);
+    try {
+      if (servicesOffered.length > 20 || servicesOffered.some(item => item.length > 120)) throw new Error("Add up to 20 services, with no more than 120 characters each.");
+      const data = {
+        businessName: form.businessName.trim(),
+        serviceCategory: form.serviceCategory,
+        description: form.description.trim(),
+        pricing: Number(form.pricing),
+        location: form.location.trim(),
+        servicesOffered,
+        contactDetails: {
+          phone: form.contactPhone.trim(),
+          email: form.contactEmail.trim()
+        }
+      };
+      const saved = await (profile ? updateVendorProfile(data) : createVendorProfile(data));
+      setProfile(saved);
+      setForm(toForm(saved));
+      setMessage("Business profile saved.");
+    } catch (err) {
+      setError(getApiError(err, "Unable to save profile."));
+    } finally {
+      setBusy(false);
+    }
   };
-
-  const removeSelectedImage = (previewUrl) => {
-    URL.revokeObjectURL(previewUrl);
-    setSelectedFiles((current) =>
-      current.filter((item) => item.previewUrl !== previewUrl),
-    );
+  const chooseFiles = event => {
+    const next = Array.from(event.target.files || []);
+    setError("");
+    if (next.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      setFiles([]);
+      setFileKey(value => value + 1);
+      setError("Use JPEG, PNG, or WebP photos up to 5 MB each.");
+      return;
+    }
+    if ((profile?.portfolioImages?.length || 0) + next.length > 8) {
+      setFiles([]);
+      setFileKey(value => value + 1);
+      setError("You can keep up to 8 business photos.");
+      return;
+    }
+    setFiles(next);
   };
-
-  const selectVerificationDocuments = (event) => {
-    const files = Array.from(event.target.files || []);
-    event.target.value = "";
-
+  const upload = async () => {
     if (!files.length) return;
-
-    const invalidType = files.find(
-      (file) =>
-        !ALLOWED_DOCUMENT_TYPES.has(file.type) &&
-        !file.name.toLowerCase().endsWith(".pdf"),
-    );
-    if (invalidType) {
-      setToast({
-        message: "Only PDF, JPG, PNG, and WEBP files are allowed.",
-        type: "error",
-      });
-      return;
-    }
-
-    const oversized = files.find((file) => file.size > MAX_IMAGE_SIZE);
-    if (oversized) {
-      setToast({
-        message: "Each document must be 5MB or smaller.",
-        type: "error",
-      });
-      return;
-    }
-
-    setSelectedVerificationFiles((current) => [...current, ...files]);
-  };
-
-  const removeSelectedVerificationFile = (fileName) => {
-    setSelectedVerificationFiles((current) =>
-      current.filter((file) => file.name !== fileName),
-    );
-  };
-
-  const uploadImages = async () => {
-    if (!profileExists) {
-      setToast({
-        message:
-          "Please create your vendor profile before uploading portfolio images.",
-        type: "error",
-      });
-      return;
-    }
-
-    if (!selectedFiles.length) {
-      setToast({
-        message: "Select at least one image to upload.",
-        type: "error",
-      });
-      return;
-    }
-
-    setUploading(true);
-    setToast({ message: "", type: "success" });
-
+    setBusy(true);
+    setError("");
+    setMessage("");
     try {
-      const profile = await uploadPortfolioImages(
-        selectedFiles.map((item) => item.file),
-      );
-      selectedFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      setSelectedFiles([]);
-      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
-      setToast({
-        message: "Portfolio images uploaded successfully.",
-        type: "success",
-      });
-    } catch (error) {
-      setToast({
-        message: getApiError(error, "Unable to upload portfolio images."),
-        type: "error",
-      });
+      setProfile(await uploadPortfolioImages(files));
+      setFiles([]);
+      setFileKey(value => value + 1);
+      setMessage("Business photos uploaded.");
+    } catch (err) {
+      setError(getApiError(err, "Unable to upload photos."));
     } finally {
-      setUploading(false);
+      setBusy(false);
     }
   };
-
-  const uploadVerificationDocs = async () => {
-    if (!profileExists) {
-      setToast({
-        message: "Please create your vendor profile before uploading verification documents.",
-        type: "error",
-      });
-      return;
-    }
-
-    if (!selectedVerificationFiles.length) {
-      setToast({
-        message: "Select at least one document to upload.",
-        type: "error",
-      });
-      return;
-    }
-
-    setUploadingVerification(true);
-    setToast({ message: "", type: "success" });
-
+  const remove = async url => {
+    setBusy(true);
+    setError("");
     try {
-      const profile = await uploadVerificationDocuments(
-        selectedVerificationFiles,
-      );
-      setSelectedVerificationFiles([]);
-      setVerificationDocuments(
-        normalizeVerificationDocuments(profile.verificationDocuments),
-      );
-      setVerificationStatus(profile.verificationStatus || "pending");
-      setVerificationReason(profile.verificationRejectionReason || "");
-      setToast({
-        message: "Verification documents uploaded successfully.",
-        type: "success",
-      });
-    } catch (error) {
-      setToast({
-        message: getApiError(error, "Unable to upload verification documents."),
-        type: "error",
-      });
+      setProfile(await deletePortfolioImage(url));
+      setMessage("Photo removed.");
+    } catch (err) {
+      setError(getApiError(err, "Unable to remove photo."));
     } finally {
-      setUploadingVerification(false);
+      setBusy(false);
     }
   };
-
-  const deleteImage = async (imageUrl) => {
-    setDeletingUrl(imageUrl);
-    setToast({ message: "", type: "success" });
-
-    try {
-      const profile = await deletePortfolioImage(imageUrl);
-      setPortfolioImages(normalizePortfolioImages(profile.portfolioImages));
-      setToast({
-        message: "Portfolio image deleted successfully.",
-        type: "success",
-      });
-    } catch (error) {
-      setToast({
-        message: getApiError(error, "Unable to delete the portfolio image."),
-        type: "error",
-      });
-    } finally {
-      setDeletingUrl("");
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="py-16 text-center text-sm text-ink/45">
-        Loading profile…
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        onClose={() => setToast({ message: "", type: "success" })}
-      />
-
-      <section className="overflow-hidden rounded-[2rem] border bg-white shadow-soft">
-        <div className="bg-gradient-to-r from-[#fff3eb] via-white to-[#f4eadf] p-6 sm:p-8">
-          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <div>
-              <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-coral">
-                Business profile builder
-              </p>
-              <h1 className="mt-2 text-3xl font-extrabold">
-                {profileExists
-                  ? "Refine your vendor profile"
-                  : "Set up your vendor profile"}
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm text-ink/55">
-                Add the details customers need before they request a booking:
-                category, pricing, location, bio, and portfolio visuals.
-              </p>
-            </div>
-            <div className="rounded-3xl bg-white p-5 shadow-soft">
-              <div className="flex items-center justify-between gap-8">
-                <div>
-                  <p className="text-sm font-extrabold">Profile strength</p>
-                  <p className="mt-1 text-xs text-ink/45">
-                    Complete profiles convert better.
-                  </p>
-                </div>
-                <span className="text-3xl font-extrabold text-coral">
-                  {completion}%
-                </span>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-sand">
-                <span
-                  className="block h-full rounded-full bg-coral"
-                  style={{ width: `${completion}%` }}
-                />
-              </div>
-            </div>
-          </div>
+  if (loading) return <LoadingSkeleton />;
+  if (loadError) return <EmptyState title="Profile unavailable" description={loadError} actionTo="/vendor/dashboard" actionLabel="Back to dashboard" />;
+  return <div className="space-y-7">
+    <Toast message={message} onClose={() => setMessage("")} />
+    <header>
+      <p className="text-xs font-bold uppercase tracking-wider text-coral">Your business on Planzo</p>
+      <h1 className="mt-2 text-3xl font-extrabold">
+        {profile ? "Manage business profile" : "Create your business profile"}
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-ink/55">Show customers your services, photos, and starting price.</p>
+    </header>
+    {profile && <div className="rounded-2xl bg-sand p-4 text-sm leading-6">
+      <strong>Approval status: <span className="capitalize">
+          {profile.verificationStatus || "pending"}
+        </span></strong>
+      <p className="mt-1 text-ink/65">
+        {profile.verificationRejectionReason || (profile.verificationStatus === "approved" ? "Your business is visible in the marketplace." : "An admin will review your profile before it appears publicly.")}
+      </p>
+      {profile.verificationStatus === "rejected" && <p className="mt-1 text-ink/65">Save your updated profile to submit it for review again.</p>}
+    </div>}
+    {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+      {error}
+    </p>}
+    <Card className="p-6 sm:p-8">
+      <form onSubmit={save} className="grid gap-5 sm:grid-cols-2">
+        <label>
+          <span className="label">Business name</span>
+          <input required maxLength={120} className="field" {...field("businessName")} />
+        </label>
+        <label>
+          <span className="label">Category</span>
+          <select required className="field" {...field("serviceCategory")}>
+            <option value="">Select a category</option>
+            {services.map(item => <option key={item.slug}>
+              {item.title}
+            </option>)}
+          </select>
+        </label>
+        <label>
+          <span className="label">City / location</span>
+          <input required maxLength={160} className="field" {...field("location")} />
+        </label>
+        <label>
+          <span className="label">Starting price (INR)</span>
+          <input required type="number" min="0" step="1" className="field" {...field("pricing")} />
+        </label>
+        <label className="sm:col-span-2">
+          <span className="label">Business description</span>
+          <textarea required rows={5} minLength={10} maxLength={2000} className="field" {...field("description")} />
+        </label>
+        <label className="sm:col-span-2">
+          <span className="label">Services offered</span>
+          <textarea rows={4} className="field" placeholder="One service per line, up to 20 services" {...field("servicesOffered")} />
+        </label>
+        <div className="sm:col-span-2">
+          <h2 className="text-xl font-extrabold">Shared business contacts</h2>
+          <p className="mt-2 text-sm leading-6 text-ink/55">Only add details you want to share with customers whose bookings you accept. These details are hidden from public profiles. Leave them blank to keep them private.</p>
         </div>
-      </section>
-
-      <form onSubmit={submit} className="grid gap-8 xl:grid-cols-[1fr_320px]">
-        <main className="space-y-6">
-          <Card className="p-6">
-            <div className="mb-6 flex items-start gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-coral">
-                <Building2 className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-xl font-extrabold">Business basics</h2>
-                <p className="mt-1 text-sm text-ink/45">
-                  Name your business and choose the service customers will find.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <label>
-                <span className="label">Business name</span>
-                <input
-                  required
-                  name="businessName"
-                  value={form.businessName}
-                  onChange={change}
-                  className="field"
-                />
-              </label>
-              <label>
-                <span className="label">Service category</span>
-                <select
-                  required
-                  name="serviceCategory"
-                  value={form.serviceCategory}
-                  onChange={change}
-                  className="field"
-                >
-                  <option value="">Select a service</option>
-                  {services.map((item) => (
-                    <option key={item.slug}>{item.title}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="mb-6 flex items-start gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-plum/10 text-plum">
-                <MapPin className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-xl font-extrabold">Location & pricing</h2>
-                <p className="mt-1 text-sm text-ink/45">
-                  Set where you operate and your starting package price.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-3">
-              <label className="sm:col-span-1">
-                <span className="label">Experience years</span>
-                <input
-                  required
-                  min="0"
-                  name="experience"
-                  type="number"
-                  value={form.experience}
-                  onChange={change}
-                  className="field"
-                />
-              </label>
-              <label className="sm:col-span-1">
-                <span className="label">Starting price</span>
-                <input
-                  required
-                  min="0"
-                  name="pricing"
-                  type="number"
-                  value={form.pricing}
-                  onChange={change}
-                  className="field"
-                  placeholder="80000"
-                />
-              </label>
-              <label className="sm:col-span-1">
-                <span className="label">Location</span>
-                <input
-                  required
-                  name="location"
-                  value={form.location}
-                  onChange={change}
-                  className="field"
-                  placeholder="Mumbai, Maharashtra"
-                />
-              </label>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="mb-6 flex items-start gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-sage/10 text-sage">
-                <Sparkles className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-xl font-extrabold">About / bio</h2>
-                <p className="mt-1 text-sm text-ink/45">
-                  Explain your style, process, and what customers can expect.
-                </p>
-              </div>
-            </div>
-            <label>
-              <span className="label">Professional bio</span>
-              <textarea
-                required
-                name="description"
-                value={form.description}
-                onChange={change}
-                className="field min-h-44 resize-none"
-              />
-            </label>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-plum/10 text-plum">
-                  <FileText className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-xl font-extrabold">Verification documents</h2>
-                  <p className="mt-1 text-sm text-ink/45">
-                    Upload ID or business proof so admins can verify your account.
-                  </p>
-                </div>
-              </div>
-              <span
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-extrabold ${
-                  verificationStatus === "approved"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : verificationStatus === "rejected"
-                      ? "bg-red-50 text-red-700"
-                      : "bg-sand text-ink/60"
-                }`}
-              >
-                {verificationStatus === "approved" ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : verificationStatus === "rejected" ? (
-                  <ShieldAlert className="h-4 w-4" />
-                ) : (
-                  <Clock3 className="h-4 w-4" />
-                )}
-                {verificationStatus === "approved"
-                  ? "Approved"
-                  : verificationStatus === "rejected"
-                    ? "Rejected"
-                    : "Pending review"}
-              </span>
-            </div>
-
-            <div className="mt-6 rounded-[1.5rem] border border-ink/8 bg-sand/40 p-4 text-sm text-ink/60">
-              {verificationStatus === "rejected" && verificationReason ? (
-                <p className="font-semibold text-red-600">
-                  Admin feedback: {verificationReason}
-                </p>
-              ) : (
-                <p>
-                  {verificationDocuments.length
-                    ? "Your latest documents are waiting for admin review."
-                    : "Upload a government ID, business registration document, or any proof of your business."}
-                </p>
-              )}
-            </div>
-
-            {verificationDocuments.length > 0 && (
-              <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
-                  Uploaded documents
-                </p>
-                <div className="mt-3 space-y-2">
-                  {verificationDocuments.map((document, index) => (
-                    <a
-                      key={`${document.url}-${index}`}
-                      href={document.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 rounded-2xl border border-ink/8 bg-white p-3 text-sm font-semibold text-coral"
-                    >
-                      <FileText className="h-4 w-4" />
-                      {document.originalName}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <label className="mt-6 flex cursor-pointer flex-col items-center justify-center rounded-[2rem] border border-dashed border-plum/40 bg-plum/5 p-6 text-center transition hover:bg-plum/10">
-              <Upload className="h-7 w-7 text-plum" />
-              <p className="mt-3 font-extrabold">Upload verification documents</p>
-              <p className="mt-1 text-sm text-ink/45">
-                PDF, JPG, PNG, or WEBP. Each file can be up to 5MB.
-              </p>
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                multiple
-                onChange={selectVerificationDocuments}
-                disabled={uploadingVerification}
-                className="sr-only"
-              />
-            </label>
-
-            {selectedVerificationFiles.length > 0 && (
-              <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
-                  Ready to upload
-                </p>
-                <div className="mt-3 space-y-2">
-                  {selectedVerificationFiles.map((file) => (
-                    <div
-                      key={file.name}
-                      className="flex items-center justify-between rounded-2xl border border-ink/8 bg-white px-4 py-3 text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-plum" />
-                        {file.name}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeSelectedVerificationFile(file.name)}
-                        className="text-ink/45 hover:text-red-500"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  onClick={uploadVerificationDocs}
-                  loading={uploadingVerification}
-                  disabled={uploadingVerification || !selectedVerificationFiles.length}
-                  className="mt-5"
-                >
-                  <Upload className="h-4 w-4" /> Upload documents
-                </Button>
-              </div>
-            )}
-          </Card>
-
-          <Card id="portfolio" className="p-6">
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-coral">
-                  <ImagePlus className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-xl font-extrabold">Portfolio upload</h2>
-                  <p className="mt-1 text-sm text-ink/45">
-                    Upload up to 8 JPG, PNG, or WEBP images. Each image can be
-                    up to 5MB.
-                  </p>
-                </div>
-              </div>
-              <span className="rounded-full bg-sand px-3 py-1 text-xs font-extrabold text-ink/50">
-                {portfolioImages.length + selectedFiles.length}/8 images
-              </span>
-            </div>
-
-            <label className="mt-6 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-[2rem] border border-dashed border-coral/40 bg-coral/5 p-8 text-center transition hover:bg-coral/10">
-              <Upload className="h-8 w-8 text-coral" />
-              <p className="mt-3 font-extrabold">Select portfolio images</p>
-              <p className="mt-1 text-sm text-ink/45">
-                Drag-and-drop style area — click to choose files.
-              </p>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                multiple
-                onChange={selectImages}
-                disabled={
-                  uploading ||
-                  portfolioImages.length + selectedFiles.length >=
-                    MAX_PORTFOLIO_IMAGES
-                }
-                className="sr-only"
-              />
-            </label>
-
-            {portfolioImages.length > 0 ? (
-              <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                {portfolioImages.map((image) => (
-                  <div
-                    key={image.url}
-                    className="group relative overflow-hidden rounded-2xl border bg-sand"
-                  >
-                    <img
-                      src={image.url}
-                      alt="Vendor portfolio"
-                      className="h-40 w-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => deleteImage(image.url)}
-                      disabled={Boolean(deletingUrl)}
-                      className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-red-500 shadow-md transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      aria-label="Delete portfolio image"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-6">
-                <EmptyState
-                  title="No portfolio images yet"
-                  description="Upload your best event photos to build trust."
-                />
-              </div>
-            )}
-
-            {selectedFiles.length > 0 && (
-              <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-wider text-ink/45">
-                  Ready to upload
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  {selectedFiles.map((item) => (
-                    <div
-                      key={item.previewUrl}
-                      className="relative overflow-hidden rounded-2xl border border-coral/20 bg-sand"
-                    >
-                      <img
-                        src={item.previewUrl}
-                        alt={item.file.name}
-                        className="h-40 w-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeSelectedImage(item.previewUrl)}
-                        disabled={uploading}
-                        className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 shadow-md disabled:opacity-60"
-                        aria-label={`Remove ${item.file.name}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  onClick={uploadImages}
-                  loading={uploading}
-                  disabled={uploading || !selectedFiles.length}
-                  className="mt-5"
-                >
-                  <Upload className="h-4 w-4" /> Upload selected images
-                </Button>
-              </div>
-            )}
-          </Card>
-        </main>
-
-        <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-          <Card className="p-6">
-            <h2 className="text-xl font-extrabold">Profile preview</h2>
-            <div className="mt-5 space-y-4">
-              <div className="rounded-3xl bg-sand/60 p-4">
-                <p className="text-xs font-bold text-ink/40">Business</p>
-                <p className="mt-1 font-extrabold">
-                  {form.businessName || "Your business name"}
-                </p>
-              </div>
-              <div className="grid gap-3 text-sm">
-                <p className="flex items-center gap-2 text-ink/55">
-                  <BriefcaseBusiness className="h-4 w-4 text-coral" />
-                  {form.serviceCategory || "Service category"}
-                </p>
-                <p className="flex items-center gap-2 text-ink/55">
-                  <MapPin className="h-4 w-4 text-coral" />
-                  {form.location || "Location"}
-                </p>
-                <p className="flex items-center gap-2 text-ink/55">
-                  <IndianRupee className="h-4 w-4 text-coral" />
-                  {form.pricing ? formatCurrency(form.pricing) : "Starting price"}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-xl font-extrabold">Profile checklist</h2>
-            <div className="mt-5 space-y-3 text-sm text-ink/60">
-              {[
-                ["Business name", form.businessName],
-                ["Category", form.serviceCategory],
-                ["Location", form.location],
-                ["Bio", form.description],
-                ["Experience", form.experience !== ""],
-                ["Pricing", form.pricing !== ""],
-                ["Portfolio images", portfolioImages.length],
-              ].map(([label, done]) => (
-                <p key={label} className="flex items-center justify-between">
-                  <span>{label}</span>
-                  <BadgeCheck
-                    className={`h-4 w-4 ${
-                      done ? "fill-sage text-white" : "text-ink/20"
-                    }`}
-                  />
-                </p>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-xl font-extrabold">Pricing packages</h2>
-            <p className="mt-2 text-sm text-ink/45">
-              Planzo currently stores your starting price. Package-specific
-              fields can be added later without changing this setup flow.
-            </p>
-            <div className="mt-5 grid gap-3">
-              {["Basic", "Standard", "Premium"].map((name, index) => (
-                <div key={name} className="rounded-2xl border border-ink/8 p-4">
-                  <div className="flex items-center gap-2">
-                    <Layers3 className="h-4 w-4 text-coral" />
-                    <p className="font-extrabold">{name}</p>
-                  </div>
-                  <p className="mt-2 text-sm text-ink/45">
-                    {form.pricing
-                      ? formatCurrency(Number(form.pricing) * (index + 1))
-                      : "Set starting price first"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Button
-            type="submit"
-            loading={saving}
-            disabled={saving}
-            className="w-full"
-          >
-            <Save className="h-4 w-4" /> Save profile
-          </Button>
-        </aside>
+        <label>
+          <span className="label">Shared phone (optional)</span>
+          <input type="tel" maxLength={30} className="field" {...field("contactPhone")} />
+        </label>
+        <label>
+          <span className="label">Shared email (optional)</span>
+          <input type="email" maxLength={254} className="field" {...field("contactEmail")} />
+        </label>
+        <div className="sm:col-span-2">
+          <Button type="submit" loading={busy} disabled={busy}>Save business profile</Button>
+        </div>
       </form>
-    </div>
-  );
+    </Card>
+    {profile && <Card className="p-6 sm:p-8">
+      <h2 className="text-xl font-extrabold">Business photos</h2>
+      <p className="mt-2 text-sm text-ink/55">Upload up to 8 JPEG, PNG, or WebP photos, up to 5 MB each.</p>
+      {profile.portfolioImages?.length ? <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+        {profile.portfolioImages.map(image => <div key={imageUrl(image)}>
+          <img src={imageUrl(image)} alt="Your business" className="h-36 w-full rounded-2xl object-cover" />
+          <Button variant="ghost" disabled={busy} onClick={() => remove(imageUrl(image))} className="mt-1 !px-2">Remove photo</Button>
+        </div>)}
+      </div> : <p className="mt-5 text-sm text-ink/50">No business photos uploaded yet.</p>}
+      <label className="mt-6 block">
+        <span className="label">Choose photos</span>
+        <input key={fileKey} type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={chooseFiles} disabled={busy || (profile.portfolioImages?.length || 0) >= 8} className="field" />
+      </label>
+      <Button className="mt-4" disabled={busy || !files.length} loading={busy} onClick={upload}>Upload {files.length || ""} photos</Button>
+    </Card>}
+  </div>;
 }

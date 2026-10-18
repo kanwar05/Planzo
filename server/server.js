@@ -1,45 +1,42 @@
 import "dotenv/config";
 import mongoose from "mongoose";
-import { createServer } from "node:http";
-import app from "./src/app.js";
-import connectDatabase from "./src/config/database.js";
-import { startNotificationSchedulers } from "./src/jobs/notificationJobs.js";
-import { validatePaymentEnvironment } from "./src/config/payment.js";
-import { initializeChatSocket } from "./src/realtime/chatSocket.js";
-import { startCalendarSyncScheduler } from "./src/jobs/calendarSyncJobs.js";
-
-const port = Number(process.env.PORT) || 5001;
+import { validateEnvironment } from "./src/config/environment.js";
 
 async function startServer() {
   try {
-    validatePaymentEnvironment();
+    validateEnvironment();
+    const [{ default: app }, { default: connectDatabase }, ...models] = await Promise.all([
+      import("./src/app.js"), import("./src/config/database.js"),
+      ...["Booking", "User", "Vendor", "Availability", "RefreshToken"].map((model) => import(`./src/models/${model}.js`)),
+    ]);
     await connectDatabase();
-    const notificationScheduler = startNotificationSchedulers();
-    const calendarSyncScheduler = startCalendarSyncScheduler();
-
-    const server = createServer(app);
-    initializeChatSocket(server, app);
-    server.listen(port, () => {
-      console.log(`eventifyy API listening on http://localhost:${port}`);
+    // Add required indexes without dropping legacy indexes or data.
+    // Conflicting legacy reservations must be resolved before deployment.
+    await Promise.all(models.map(({ default: model }) => model.createIndexes()));
+    const port = Number(process.env.PORT) || 5001;
+    const server = app.listen(port, () => console.log(`Planzo API listening on http://localhost:${port}`));
+    server.on("error", async (error) => {
+      console.error(`Server failed: ${error.message}`);
+      await mongoose.disconnect();
+      process.exitCode = 1;
     });
-
-    const shutdown = (signal) => {
-      console.log(`${signal} received. Closing eventifyy API...`);
-      if (notificationScheduler) {
-        clearInterval(notificationScheduler);
-      }
-      if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
+    let closing = false;
+    const shutdown = () => {
+      if (closing) return;
+      closing = true;
+      const deadline = setTimeout(() => process.exit(1), 10000);
+      deadline.unref();
       server.close(async () => {
-        await mongoose.connection.close();
-        process.exit(0);
+        await mongoose.disconnect();
+        clearTimeout(deadline);
       });
     };
-
-    process.on("SIGINT", () => shutdown("SIGINT"));
-    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
   } catch (error) {
     console.error(`Server startup failed: ${error.message}`);
-    process.exit(1);
+    await mongoose.disconnect();
+    process.exitCode = 1;
   }
 }
 

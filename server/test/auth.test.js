@@ -6,10 +6,13 @@ import request from "supertest";
 import app from "../src/app.js";
 import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
+import { setAccountEmailSenderForTests } from "../src/services/accountEmailService.js";
 
 let mongo;
 
-const strongPassword = "eventifyy@123";
+const strongPassword = "Planzo@123";
+let sentEmails = [];
+const latestToken = () => new URL(sentEmails.at(-1).text.match(/https?:\/\/\S+/)[0]).searchParams.get("token");
 
 before(async () => {
   process.env.JWT_SECRET = "auth-test-secret";
@@ -19,6 +22,8 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  sentEmails = [];
+  setAccountEmailSenderForTests((email) => sentEmails.push(email));
   await Promise.all(
     Object.values(mongoose.connection.collections).map((collection) =>
       collection.deleteMany({}),
@@ -125,19 +130,20 @@ test("profile update validates and returns the updated user", async () => {
 
   const updateResponse = await agent.patch("/api/auth/profile").send({
     name: "Updated Customer",
-    email: "updated@example.com",
+    email: "customer@example.com",
     phone: "9999999999",
   });
   assert.equal(updateResponse.status, 200);
   assert.equal(updateResponse.body.user.name, "Updated Customer");
-  assert.equal(updateResponse.body.user.email, "updated@example.com");
+  assert.equal(updateResponse.body.user.email, "customer@example.com");
 
   const duplicateResponse = await agent.patch("/api/auth/profile").send({
     name: "Updated Customer",
     email: "taken@example.com",
     phone: "9999999999",
   });
-  assert.equal(duplicateResponse.status, 409);
+  assert.equal(duplicateResponse.status, 400);
+  assert.match(duplicateResponse.body.message, /verification/i);
 });
 
 test("password change requires current password and invalidates session", async () => {
@@ -197,21 +203,23 @@ test("forgot and reset password invalidate existing refresh tokens", async () =>
     .post("/api/auth/forgot-password")
     .send({ email: "customer@example.com" });
   assert.equal(forgotResponse.status, 200);
-  assert.ok(forgotResponse.body.resetToken);
+  assert.equal(forgotResponse.body.resetToken, undefined);
+  const resetToken = latestToken();
+  assert.ok(resetToken);
   const storedReset = await User.findOne({ email: "customer@example.com" })
     .select("+passwordResetTokenHash +passwordResetExpiresAt");
-  assert.notEqual(storedReset.passwordResetTokenHash, forgotResponse.body.resetToken);
+  assert.notEqual(storedReset.passwordResetTokenHash, resetToken);
   assert.equal(storedReset.passwordResetTokenHash.length, 64);
   assert.ok(storedReset.passwordResetExpiresAt > new Date());
 
   const resetResponse = await request(app).post("/api/auth/reset-password").send({
-    token: forgotResponse.body.resetToken,
+    token: resetToken,
     password: "Better@12345",
   });
   assert.equal(resetResponse.status, 200);
 
   const replayResponse = await request(app).post("/api/auth/reset-password").send({
-    token: forgotResponse.body.resetToken,
+    token: resetToken,
     password: "Another@12345",
   });
   assert.equal(replayResponse.status, 400);
@@ -246,12 +254,14 @@ test("expired reset tokens fail and unknown emails receive the same response", a
   const requested = await request(app)
     .post("/api/auth/forgot-password")
     .send({ email: user.email });
+  assert.equal(requested.status, 200);
+  const resetToken = latestToken();
   await User.updateOne(
     { _id: user._id },
     { passwordResetExpiresAt: new Date(Date.now() - 1000) },
   );
   const expired = await request(app).post("/api/auth/reset-password").send({
-    token: requested.body.resetToken,
+    token: resetToken,
     password: "Changed@12345",
   });
   assert.equal(expired.status, 400);

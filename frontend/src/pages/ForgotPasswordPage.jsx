@@ -10,7 +10,6 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [devToken, setDevToken] = useState("");
   const [sentTo, setSentTo] = useState("");
 
   const submit = async (event) => {
@@ -18,7 +17,6 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError("");
     setMessage("");
-    setDevToken("");
 
     try {
       const form = new FormData(event.currentTarget);
@@ -26,7 +24,6 @@ export default function ForgotPasswordPage() {
       const response = await forgotPassword(email);
       setMessage(response.message);
       setSentTo(email);
-      if (response.resetToken) setDevToken(response.resetToken);
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to start password reset."));
     } finally {
@@ -53,7 +50,7 @@ export default function ForgotPasswordPage() {
           <CheckCircle2 className="h-10 w-10 text-emerald-600" />
           <p className="mt-4 font-bold">If an account exists for {sentTo}, a secure link is on its way.</p>
           <p className="mt-2 text-sm leading-6 text-ink/55">It expires in 15 minutes and can only be used once. Check your spam folder if it does not arrive.</p>
-          <Button type="button" variant="outline" className="mt-5" onClick={() => { setSentTo(""); setMessage(""); setDevToken(""); }}>
+          <Button type="button" variant="outline" className="mt-5" onClick={() => { setSentTo(""); setMessage(""); }}>
             Try another email
           </Button>
         </div>
@@ -64,12 +61,12 @@ export default function ForgotPasswordPage() {
         </p>
         <form onSubmit={submit} className="mt-9 space-y-5">
         <div>
-          <label className="label">Email address</label>
+          <label className="label" htmlFor="recovery-email">Email address</label>
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
             <input
               required
-              name="email"
+              name="email" id="recovery-email"
               type="email"
               className="field !pl-11"
               placeholder="you@example.com"
@@ -81,11 +78,6 @@ export default function ForgotPasswordPage() {
         </Button>
         </form>
       </>
-      )}
-      {devToken && (
-        <div className="mt-5 rounded-2xl bg-sand p-4 text-xs font-semibold text-ink/60">
-          Development only: <Link className="font-bold text-coral" to={`/reset-password?token=${encodeURIComponent(devToken)}`}>open reset page</Link>
-        </div>
       )}
       <p className="mt-7 text-center text-sm text-ink/50">
         Remembered it?{" "}

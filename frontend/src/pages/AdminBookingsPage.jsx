@@ -1,231 +1,100 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Calendar, MapPin, DollarSign } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import { useDocumentTitle } from "../hooks/useDocumentTitle";
-import EmptyState from "../components/EmptyState";
+import { useCallback, useEffect, useState } from "react";
 import Button from "../components/Button";
+import BookingStatus, { bookingStatuses } from "../components/BookingStatus";
+import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
-import {api} from "../services/api";
+import Pagination from "../components/Pagination";
+import Toast from "../components/Toast";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { getAdminBookings } from "../services/adminService";
+import { updateBookingStatus } from "../services/bookingService";
 import { getApiError } from "../utils/apiError";
-import { cancelBookingRequest } from "../services/bookingService";
-
-const STATUS_COLORS = {
-  pending: "bg-yellow-50 border-yellow-200 text-yellow-700",
-  accepted: "bg-green-50 border-green-200 text-green-700",
-  rejected: "bg-red-50 border-red-200 text-red-700",
-  completed: "bg-blue-50 border-blue-200 text-blue-700",
-  cancelled: "bg-gray-50 border-gray-200 text-gray-700",
-};
-
+import { formatDate } from "../utils/format";
 export default function AdminBookingsPage() {
-  useDocumentTitle("View Bookings - Admin");
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  useDocumentTitle("Manage bookings");
   const [bookings, setBookings] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, pages: 1 });
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [updatingId, setUpdatingId] = useState("");
-
-  const cancelBooking = async (id) => {
-    const reason = window.prompt("Administrative cancellation reason");
-    if (!reason?.trim()) return;
-    setUpdatingId(id); setError("");
-    try { await cancelBookingRequest(id, reason.trim()); await loadBookings(pagination.page); }
-    catch (err) { setError(getApiError(err, "Unable to cancel booking.")); }
-    finally { setUpdatingId(""); }
-  };
-
-  useEffect(() => {
-    if (user?.role !== "admin") {
-      navigate("/");
-      return;
-    }
-
-    loadBookings();
-  }, [user, navigate, statusFilter]);
-
-  const loadBookings = async (page = 1) => {
+  const [message, setMessage] = useState("");
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await api.get("/admin/bookings", {
-        params: {
-          page,
-          limit: 15,
-          status: statusFilter || undefined,
-        },
+      const data = await getAdminBookings({
+        status: status || undefined,
+        page,
+        limit: 12
       });
-      setBookings(response.data.data?.bookings || response.data.bookings || []);
-      setPagination(response.data.data?.pagination || response.data.pagination);
+      setBookings(data.bookings || []);
+      setPagination(data.pagination || {});
     } catch (err) {
-      setError(getApiError(err, "Failed to load bookings"));
+      setError(getApiError(err, "Unable to load bookings."));
     } finally {
       setLoading(false);
     }
+  }, [status, page]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const cancel = async id => {
+    setBusy(id);
+    setError("");
+    try {
+      await updateBookingStatus(id, "cancelled");
+      await load();
+      setMessage("Booking cancelled.");
+    } catch (err) {
+      setError(getApiError(err, "Unable to cancel booking."));
+    } finally {
+      setBusy("");
+    }
   };
-
-  if (user?.role !== "admin") {
-    return (
-      <section className="section-pad container-shell min-h-screen">
-        <EmptyState
-          title="Access Denied"
-          description="You do not have permission to access this page."
-        />
-      </section>
-    );
-  }
-
-  return (
-    <section className="section-pad container-shell">
-      <div className="max-w-6xl">
-        <div className="mb-8">
-          <Button to="/admin" variant="outline" size="sm" className="mb-4">
-            ← Back to Dashboard
-          </Button>
-          <h1 className="text-4xl font-extrabold">View Bookings</h1>
-          <p className="mt-2 text-ink/50">
-            View all bookings and their status
-          </p>
-        </div>
-
-        {/* Status Filter */}
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
-          <button
-            onClick={() => setStatusFilter("")}
-            className={`whitespace-nowrap rounded-full px-4 py-2 font-semibold ${
-              statusFilter === ""
-                ? "bg-coral text-white"
-                : "border bg-white hover:bg-gray-50"
-            }`}
-          >
-            All
-          </button>
-          {["pending", "accepted", "rejected", "completed", "cancelled"].map(
-            (status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 font-semibold capitalize ${
-                  statusFilter === status
-                    ? "bg-coral text-white"
-                    : "border bg-white hover:bg-gray-50"
-                }`}
-              >
-                {status}
-              </button>
-            ),
-          )}
-        </div>
-
-        {loading ? (
-          <LoadingSkeleton />
-        ) : error ? (
-          <EmptyState title="Failed to load bookings" description={error} />
-        ) : bookings.length === 0 ? (
-          <EmptyState
-            title="No bookings found"
-            description="There are no bookings to display."
-          />
-        ) : (
-          <>
-            <div className="grid gap-4">
-              {bookings.map((booking) => (
-                <div
-                  key={booking._id}
-                  className="rounded-[1.75rem] border bg-white p-6 shadow-soft"
-                >
-                  <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg font-bold">
-                            {booking.eventType}
-                          </h3>
-                          <p className="text-sm text-ink/60">
-                            {booking.vendorId?.businessName || "Unknown Vendor"}{" "}
-                            • Customer:{" "}
-                            {booking.customerId?.name || "Unknown"}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold border ${
-                            STATUS_COLORS[booking.status]
-                          }`}
-                        >
-                          {booking.status.charAt(0).toUpperCase() +
-                            booking.status.slice(1)}
-                        </span>
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <div className="flex items-start gap-2">
-                          <Calendar className="mt-0.5 h-4 w-4 text-ink/50 flex-shrink-0" />
-                          <div className="text-sm">
-                            <p className="font-semibold text-ink/60">Date</p>
-                            <p>
-                              {new Date(booking.eventDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <MapPin className="mt-0.5 h-4 w-4 text-ink/50 flex-shrink-0" />
-                          <div className="text-sm">
-                            <p className="font-semibold text-ink/60">Location</p>
-                            <p>{booking.eventLocation}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <DollarSign className="mt-0.5 h-4 w-4 text-ink/50 flex-shrink-0" />
-                          <div className="text-sm">
-                            <p className="font-semibold text-ink/60">Budget</p>
-                            <p>₹{booking.budget.toLocaleString()}</p>
-                          </div>
-                        </div>
-                      </div>
-                      {booking.specialRequirements && (
-                        <div className="mt-3 text-sm">
-                          <p className="font-semibold text-ink/60">
-                            Special Requirements
-                          </p>
-                          <p className="text-ink/70">
-                            {booking.specialRequirements}
-                          </p>
-                        </div>
-                      )}
-                      <p className="mt-4 text-xs text-ink/50">
-                        Booking ID: {booking._id}
-                      </p>
-                      {booking.status === "cancelled" && <p className="mt-2 text-sm text-ink/60">Refund: {(booking.refundStatus || "not applicable").replaceAll("_", " ")}</p>}
-                    </div>
-                    {["pending", "accepted"].includes(booking.status) && <Button variant="outline" disabled={updatingId === booking._id} onClick={() => cancelBooking(booking._id)}>Cancel booking</Button>}
-                  </div>
-                </div>
-              ))}
+  return <div className="space-y-7">
+    <Toast message={message} onClose={() => setMessage("")} />
+    <header>
+      <p className="text-xs font-bold uppercase tracking-wider text-coral">Booking administration</p>
+      <h1 className="mt-2 text-3xl font-extrabold">All bookings</h1>
+    </header>
+    <label className="block max-w-xs">
+      <span className="label">Booking status</span>
+      <select className="field" value={status} onChange={event => {
+        setStatus(event.target.value);
+        setPage(1);
+      }}>
+        <option value="">All statuses</option>
+        {bookingStatuses.map(item => <option key={item} value={item}>
+          {item[0].toUpperCase() + item.slice(1)}
+        </option>)}
+      </select>
+    </label>
+    {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+      {error}
+    </p>}
+    {loading ? <LoadingSkeleton /> : <>
+      <div className="space-y-4">
+        {bookings.length ? bookings.map(booking => <article key={booking._id} className="rounded-3xl border bg-white p-6 shadow-soft">
+          <div className="flex flex-wrap justify-between gap-3">
+            <div>
+              <h2 className="font-extrabold">
+                {booking.vendorId?.businessName || "Vendor unavailable"}
+              </h2>
+              <p className="mt-2 text-sm text-ink/55">Customer: {booking.customerId?.name || "Unavailable"}</p>
             </div>
-
-            {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className="mt-8 flex justify-center gap-2">
-                {Array.from({ length: pagination.pages }).map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => loadBookings(i + 1)}
-                    className={`px-4 py-2 rounded-lg border font-semibold ${
-                      pagination.page === i + 1
-                        ? "bg-coral text-white border-coral"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+            <BookingStatus status={booking.status} />
+          </div>
+          <p className="mt-4 text-sm text-ink/65">{booking.eventType} · {formatDate(booking.eventDate)} · {booking.eventLocation}</p>
+          <p className="mt-3 whitespace-pre-line text-sm leading-6 text-ink/55">
+            {booking.description}
+          </p>
+          {booking.notes && <p className="mt-2 text-sm text-ink/55">Notes: {booking.notes}</p>}
+          {["pending", "accepted"].includes(booking.status) && <Button className="mt-5" variant="outline" disabled={Boolean(busy)} loading={busy === booking._id} onClick={() => cancel(booking._id)}>Cancel booking</Button>}
+        </article>) : <EmptyState title="No bookings found" description="Booking requests with this status will appear here." />}
       </div>
-    </section>
-  );
+      <Pagination pagination={pagination} page={page} onPage={setPage} />
+    </>}
+  </div>;
 }

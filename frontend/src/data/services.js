@@ -6,6 +6,7 @@ import {
   HandHeart,
   PartyPopper,
   Armchair,
+  Camera,
 } from "lucide-react";
 import venueImage from "../assets/services/punjab_heritage_venue.jpg";
 import cateringImage from "../assets/services/tablescape_details_macro_1788675492844.jpg";
@@ -23,4 +24,5 @@ export const services = [
   { title: "Mehndi Artist", slug: "mehndi", description: "Intricate bridal mehndi and contemporary henna artistry.", icon: HandHeart, image: mehndiImage },
   { title: "Event Planner", slug: "planner", description: "Calm, capable experts handling every moving detail.", icon: PartyPopper, image: plannerImage },
   { title: "Rental Services", slug: "rental", description: "Furniture, lighting and essentials, delivered on time.", icon: Armchair, image: rentalImage },
+  { title: "Photographer", slug: "photographer", description: "Thoughtful photographs that preserve the moments that matter.", icon: Camera, image: venueImage },
 ];
