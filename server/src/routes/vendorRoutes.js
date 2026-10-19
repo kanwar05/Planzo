@@ -23,10 +23,7 @@ import {
   updateVendorProfile,
   updateVendorImages,
 } from "../controllers/vendorController.js";
-import {
-  authorizeRoles,
-  protect,
-} from "../middleware/authMiddleware.js";
+import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 import {
   uploadCoverImage,
   uploadPortfolioImages,
@@ -39,7 +36,12 @@ const router = Router();
 router.get("/", getVendors);
 router.get("/search/meta", getVendorSearchMetadata);
 router.get("/categories", getVendorSearchMetadata);
-router.get("/availability", protect, authorizeRoles("vendor"), getMyAvailability);
+router.get(
+  "/availability",
+  protect,
+  authorizeRoles("vendor"),
+  getMyAvailability,
+);
 router.get("/:id/availability", getAvailability);
 router.post(
   "/availability",
@@ -59,18 +61,8 @@ router.delete(
   authorizeRoles("vendor"),
   deleteAvailability,
 );
-router.get(
-  "/me",
-  protect,
-  authorizeRoles("vendor"),
-  getMyVendorProfile,
-);
-router.post(
-  "/profile",
-  protect,
-  authorizeRoles("vendor"),
-  createVendorProfile,
-);
+router.get("/me", protect, authorizeRoles("vendor"), getMyVendorProfile);
+router.post("/profile", protect, authorizeRoles("vendor"), createVendorProfile);
 router.patch(
   "/profile",
   protect,

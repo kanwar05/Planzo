@@ -3,10 +3,12 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import Toast from "../components/Toast";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { resetPassword } from "../services/authService";
 import { getApiError } from "../utils/apiError";
 
 export default function ResetPasswordPage() {
+  useDocumentTitle("Set a new password");
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -42,9 +44,9 @@ export default function ResetPasswordPage() {
       <Toast message={error} type="error" onClose={() => setError("")} />
       {success ? (
         <div className="text-center">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-8 w-8" /></span>
-          <h1 className="mt-5 text-4xl font-extrabold">Password changed.</h1>
-          <p className="mt-3 text-sm leading-6 text-ink/50">Your password was updated and existing sessions were signed out.</p>
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-sage text-[#356347]"><CheckCircle2 className="h-8 w-8" /></span>
+          <h1 className="mt-5 font-editorial text-4xl sm:text-5xl">Password changed.</h1>
+          <p className="mt-3 text-sm leading-6 text-ink/65">Your password was updated and existing sessions were signed out.</p>
           <Button className="mt-7 w-full" onClick={() => navigate("/login", { replace: true })}>Continue to login</Button>
         </div>
       ) : (
@@ -52,7 +54,7 @@ export default function ResetPasswordPage() {
       <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-coral">
         Choose a new password
       </p>
-      <h1 className="mt-3 text-4xl font-extrabold">Secure your account.</h1>
+      <h1 className="mt-3 font-editorial text-4xl sm:text-5xl">Secure your account.</h1>
       {!token ? (
         <div className="mt-7 rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">
           This reset link is incomplete. Request a new password reset email.
@@ -62,7 +64,7 @@ export default function ResetPasswordPage() {
         <div>
           <label className="label" htmlFor="reset-password">New password</label>
           <div className="relative">
-            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/65" />
             <input
               required
               name="password" id="reset-password" autoComplete="new-password"
@@ -76,7 +78,7 @@ export default function ResetPasswordPage() {
         <div>
           <label className="label" htmlFor="reset-confirmation">Confirm new password</label>
           <div className="relative">
-            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/65" />
             <input required name="confirmPassword" id="reset-confirmation" autoComplete="new-password" type="password" minLength="8" className="field !pl-11" placeholder="Enter it again" />
           </div>
         </div>
@@ -85,7 +87,7 @@ export default function ResetPasswordPage() {
         </Button>
       </form>
       )}
-      <p className="mt-7 text-center text-sm text-ink/50">
+      <p className="mt-7 border-t border-ink/10 pt-6 text-center text-sm text-ink/65">
         Back to{" "}
         <Link to="/login" className="font-bold text-coral">
           login

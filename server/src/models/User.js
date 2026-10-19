@@ -67,7 +67,18 @@ const userSchema = new mongoose.Schema(
     versionKey: false,
     toJSON: {
       transform(doc, value) {
-        for (const field of ["password", "authVersion", "passwordResetTokenHash", "passwordResetExpiresAt", "passwordResetConsumedAt", "pendingEmail", "emailChangeTokenHash", "emailChangeExpiresAt", "notificationPreferences", "lastSeenAt"]) {
+        for (const field of [
+          "password",
+          "authVersion",
+          "passwordResetTokenHash",
+          "passwordResetExpiresAt",
+          "passwordResetConsumedAt",
+          "pendingEmail",
+          "emailChangeTokenHash",
+          "emailChangeExpiresAt",
+          "notificationPreferences",
+          "lastSeenAt",
+        ]) {
           delete value[field];
         }
         return value;
@@ -83,7 +94,9 @@ userSchema.pre("save", async function hashPassword(next) {
   return next();
 });
 
-userSchema.methods.comparePassword = function comparePassword(candidatePassword) {
+userSchema.methods.comparePassword = function comparePassword(
+  candidatePassword,
+) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

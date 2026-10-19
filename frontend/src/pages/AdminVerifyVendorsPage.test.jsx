@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminVerifyVendorsPage from "./AdminVerifyVendorsPage";
 import { getAdminVendors, reviewVendor } from "../services/adminService";
@@ -54,5 +54,23 @@ describe("admin vendor approval", () => {
       name: "Reject vendor"
     }));
     await waitFor(() => expect(reviewVendor).toHaveBeenCalledWith("vendor-1", false, "Please complete the business description."));
+  });
+
+  it("does not replace the current approval filter with an older response", async () => {
+    let finishFirst;
+    const firstRequest = new Promise(resolve => { finishFirst = resolve; });
+    getAdminVendors.mockResolvedValueOnce(firstRequest).mockResolvedValueOnce({
+      vendors: [{ ...vendor, _id: "approved-1", businessName: "Approved Studio", verificationStatus: "approved" }], pagination: { page: 1, pages: 1 }
+    });
+    render(<AdminVerifyVendorsPage />);
+    fireEvent.change(screen.getByLabelText("Approval status"), { target: { value: "approved" } });
+    expect(await screen.findByText("Approved Studio")).toBeInTheDocument();
+    await act(async () => {
+      finishFirst({ vendors: [vendor], pagination: { page: 1, pages: 1 } });
+      await firstRequest;
+    });
+    expect(screen.getByLabelText("Approval status")).toHaveValue("approved");
+    expect(screen.getByText("Approved Studio")).toBeInTheDocument();
+    expect(screen.queryByText("Event Studio")).not.toBeInTheDocument();
   });
 });

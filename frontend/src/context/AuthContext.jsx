@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import * as authService from "../services/authService";
+const loadAuthService = () => import("../services/authService");
 const AuthContext = createContext(null);
 export function AuthProvider({
   children
@@ -14,7 +14,7 @@ export function AuthProvider({
     } catch {/* Storage may be disabled. */}
     const expired = () => setUser(null);
     window.addEventListener("planzo:session-expired", expired);
-    authService.getMe().then(data => {
+    loadAuthService().then(service => active ? service.getMe() : null).then(data => {
       if (active) setUser(data);
     }).catch(() => {
       if (active) setUser(null);
@@ -27,16 +27,19 @@ export function AuthProvider({
     };
   }, []);
   const login = useCallback(async credentials => {
+    const authService = await loadAuthService();
     const next = await authService.login(credentials);
     setUser(next);
     return next;
   }, []);
   const register = useCallback(async data => {
+    const authService = await loadAuthService();
     const next = await authService.register(data);
     setUser(next);
     return next;
   }, []);
   const logout = useCallback(async () => {
+    const authService = await loadAuthService();
     await authService.logout();
     setUser(null);
   }, []);

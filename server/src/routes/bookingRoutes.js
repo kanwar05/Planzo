@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { createBooking, getMyBookings, getVendorRequests, updateBookingStatus } from "../controllers/bookingController.js";
+import {
+  createBooking,
+  getMyBookings,
+  getVendorRequests,
+  updateBookingStatus,
+} from "../controllers/bookingController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 
 const router = Router();

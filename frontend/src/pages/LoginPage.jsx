@@ -1,5 +1,5 @@
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Toast from "../components/Toast";
@@ -12,12 +12,15 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const inFlight = useRef(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const submit = async (event) => {
     event.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError("");
 
@@ -35,6 +38,7 @@ export default function LoginPage() {
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to log in."));
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -42,19 +46,19 @@ export default function LoginPage() {
   return (
     <div className="w-full">
       <Toast message={error} type="error" onClose={() => setError("")} />
-      {location.state?.message && <p role="status" className="mb-5 rounded-2xl bg-sage/10 p-4 text-sm text-ink/70">{location.state.message}</p>}
+      {location.state?.message && <p role="status" className="mb-5 rounded-2xl bg-sage/70 p-4 text-sm leading-6 text-ink/75">{location.state.message}</p>}
       <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-coral">
         Good to see you
       </p>
-      <h1 className="mt-3 text-4xl font-extrabold">Welcome back.</h1>
-      <p className="mt-3 text-sm text-ink/50">
+      <h1 className="mt-3 font-editorial text-5xl">Welcome back.</h1>
+      <p className="mt-3 text-sm leading-6 text-ink/65">
         Sign in to continue planning your next beautiful event.
       </p>
       <form onSubmit={submit} className="mt-9 space-y-5">
         <div>
           <label htmlFor="login-email" className="label">Email address</label>
           <div className="relative">
-            <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+            <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/65" />
             <input
               required
               name="email"
@@ -69,7 +73,7 @@ export default function LoginPage() {
         <div>
           <label htmlFor="login-password" className="label">Password</label>
           <div className="relative">
-            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+            <LockKeyhole className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/65" />
             <input
               required
               name="password"
@@ -83,7 +87,8 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShow(!show)}
               aria-label={show ? "Hide password" : "Show password"}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-ink/40"
+              aria-pressed={show}
+              className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full text-ink/65"
             >
               {show ? (
                 <EyeOff className="h-4 w-4" />
@@ -94,7 +99,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <Link to="/forgot-password" className="font-bold text-coral">
+          <Link to="/forgot-password" className="inline-flex min-h-11 items-center font-bold text-coral">
             Forgot password?
           </Link>
         </div>
@@ -102,7 +107,7 @@ export default function LoginPage() {
           Log in
         </Button>
       </form>
-      <p className="mt-7 text-center text-sm text-ink/50">
+      <p className="mt-7 border-t border-ink/10 pt-6 text-center text-sm leading-7 text-ink/65">
         New to Planzo?{" "}
         <Link to="/register" className="font-bold text-coral">
           Create an account

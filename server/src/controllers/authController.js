@@ -15,10 +15,16 @@ import {
   setAuthCookies,
 } from "../utils/generateToken.js";
 import { requireFields, validateEmail } from "../utils/validation.js";
-import { sendEmailChange, sendPasswordReset } from "../services/accountEmailService.js";
+import {
+  sendEmailChange,
+  sendPasswordReset,
+} from "../services/accountEmailService.js";
 
 const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
-const ACTIVE_ACCOUNT = { accountStatus: { $ne: "deactivated" }, suspendedAt: null };
+const ACTIVE_ACCOUNT = {
+  accountStatus: { $ne: "deactivated" },
+  suspendedAt: null,
+};
 const credentialTokenFields = {
   passwordResetTokenHash: 1,
   passwordResetExpiresAt: 1,
@@ -50,7 +56,10 @@ function validateProfile(name, phone) {
     throw new ApiError(400, "Name must be between 2 and 80 characters.");
   }
   if (!/^[+()\d\s.\-]{7,20}$/.test(phone)) {
-    throw new ApiError(400, "Provide a valid phone number between 7 and 20 characters.");
+    throw new ApiError(
+      400,
+      "Provide a valid phone number between 7 and 20 characters.",
+    );
   }
 }
 
@@ -79,7 +88,10 @@ function validatePasswordStrength(password) {
 
 function assertActive(user) {
   if (user.accountStatus === "deactivated") {
-    throw new ApiError(403, "This account is deactivated. Contact support to reactivate it.");
+    throw new ApiError(
+      403,
+      "This account is deactivated. Contact support to reactivate it.",
+    );
   }
   if (user.suspendedAt) throw new ApiError(403, "This account is suspended.");
 }
@@ -106,7 +118,9 @@ async function startSession(res, user, statusCode, message) {
   const accessToken = generateAccessToken(user._id, user.authVersion || 0);
   const refreshToken = await createRefreshToken(user);
   setAuthCookies(res, { accessToken, refreshToken });
-  res.status(statusCode).json({ success: true, message, user: serializeUser(user) });
+  res
+    .status(statusCode)
+    .json({ success: true, message, user: serializeUser(user) });
 }
 
 function getRefreshTokenFromRequest(req) {
@@ -137,7 +151,10 @@ export const register = asyncHandler(async (req, res) => {
   validateProfile(name, phone);
   validatePasswordStrength(password);
   if (!["customer", "vendor"].includes(role)) {
-    throw new ApiError(400, "Public registration supports customer or vendor accounts only.");
+    throw new ApiError(
+      400,
+      "Public registration supports customer or vendor accounts only.",
+    );
   }
   if (await User.exists({ email })) {
     throw new ApiError(409, "An account with this email already exists.");
@@ -163,11 +180,14 @@ export const refresh = asyncHandler(async (req, res) => {
   const token = getRefreshTokenFromRequest(req);
   if (!token) throw new ApiError(401, "Refresh token is missing.");
   // Atomic consumption makes each refresh token usable once, including concurrent requests.
-  const tokenRecord = await RefreshToken.findOneAndUpdate({
-    tokenHash: hashToken(token),
-    revokedAt: null,
-    expiresAt: { $gt: new Date() },
-  }, { $set: { revokedAt: new Date() } });
+  const tokenRecord = await RefreshToken.findOneAndUpdate(
+    {
+      tokenHash: hashToken(token),
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    },
+    { $set: { revokedAt: new Date() } },
+  );
   if (!tokenRecord) {
     clearAuthCookies(res);
     throw new ApiError(401, "Invalid or expired refresh token.");
@@ -175,7 +195,10 @@ export const refresh = asyncHandler(async (req, res) => {
   const user = await User.findById(tokenRecord.userId);
   if (!user || (tokenRecord.authVersion || 0) !== (user.authVersion || 0)) {
     clearAuthCookies(res);
-    throw new ApiError(401, "This session is no longer valid. Please log in again.");
+    throw new ApiError(
+      401,
+      "This session is no longer valid. Please log in again.",
+    );
   }
   if (user.accountStatus === "deactivated" || user.suspendedAt) {
     await revokeAllUserRefreshTokens(user._id);
@@ -203,51 +226,73 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   validateEmail(email);
   const response = {
     success: true,
-    message: "If an account exists for that email, password reset instructions have been sent.",
+    message:
+      "If an account exists for that email, password reset instructions have been sent.",
   };
   const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
   if (!user) return res.status(200).json(response);
   const resetToken = createOpaqueToken();
   const tokenHash = hashToken(resetToken);
-  const issued = await User.updateOne({ _id: user._id, email, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
-    $set: {
-      passwordResetTokenHash: tokenHash,
-      passwordResetExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+  const issued = await User.updateOne(
+    { _id: user._id, email, ...versionFilter(user), ...ACTIVE_ACCOUNT },
+    {
+      $set: {
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+      },
     },
-  });
+  );
   if (!issued.matchedCount) return res.status(200).json(response);
   try {
     await sendPasswordReset({ user, token: resetToken });
   } catch {
     // Keep the response identical for existing and missing accounts. Never log reset links.
-    await User.updateOne({ _id: user._id, passwordResetTokenHash: tokenHash }, {
-      $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 },
-    });
-    console.error("Account recovery email could not be delivered. Check SMTP configuration.");
+    await User.updateOne(
+      { _id: user._id, passwordResetTokenHash: tokenHash },
+      {
+        $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 },
+      },
+    );
+    console.error(
+      "Account recovery email could not be delivered. Check SMTP configuration.",
+    );
   }
   return res.status(200).json(response);
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
   requireFields(req.body, ["token", "password"]);
-  const token = readCredentialToken(req.body, "Password reset token is invalid or expired.");
+  const token = readCredentialToken(
+    req.body,
+    "Password reset token is invalid or expired.",
+  );
   const password = passwordField(req.body, "password");
   validatePasswordStrength(password);
   const passwordHash = await bcrypt.hash(password, 12);
   // Hash first, then consume the token and replace the password in one database operation.
-  const user = await User.findOneAndUpdate({
-    passwordResetTokenHash: hashToken(token),
-    passwordResetExpiresAt: { $gt: new Date() },
-    ...ACTIVE_ACCOUNT,
-  }, {
-    $set: { password: passwordHash, passwordChangedAt: new Date() },
-    $inc: { authVersion: 1 },
-    $unset: credentialTokenFields,
-  }, { new: true });
-  if (!user) throw new ApiError(400, "Password reset token is invalid or expired.");
+  const user = await User.findOneAndUpdate(
+    {
+      passwordResetTokenHash: hashToken(token),
+      passwordResetExpiresAt: { $gt: new Date() },
+      ...ACTIVE_ACCOUNT,
+    },
+    {
+      $set: { password: passwordHash, passwordChangedAt: new Date() },
+      $inc: { authVersion: 1 },
+      $unset: credentialTokenFields,
+    },
+    { new: true },
+  );
+  if (!user)
+    throw new ApiError(400, "Password reset token is invalid or expired.");
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-  res.status(200).json({ success: true, message: "Password reset successfully. Please log in again." });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message: "Password reset successfully. Please log in again.",
+    });
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {
@@ -255,13 +300,25 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const name = textField(req.body, "name");
   const phone = textField(req.body, "phone");
   validateProfile(name, phone);
-  if (req.body.email !== undefined && textField(req.body, "email").toLowerCase() !== req.user.email) {
-    throw new ApiError(400, "Use email change verification to update your email address.");
+  if (
+    req.body.email !== undefined &&
+    textField(req.body, "email").toLowerCase() !== req.user.email
+  ) {
+    throw new ApiError(
+      400,
+      "Use email change verification to update your email address.",
+    );
   }
   req.user.name = name;
   req.user.phone = phone;
   await req.user.save();
-  res.status(200).json({ success: true, message: "Profile updated successfully.", user: serializeUser(req.user) });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message: "Profile updated successfully.",
+      user: serializeUser(req.user),
+    });
 });
 
 export const requestEmailChange = asyncHandler(async (req, res) => {
@@ -269,93 +326,161 @@ export const requestEmailChange = asyncHandler(async (req, res) => {
   const email = textField(req.body, "email").toLowerCase();
   validateEmail(email);
   const user = await User.findById(req.user._id).select("+password");
-  if (!user || !(await user.comparePassword(passwordField(req.body, "currentPassword")))) {
+  if (
+    !user ||
+    !(await user.comparePassword(passwordField(req.body, "currentPassword")))
+  ) {
     throw new ApiError(401, "Current password is incorrect.");
   }
-  if (email === user.email) throw new ApiError(400, "Provide a different email address.");
-  if (await User.exists({ email })) throw new ApiError(409, "An account with this email already exists.");
+  if (email === user.email)
+    throw new ApiError(400, "Provide a different email address.");
+  if (await User.exists({ email }))
+    throw new ApiError(409, "An account with this email already exists.");
   const token = createOpaqueToken();
   const tokenHash = hashToken(token);
-  const updated = await User.updateOne({ _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
-    $set: {
-      pendingEmail: email,
-      emailChangeTokenHash: tokenHash,
-      emailChangeExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+  const updated = await User.updateOne(
+    { _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT },
+    {
+      $set: {
+        pendingEmail: email,
+        emailChangeTokenHash: tokenHash,
+        emailChangeExpiresAt: new Date(Date.now() + TOKEN_LIFETIME_MS),
+      },
     },
-  });
-  if (!updated.matchedCount) throw new ApiError(401, "Your account changed. Please log in again.");
+  );
+  if (!updated.matchedCount)
+    throw new ApiError(401, "Your account changed. Please log in again.");
   try {
     await sendEmailChange({ user, email, token });
   } catch {
-    await User.updateOne({ _id: user._id, emailChangeTokenHash: tokenHash }, {
-      $unset: { pendingEmail: 1, emailChangeTokenHash: 1, emailChangeExpiresAt: 1 },
-    });
-    throw new ApiError(503, "Verification email could not be sent. Please try again later.");
+    await User.updateOne(
+      { _id: user._id, emailChangeTokenHash: tokenHash },
+      {
+        $unset: {
+          pendingEmail: 1,
+          emailChangeTokenHash: 1,
+          emailChangeExpiresAt: 1,
+        },
+      },
+    );
+    throw new ApiError(
+      503,
+      "Verification email could not be sent. Please try again later.",
+    );
   }
-  res.status(200).json({ success: true, message: "A verification link has been sent to your new email address. Your current email remains active until you confirm it." });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message:
+        "A verification link has been sent to your new email address. Your current email remains active until you confirm it.",
+    });
 });
 
 export const confirmEmailChange = asyncHandler(async (req, res) => {
   requireFields(req.body, ["token"]);
-  const token = readCredentialToken(req.body, "Email verification token is invalid or expired.");
+  const token = readCredentialToken(
+    req.body,
+    "Email verification token is invalid or expired.",
+  );
   const filter = {
     emailChangeTokenHash: hashToken(token),
     emailChangeExpiresAt: { $gt: new Date() },
     ...ACTIVE_ACCOUNT,
   };
   const pending = await User.findOne(filter).select("+pendingEmail");
-  if (!pending?.pendingEmail) throw new ApiError(400, "Email verification token is invalid or expired.");
-  const user = await User.findOneAndUpdate({ ...filter, _id: pending._id, ...versionFilter(pending) }, {
-    $set: { email: pending.pendingEmail },
-    $inc: { authVersion: 1 },
-    $unset: credentialTokenFields,
-  }, { new: true, runValidators: true });
-  if (!user) throw new ApiError(400, "Email verification token is invalid or expired.");
+  if (!pending?.pendingEmail)
+    throw new ApiError(400, "Email verification token is invalid or expired.");
+  const user = await User.findOneAndUpdate(
+    { ...filter, _id: pending._id, ...versionFilter(pending) },
+    {
+      $set: { email: pending.pendingEmail },
+      $inc: { authVersion: 1 },
+      $unset: credentialTokenFields,
+    },
+    { new: true, runValidators: true },
+  );
+  if (!user)
+    throw new ApiError(400, "Email verification token is invalid or expired.");
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-  res.status(200).json({ success: true, message: "Email verified and updated. Please log in with your new email address." });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message:
+        "Email verified and updated. Please log in with your new email address.",
+    });
 });
 
 export const changePassword = asyncHandler(async (req, res) => {
   requireFields(req.body, ["currentPassword", "newPassword"]);
   const user = await User.findById(req.user._id).select("+password");
-  if (!user || !(await user.comparePassword(passwordField(req.body, "currentPassword")))) {
+  if (
+    !user ||
+    !(await user.comparePassword(passwordField(req.body, "currentPassword")))
+  ) {
     throw new ApiError(401, "Current password is incorrect.");
   }
   const newPassword = passwordField(req.body, "newPassword");
   validatePasswordStrength(newPassword);
   const passwordHash = await bcrypt.hash(newPassword, 12);
-  const result = await User.updateOne({ _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT }, {
-    $set: { password: passwordHash, passwordChangedAt: new Date() },
-    $inc: { authVersion: 1 },
-    $unset: credentialTokenFields,
-  });
-  if (!result.matchedCount) throw new ApiError(401, "Your account changed. Please log in again.");
+  const result = await User.updateOne(
+    { _id: user._id, ...versionFilter(user), ...ACTIVE_ACCOUNT },
+    {
+      $set: { password: passwordHash, passwordChangedAt: new Date() },
+      $inc: { authVersion: 1 },
+      $unset: credentialTokenFields,
+    },
+  );
+  if (!result.matchedCount)
+    throw new ApiError(401, "Your account changed. Please log in again.");
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-  res.status(200).json({ success: true, message: "Password changed successfully. Please log in again." });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message: "Password changed successfully. Please log in again.",
+    });
 });
 
 export const deleteAccount = asyncHandler(async (req, res) => {
   requireFields(req.body, ["password"]);
   const user = await User.findById(req.user._id).select("+password");
-  if (!user || !(await user.comparePassword(passwordField(req.body, "password")))) {
+  if (
+    !user ||
+    !(await user.comparePassword(passwordField(req.body, "password")))
+  ) {
     throw new ApiError(401, "Password is incorrect.");
   }
-  if (user.role === "admin") throw new ApiError(403, "Administrator accounts must be managed by another administrator.");
+  if (user.role === "admin")
+    throw new ApiError(
+      403,
+      "Administrator accounts must be managed by another administrator.",
+    );
   const vendor = await Vendor.findOne({ userId: user._id });
   const filter = vendor
-    ? { $or: [{ customerId: user._id }, { vendorId: vendor._id }], status: { $in: ["pending", "accepted"] } }
+    ? {
+        $or: [{ customerId: user._id }, { vendorId: vendor._id }],
+        status: { $in: ["pending", "accepted"] },
+      }
     : { customerId: user._id, status: { $in: ["pending", "accepted"] } };
   if (await Booking.exists(filter)) {
-    throw new ApiError(409, "Cancel or complete active bookings before deactivating your account.");
+    throw new ApiError(
+      409,
+      "Cancel or complete active bookings before deactivating your account.",
+    );
   }
   // Preserve users, vendor profiles and booking history; this endpoint deactivates access.
-  await User.updateOne({ _id: user._id }, {
-    $set: { accountStatus: "deactivated", deactivatedAt: new Date() },
-    $inc: { authVersion: 1 },
-    $unset: credentialTokenFields,
-  });
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: { accountStatus: "deactivated", deactivatedAt: new Date() },
+      $inc: { authVersion: 1 },
+      $unset: credentialTokenFields,
+    },
+  );
   if (vendor) {
     vendor.suspended = true;
     vendor.suspendedAt = new Date();
@@ -363,7 +488,12 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   }
   await revokeAllUserRefreshTokens(user._id);
   clearAuthCookies(res);
-  res.status(200).json({ success: true, message: "Account deactivated. Booking history has been retained." });
+  res
+    .status(200)
+    .json({
+      success: true,
+      message: "Account deactivated. Booking history has been retained.",
+    });
 });
 
 export const getMe = asyncHandler(async (req, res) => {

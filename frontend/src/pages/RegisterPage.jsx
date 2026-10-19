@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
@@ -9,14 +9,18 @@ import { getApiError } from "../utils/apiError";
 
 export default function RegisterPage() {
   useDocumentTitle("Create account");
-  const [tab, setTab] = useState("customer");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(() => params.get("role") === "vendor" ? "vendor" : "customer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const inFlight = useRef(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
   const submit = async (event) => {
     event.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError("");
 
@@ -45,6 +49,7 @@ export default function RegisterPage() {
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to create your account."));
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   };
@@ -55,15 +60,18 @@ export default function RegisterPage() {
       <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-coral">
         Join the community
       </p>
-      <h1 className="mt-3 text-4xl font-extrabold">Create your account.</h1>
-      <div className="mt-7 grid grid-cols-2 rounded-full bg-sand/70 p-1.5">
+      <h1 className="mt-3 font-editorial text-4xl sm:text-5xl">Create your account.</h1>
+      <p className="mt-3 text-sm leading-6 text-ink/65">Start planning something lovely, or help bring it to life.</p>
+      <div role="group" aria-label="Account type" className="mt-7 grid grid-cols-2 rounded-2xl bg-sand p-1.5">
         {["customer", "vendor"].map((item) => (
           <button
             type="button"
             key={item}
+            aria-pressed={tab === item}
+            disabled={loading}
             onClick={() => setTab(item)}
-            className={`rounded-full px-4 py-2.5 text-xs font-bold capitalize transition ${
-              tab === item ? "bg-white text-ink shadow-sm" : "text-ink/45"
+            className={`min-h-12 rounded-xl px-2 py-2.5 text-[11px] font-bold capitalize transition sm:text-xs ${
+              tab === item ? "bg-white text-ink shadow-sm" : "text-ink/65"
             }`}
           >
             {item} registration
@@ -74,7 +82,7 @@ export default function RegisterPage() {
         <div className={tab === "vendor" ? "grid gap-4 sm:grid-cols-2" : ""}>
           <div>
             <label className="label" htmlFor="register-name">Full name</label>
-            <input required name="name" id="register-name" className="field" placeholder="Your name" />
+            <input required name="name" id="register-name" autoComplete="name" className="field" placeholder="Your name" />
           </div>
           {tab === "vendor" && (
             <div>
@@ -94,6 +102,7 @@ export default function RegisterPage() {
             required
             name="email" id="register-email"
             type="email"
+            autoComplete="email"
             className="field"
             placeholder="you@example.com"
           />
@@ -104,6 +113,7 @@ export default function RegisterPage() {
             required
             name="phone" id="register-phone"
             type="tel"
+            autoComplete="tel"
             className="field"
             placeholder="+91 98765 43210"
           />
@@ -125,6 +135,7 @@ export default function RegisterPage() {
             required
             name="password" id="register-password"
             type="password"
+            autoComplete="new-password"
             minLength="8"
             className="field"
             placeholder="Uppercase, number, and symbol"
@@ -136,7 +147,7 @@ export default function RegisterPage() {
             : "Create customer account"}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-ink/50">
+      <p className="mt-6 border-t border-ink/10 pt-6 text-center text-sm leading-7 text-ink/65">
         Already have an account?{" "}
         <Link to="/login" className="font-bold text-coral">
           Log in

@@ -33,4 +33,10 @@ describe("account entry", () => {
     await waitFor(() => expect(register).toHaveBeenCalledWith({ name: "Planzo User", email: "user@example.test", phone: "9999999991", password: "Password1!", role }));
     expect(await screen.findByText("Account destination reached")).toBeInTheDocument();
   });
+  it.each([["vendor", "vendor"], ["admin", "customer"], ["VENDOR", "customer"]])("opens role=%s with the safe %s registration form", (requestedRole, selectedRole) => {
+    render(<MemoryRouter initialEntries={[`/register?role=${requestedRole}`]}><RegisterPage /></MemoryRouter>);
+    expect(screen.getByRole("button", { name: `${selectedRole} registration` })).toHaveAttribute("aria-pressed", "true");
+    if (selectedRole === "vendor") expect(screen.getByLabelText("Business name")).toBeInTheDocument();
+    else expect(screen.queryByLabelText("Business name")).not.toBeInTheDocument();
+  });
 });

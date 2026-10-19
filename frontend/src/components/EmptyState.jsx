@@ -25,7 +25,7 @@ export default function EmptyState({
           <SearchX />
         </span>
         <h3 className="mt-5 text-xl font-extrabold">{title}</h3>
-        <p className="mt-2 text-sm text-ink/50">{description}</p>
+        <p className="mt-2 text-sm text-ink/65">{description}</p>
         {action}
       </div>
     </div>

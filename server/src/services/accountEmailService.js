@@ -4,12 +4,15 @@ let testSender;
 
 // Tests capture email through this seam; production never exposes account tokens in responses or logs.
 export function setAccountEmailSenderForTests(sender) {
-  if (process.env.NODE_ENV !== "test") throw new Error("Email test injection is only available in tests.");
+  if (process.env.NODE_ENV !== "test")
+    throw new Error("Email test injection is only available in tests.");
   testSender = sender;
 }
 
 function accountLink(path, token) {
-  const base = (process.env.CLIENT_URL || "http://localhost:5173").split(",")[0].trim();
+  const base = (process.env.CLIENT_URL || "http://localhost:5173")
+    .split(",")[0]
+    .trim();
   const link = new URL(path, `${base.replace(/\/$/, "")}/`);
   link.searchParams.set("token", token);
   return link.toString();
@@ -23,10 +26,13 @@ async function send(message) {
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === "true" || Number(process.env.SMTP_PORT) === 465,
-    auth: process.env.SMTP_USER && process.env.SMTP_PASS
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      : undefined,
+    secure:
+      process.env.SMTP_SECURE === "true" ||
+      Number(process.env.SMTP_PORT) === 465,
+    auth:
+      process.env.SMTP_USER && process.env.SMTP_PASS
+        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        : undefined,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,
