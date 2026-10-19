@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import VendorsPage from "./VendorsPage";
@@ -85,5 +85,42 @@ describe("vendor search", () => {
     }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(getVendors).toHaveBeenCalledTimes(2);
+  });
+  it("removes an individual URL filter without losing the other filters", async () => {
+    render(<MemoryRouter initialEntries={["/vendors?category=Catering&city=Delhi"]}><VendorsPage /></MemoryRouter>);
+    await waitFor(() => expect(getVendors).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Remove city filter" }));
+    await waitFor(() => expect(getVendors).toHaveBeenLastCalledWith(expect.objectContaining({ category: "Catering", city: undefined, page: 1 }), expect.any(Object)));
+    expect(screen.getByLabelText("Category")).toHaveValue("Catering");
+    expect(screen.getByLabelText("City")).toHaveValue("");
+  });
+  it("keeps a typed search when choosing a category from the rail", async () => {
+    render(<MemoryRouter initialEntries={["/vendors?city=Delhi"]}><VendorsPage /></MemoryRouter>);
+    await waitFor(() => expect(getVendors).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText("Vendor or service"), { target: { value: " Studio " } });
+    fireEvent.click(screen.getByRole("button", { name: "Catering", exact: true }));
+    await waitFor(() => expect(getVendors).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Studio", category: "Catering", city: "Delhi", page: 1 }), expect.any(Object)));
+    expect(screen.getByLabelText("Vendor or service")).toHaveValue("Studio");
+    fireEvent.click(screen.getByRole("button", { name: "All services" }));
+    await waitFor(() => expect(getVendors).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Studio", category: undefined, city: "Delhi" }), expect.any(Object)));
+    expect(screen.getByLabelText("Vendor or service")).toHaveValue("Studio");
+  });
+  it("traps filter-sheet focus and restores it after Escape", async () => {
+    render(<MemoryRouter><VendorsPage /></MemoryRouter>);
+    const trigger = screen.getByRole("button", { name: "Filters" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "A little more specific." });
+    expect(document.body.style.overflow).toBe("hidden");
+    const close = within(dialog).getByRole("button", { name: "Close filters" });
+    expect(close).toHaveFocus();
+    fireEvent.change(within(dialog).getByLabelText("City"), { target: { value: "Mumbai" } });
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    expect(within(dialog).getByRole("button", { name: "Show results" })).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+    expect(document.body.style.overflow).toBe("");
+    expect(screen.getByLabelText("City")).toHaveValue("");
   });
 });

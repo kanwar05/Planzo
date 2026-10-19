@@ -1,8 +1,8 @@
-import celebrationImage from "../assets/planzo-hero-event.jpg";
-import cateringImage from "../assets/services/catering.jpg";
-import venueImage from "../assets/services/venue.jpg";
-import djImage from "../assets/services/dj.jpg";
-import decorationImage from "../assets/services/decoration.jpg";
+import celebrationImage from "../assets/optimized/luxury_wedding_editorial_1788675454322.webp";
+import cateringImage from "../assets/optimized/catering.webp";
+import venueImage from "../assets/optimized/venue.webp";
+import djImage from "../assets/optimized/dj.webp";
+import decorationImage from "../assets/optimized/decoration.webp";
 const fallbacks = {
   DJ: djImage,
   Catering: cateringImage,

@@ -58,15 +58,22 @@ export function errorHandler(error, req, res, next) {
   }
 
   if (
-    ["LIMIT_PART_COUNT", "LIMIT_FIELD_COUNT", "LIMIT_FIELD_KEY", "LIMIT_FIELD_VALUE"].includes(
-      error.code,
-    )
+    [
+      "LIMIT_PART_COUNT",
+      "LIMIT_FIELD_COUNT",
+      "LIMIT_FIELD_KEY",
+      "LIMIT_FIELD_VALUE",
+    ].includes(error.code)
   ) {
     statusCode = 400;
     message = "The multipart upload contains too many fields.";
   }
 
-  if (statusCode >= 500 && process.env.NODE_ENV === "production" && !error.statusCode) {
+  if (
+    statusCode >= 500 &&
+    process.env.NODE_ENV === "production" &&
+    !error.statusCode
+  ) {
     message = "Internal server error.";
     errors = undefined;
   }

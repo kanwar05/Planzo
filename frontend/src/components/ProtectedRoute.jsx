@@ -7,8 +7,11 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
 
   if (loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-cream">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-coral/20 border-t-coral" />
+      <div className="grid min-h-screen place-items-center bg-cream" role="status">
+        <div className="flex items-center gap-3 text-sm text-ink/65">
+          <span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-coral/20 border-t-coral" />
+          Opening your account…
+        </div>
       </div>
     );
   }

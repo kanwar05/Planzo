@@ -1,36 +1,103 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap");
-
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/manrope-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "DM Serif Display";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/dm-serif-display-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "DM Serif Display";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/dm-serif-display-italic-latin.woff2") format("woff2");
+}
+
 @layer base {
-  * { @apply border-ink/10; }
-  html { scroll-behavior: smooth; }
-  body { @apply bg-cream font-sans text-ink antialiased; }
-  h1, h2, h3, h4 { @apply font-display tracking-tight; }
-  ::selection { @apply bg-coral/30 text-ink; }
+  :root {
+    color-scheme: light;
+    --background: #faf8f5;
+    --foreground: #24201f;
+    --surface: #ffffff;
+    --surface-soft: #f1ede8;
+    --muted: #68615d;
+    --accent: #a94f39;
+    --accent-soft: #f4e7e1;
+    --border: #e5dfd8;
+    --success: #356347;
+    --warning: #8a5a16;
+    --danger: #b42332;
+    --focus: #a94f39;
+    --header-height: 64px;
+    --bottom-nav-height: 72px;
+  }
+  * { border-color: var(--border); }
+  html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 20px); }
+  body { @apply m-0 bg-cream font-sans text-ink antialiased; }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; text-wrap: balance; }
+  p { text-wrap: pretty; }
+  img { @apply max-w-full; }
+  button, input, select, textarea { font: inherit; }
+  button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  button:not(:disabled), summary, select { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+  ::selection { background: #e9c4b6; color: var(--foreground); }
+  @media (min-width: 768px) { :root { --header-height: 80px; } }
 }
 
 @layer components {
-  .container-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  .section-pad { @apply py-16 sm:py-20 lg:py-24; }
-  .glass { @apply border border-white/30 bg-white/75 shadow-soft backdrop-blur-xl; }
-  .field { @apply w-full rounded-2xl border border-ink/10 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-ink/35 focus:border-coral/60 focus:ring-4 focus:ring-coral/10; }
-  .label { @apply mb-2 block text-sm font-semibold text-ink/75; }
-  .service-card { border-color: rgba(74, 33, 72, 0.12); }
-  .service-card:hover { box-shadow: 0 20px 45px rgba(74, 33, 72, 0.14); }
-  .services-page h2 { font-style: italic; }
-  .services-page p, .services-page a { font-style: normal; }
-  #how-it-works h2 { font-style: italic; }
+  .container-shell { @apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12; }
+  .section-pad { @apply py-12 sm:py-16 lg:py-20; }
+  .eyebrow { @apply text-[10px] font-bold uppercase tracking-[0.2em] text-coral sm:text-[11px]; }
+  .field { @apply min-h-12 w-full min-w-0 rounded-xl border bg-white px-4 py-3 text-base text-ink outline-none transition duration-200 placeholder:text-ink/65 focus:border-coral focus:ring-2 focus:ring-coral/10 disabled:cursor-not-allowed disabled:bg-sand sm:text-sm; }
+  .label { @apply mb-2 block text-xs font-bold text-ink/75; }
+  .glass { @apply border bg-white shadow-soft; }
+  .skip-link { @apply fixed left-4 top-4 z-[200] -translate-y-32 rounded-xl bg-ink px-5 py-3 text-sm font-bold text-white focus:translate-y-0; }
+  .icon-button { @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition hover:bg-sand disabled:opacity-40; }
+  .scroll-rail { @apply flex gap-4 overflow-x-auto overscroll-x-contain pb-3; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: #d6cec4 transparent; }
+  .scroll-rail > * { scroll-snap-align: start; }
+  .mobile-nav-space { padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)); }
+  .dashboard-content { overflow-wrap: anywhere; }
+  .dashboard-content h1 { @apply font-editorial font-normal; }
+  .service-card { border-color: var(--border); }
+  .service-card:hover { box-shadow: 0 12px 36px rgba(36, 32, 31, 0.08); }
+  form[aria-label="Find event vendors"] label:focus-within { border-radius: 10px; outline: 2px solid var(--focus); outline-offset: -2px; }
+  @media (min-width: 768px) { .mobile-nav-space { padding-bottom: 0; } }
 }
 
-button, a { -webkit-tap-highlight-color: transparent; }
+@keyframes hero-rise {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
+}
+@keyframes hero-settle {
+  from { transform: scale(0.985); }
+  to { transform: scale(1); }
+}
+@keyframes page-enter {
+  from { opacity: 0.94; }
+  to { opacity: 1; }
+}
+.hero-copy { animation: hero-rise 350ms ease-out; }
+.hero-photo { animation: hero-settle 450ms ease-out; }
+.page-enter { animation: page-enter 180ms ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
-*, *::before, *::after {
-  animation-duration: 0.01ms !important;
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
-}
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .group:hover img { transform: none !important; }
 }

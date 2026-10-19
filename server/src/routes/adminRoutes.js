@@ -1,7 +1,15 @@
 import { Router } from "express";
 import {
-  verifyVendor, rejectVendor, getUnverifiedVendors, getVendorsForAdmin, getUsers,
-  getBookingsForAdmin, getAdminStats, editBooking, setUserSuspension, setVendorSuspension,
+  verifyVendor,
+  rejectVendor,
+  getUnverifiedVendors,
+  getVendorsForAdmin,
+  getUsers,
+  getBookingsForAdmin,
+  getAdminStats,
+  editBooking,
+  setUserSuspension,
+  setVendorSuspension,
 } from "../controllers/adminController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 

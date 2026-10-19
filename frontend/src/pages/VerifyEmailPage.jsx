@@ -34,10 +34,10 @@ export default function VerifyEmailPage() {
   };
   return <div className="w-full">
     <p className="text-xs font-bold uppercase tracking-wider text-coral">Account security</p>
-    <h1 className="mt-3 text-4xl font-extrabold">
+    <h1 className="mt-3 font-editorial text-4xl sm:text-5xl">
       {success ? "Email updated." : "Verify your email."}
     </h1>
-    <p className="mt-5 text-sm leading-7 text-ink/55">
+    <p className="mt-5 text-sm leading-7 text-ink/65">
       {success ? "Sign in with your new email address. Your existing sessions have been signed out." : token ? "Confirm this change to start using your new email address." : "Open the verification link sent to your new email address. If it has expired, request another link from account settings."}
     </p>
     {error && <p role="alert" className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">

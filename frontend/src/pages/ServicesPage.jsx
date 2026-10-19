@@ -1,25 +1,14 @@
-import { ArrowUpRight } from "lucide-react";
-import { motion } from "framer-motion";
-import Button from "../components/Button";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import * as motion from "motion/react-m";
 import SectionHeading from "../components/SectionHeading";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export default function ServicesPage() {
   useDocumentTitle("Event services");
-  return (
-    <div className="services-page min-h-screen bg-[#FFF9F2]">
-      <section className="bg-[#FFE1D6] py-16 sm:py-20"><div className="container-shell text-[#4A2148]"><SectionHeading eyebrow="The Planzo collection" title="The right expert for every detail." description="Browse trusted specialists, compare their work, and build your perfect event team." /></div></section>
-      <section className="section-pad container-shell bg-[#FFF9F2]">
-        <div className="grid gap-7 md:grid-cols-2 lg:grid-cols-3">
-          {services.map(({ title, description, icon: Icon, image }, index) => (
-            <motion.article initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.05 }} key={title} className={`group overflow-hidden rounded-[1.75rem] border border-[#4A2148]/15 bg-white shadow-[0_12px_35px_rgba(74,33,72,0.08)] transition duration-300 hover:-translate-y-2 hover:border-[#F26B5E]/60 hover:shadow-[0_20px_45px_rgba(74,33,72,0.16)] ${index === 0 ? "lg:col-span-2" : ""}`}>
-              <div className={`overflow-hidden rounded-t-[1.75rem] ${index === 0 ? "h-80" : "h-72"}`}><img src={image} alt={title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /></div>
-              <div className="flex min-h-[250px] flex-col p-8"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#B8D8C0] text-[#4A2148]"><Icon className="h-5 w-5" /></span><h2 className="mt-5 text-2xl font-extrabold italic text-[#4A2148]">{title}</h2><p className="mt-3 text-sm leading-6 text-[#4A2148]/65">{description}</p><Button to={`/vendors?category=${encodeURIComponent(title)}`} variant="primary" className="mt-auto self-start !bg-[#F26B5E] !px-5 !text-white hover:!bg-[#d9584d]">Explore service <ArrowUpRight className="h-4 w-4" /></Button></div>
-            </motion.article>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
+  return <div>
+    <section className="container-shell pb-9 pt-8 sm:pb-12 sm:pt-12"><nav aria-label="Breadcrumb" className="mb-7 flex items-center gap-2 text-xs text-ink/65"><Link to="/" className="inline-flex min-h-11 items-center">Home</Link><ChevronRight className="h-3 w-3" /><span aria-current="page">Our services</span></nav><div className="flex flex-wrap items-end justify-between gap-6"><SectionHeading as="h1" eyebrow="Every detail, considered" title={<>The right people.<br /><span className="italic text-coral">For your kind of occasion.</span></>} description="From the first flowers to the last song, find the people who bring your celebration to life." /><p className="max-w-xs text-xs leading-6 text-ink/65">Eight ways to start something wonderful.<br />One place to bring it all together.</p></div></section>
+    <section aria-label="Event service categories" className="container-shell pb-16"><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{services.map(({ title, description, image, imageSmall, icon: Icon, label }, index) => <motion.article initial={{ y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.25 }} key={title} className={`group overflow-hidden rounded-2xl border bg-white ${index === 0 ? "lg:col-span-2" : ""}`}><Link to={`/vendors?category=${encodeURIComponent(title)}`} className="block"><div className="relative h-56 overflow-hidden bg-sand sm:h-64"><img src={image} srcSet={`${imageSmall} 320w, ${image} 960w`} sizes={index === 0 ? "(min-width: 1024px) 750px, (min-width: 640px) 50vw, 100vw" : "(min-width: 1024px) 375px, (min-width: 640px) 50vw, 100vw"} alt="" loading="lazy" width={index === 0 ? "900" : "450"} height="350" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /><span className="absolute left-4 top-4 rounded-full bg-cream/95 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wider">Category inspiration</span><span className="absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white"><ArrowUpRight aria-hidden="true" className="h-4 w-4 text-coral" /></span></div><div className="p-5 sm:p-6"><div className="flex items-center gap-2"><Icon className="h-4 w-4 text-coral" /><h2 className="text-lg font-bold">{label || title}</h2></div><p className="mt-3 text-sm leading-6 text-ink/65">{description}</p><span className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-coral">Explore {label?.toLowerCase() || title.toLowerCase()}<ArrowUpRight className="h-3.5 w-3.5" /></span></div></Link></motion.article>)}</div></section>
+  </div>;
 }

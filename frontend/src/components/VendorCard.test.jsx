@@ -15,6 +15,7 @@ describe("VendorCard", () => {
   </MemoryRouter>);
     expect(screen.getByText("Celebration Studio")).toBeInTheDocument();
     expect(screen.getByText("Delhi")).toBeInTheDocument();
+    expect(screen.getByText("Category inspiration")).toBeInTheDocument();
     expect(screen.getByRole("link", {
       name: /View details/i
     })).toHaveAttribute("href", "/vendors/vendor-1");
