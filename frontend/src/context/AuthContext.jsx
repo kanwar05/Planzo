@@ -32,6 +32,16 @@ export function AuthProvider({
     setUser(next);
     return next;
   }, []);
+  const requestLoginOtp = useCallback(async email => {
+    const authService = await loadAuthService();
+    return authService.requestLoginOtp(email);
+  }, []);
+  const verifyLoginOtp = useCallback(async credentials => {
+    const authService = await loadAuthService();
+    const next = await authService.verifyLoginOtp(credentials);
+    setUser(next);
+    return next;
+  }, []);
   const register = useCallback(async data => {
     const authService = await loadAuthService();
     const next = await authService.register(data);
@@ -49,10 +59,12 @@ export function AuthProvider({
     loading,
     isAuthenticated: Boolean(user),
     login,
+    requestLoginOtp,
+    verifyLoginOtp,
     register,
     logout,
     updateUser
-  }), [user, loading, login, register, logout, updateUser]);
+  }), [user, loading, login, requestLoginOtp, verifyLoginOtp, register, logout, updateUser]);
   return <AuthContext.Provider value={value}>
     {children}
   </AuthContext.Provider>;

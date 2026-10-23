@@ -70,12 +70,10 @@ app.use((req, res, next) => {
         cookieAuth &&
         !req.get("authorization")))
   )
-    return res
-      .status(403)
-      .json({
-        success: false,
-        message: "A trusted Origin is required for this request.",
-      });
+    return res.status(403).json({
+      success: false,
+      message: "A trusted Origin is required for this request.",
+    });
   return next();
 });
 app.use(express.json({ limit: "100kb" }));
@@ -101,6 +99,8 @@ const confirmationLimiter = limiter(
   Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10,
 );
 app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
+app.use(["/api/auth/login/otp/request"], recoveryLimiter);
+app.use(["/api/auth/login/otp/verify"], confirmationLimiter);
 app.use(
   ["/api/auth/forgot-password", "/api/auth/email-change"],
   recoveryLimiter,

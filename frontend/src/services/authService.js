@@ -1,6 +1,8 @@
 import { api } from "./api";
 export const register = async data => (await api.post("/auth/register", data)).data.user;
 export const login = async data => (await api.post("/auth/login", data)).data.user;
+export const requestLoginOtp = async email => (await api.post("/auth/login/otp/request", { email })).data;
+export const verifyLoginOtp = async data => (await api.post("/auth/login/otp/verify", data)).data.user;
 export const refresh = async () => (await api.post("/auth/refresh")).data.user;
 export const getMe = async () => (await api.get("/auth/me")).data.user;
 export const updateProfile = async data => (await api.patch("/auth/profile", data)).data.user;

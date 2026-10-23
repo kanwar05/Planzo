@@ -1,5 +1,7 @@
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import RefreshToken from "../models/RefreshToken.js";
+import EmailOtp from "../models/EmailOtp.js";
 import Booking from "../models/Booking.js";
 import User from "../models/User.js";
 import Vendor from "../models/Vendor.js";
@@ -19,8 +21,13 @@ import {
   sendEmailChange,
   sendPasswordReset,
 } from "../services/accountEmailService.js";
+import { sendLoginOtp } from "../services/otpEmailService.js";
 
 const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
+const OTP_EXPIRY_MS = Number(process.env.OTP_EXPIRY_MINUTES || 5) * 60 * 1000;
+const OTP_COOLDOWN_MS =
+  Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60) * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 const ACTIVE_ACCOUNT = {
   accountStatus: { $ne: "deactivated" },
   suspendedAt: null,
@@ -139,6 +146,92 @@ function readCredentialToken(body, message) {
   if (!/^[a-f0-9]{96}$/i.test(token)) throw new ApiError(400, message);
   return token;
 }
+
+function otpHash(code) {
+  const secret = process.env.OTP_HMAC_SECRET || process.env.JWT_SECRET;
+  if (!secret) throw new ApiError(503, "OTP authentication is not configured.");
+  return crypto.createHmac("sha256", secret).update(code).digest("hex");
+}
+
+function generateOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+export const requestLoginOtp = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["email"]);
+  const email = textField(req.body, "email").toLowerCase();
+  validateEmail(email);
+  const response = {
+    success: true,
+    message: "If an eligible account exists, a sign-in code has been sent.",
+  };
+  const recent = await EmailOtp.findOne({
+    email,
+    consumedAt: null,
+    requestedAt: { $gt: new Date(Date.now() - OTP_COOLDOWN_MS) },
+  });
+  if (recent) return res.status(200).json(response);
+  const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
+  if (!user || user.role === "admin") return res.status(200).json(response);
+  const code = generateOtp();
+  await EmailOtp.deleteMany({ email, consumedAt: null });
+  await EmailOtp.create({
+    email,
+    codeHash: otpHash(code),
+    expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
+    requestedAt: new Date(),
+  });
+  try {
+    await sendLoginOtp({ email, code });
+  } catch (error) {
+    await EmailOtp.deleteMany({ email, codeHash: otpHash(code) });
+    console.error(`OTP email delivery failed: ${error.message}`);
+    throw new ApiError(
+      503,
+      "Sign-in code could not be sent. Please try again later.",
+    );
+  }
+  return res.status(200).json(response);
+});
+
+export const verifyLoginOtp = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["email", "code"]);
+  const email = textField(req.body, "email").toLowerCase();
+  const code = textField(req.body, "code");
+  validateEmail(email);
+  if (!/^\d{6}$/.test(code))
+    throw new ApiError(400, "Sign-in code must be six digits.");
+  const otp = await EmailOtp.findOne({
+    email,
+    consumedAt: null,
+    expiresAt: { $gt: new Date() },
+  });
+  if (!otp || otp.attempts >= OTP_MAX_ATTEMPTS) {
+    throw new ApiError(401, "The sign-in code is invalid or expired.");
+  }
+  if (!crypto.timingSafeEqual(Buffer.from(otp.codeHash), Buffer.from(otpHash(code)))) {
+    await EmailOtp.updateOne({ _id: otp._id }, { $inc: { attempts: 1 } });
+    throw new ApiError(401, "The sign-in code is invalid or expired.");
+  }
+  const user = await User.findOne({
+    email,
+    ...ACTIVE_ACCOUNT,
+    role: { $in: ["customer", "vendor"] },
+  });
+  if (!user) throw new ApiError(401, "The sign-in code is invalid or expired.");
+  const consumed = await EmailOtp.findOneAndUpdate(
+    {
+      _id: otp._id,
+      codeHash: otp.codeHash,
+      consumedAt: null,
+      expiresAt: { $gt: new Date() },
+    },
+    { $set: { consumedAt: new Date() } },
+    { new: true },
+  );
+  if (!consumed) throw new ApiError(401, "The sign-in code is invalid or expired.");
+  await startSession(res, user, 200, "Logged in successfully.");
+});
 
 export const register = asyncHandler(async (req, res) => {
   requireFields(req.body, ["name", "email", "phone", "password"]);

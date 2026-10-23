@@ -6,11 +6,13 @@ import {
   forgotPassword,
   getMe,
   login,
+  requestLoginOtp,
   logout,
   refresh,
   register,
   requestEmailChange,
   resetPassword,
+  verifyLoginOtp,
   updateProfile,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
@@ -19,6 +21,8 @@ const router = Router();
 
 router.post("/register", register);
 router.post("/login", login);
+router.post("/login/otp/request", requestLoginOtp);
+router.post("/login/otp/verify", verifyLoginOtp);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);

@@ -54,16 +54,45 @@ export function validateEnvironment(env = process.env) {
     throw new Error("COOKIE_SAME_SITE must be lax, strict, or none.");
   if (env.SMTP_SECURE && !["true", "false"].includes(env.SMTP_SECURE))
     throw new Error("SMTP_SECURE must be true or false.");
-  if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PASS))
+  const smtpPassword = env.SMTP_APP_PASSWORD || env.SMTP_PASS;
+  if (Boolean(env.SMTP_USER) !== Boolean(smtpPassword))
     throw new Error(
-      "Set both SMTP_USER and SMTP_PASS, or neither for a trusted relay.",
+      "Set both SMTP_USER and SMTP_APP_PASSWORD, or neither for a trusted relay.",
     );
-  if (production && (!env.SMTP_HOST || !env.SMTP_FROM))
+  const smtpFrom = env.SMTP_FROM_EMAIL || env.SMTP_FROM;
+  if (production && (!env.SMTP_HOST || !smtpFrom))
     throw new Error(
-      "SMTP_HOST and SMTP_FROM are required for account recovery in production.",
+      "SMTP_HOST and SMTP_FROM_EMAIL (or SMTP_FROM) are required for account recovery in production.",
     );
-  if ((env.SMTP_HOST || env.SMTP_FROM) && (!env.SMTP_HOST || !env.SMTP_FROM))
-    throw new Error("Set both SMTP_HOST and SMTP_FROM for account email.");
+  if (
+    (env.SMTP_HOST || env.SMTP_FROM || env.SMTP_FROM_EMAIL) &&
+    (!env.SMTP_HOST || !smtpFrom)
+  )
+    throw new Error(
+      "Set SMTP_HOST and SMTP_FROM_EMAIL (or SMTP_FROM) for account email.",
+    );
+  if (
+    production &&
+    (!env.SMTP_HOST ||
+      !env.SMTP_USER ||
+      !smtpPassword ||
+      !(env.SMTP_FROM_EMAIL || env.SMTP_FROM))
+  )
+    throw new Error(
+      "SMTP_HOST, SMTP_USER, SMTP_APP_PASSWORD, and SMTP_FROM_EMAIL are required in production for OTP sign-in.",
+    );
+  if (production && !env.OTP_HMAC_SECRET)
+    throw new Error("OTP_HMAC_SECRET is required in production.");
+  if (env.OTP_HMAC_SECRET && env.OTP_HMAC_SECRET.length < 32)
+    throw new Error("OTP_HMAC_SECRET must contain at least 32 characters.");
+  for (const [key, fallback, max] of [
+    ["OTP_EXPIRY_MINUTES", 5, 60],
+    ["OTP_RESEND_COOLDOWN_SECONDS", 60, 3600],
+  ]) {
+    const value = Number(env[key] ?? fallback);
+    if (!Number.isInteger(value) || value < 1 || value > max)
+      throw new Error(`${key} is invalid.`);
+  }
   const cloudinary = [
     "CLOUDINARY_CLOUD_NAME",
     "CLOUDINARY_API_KEY",

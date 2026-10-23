@@ -3,10 +3,23 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
-const { login, register } = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn() }));
-vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ login, register }) }));
+const { login, register, requestLoginOtp, verifyLoginOtp } = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), requestLoginOtp: vi.fn(), verifyLoginOtp: vi.fn() }));
+vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ login, register, requestLoginOtp, verifyLoginOtp }) }));
 describe("account entry", () => {
   beforeEach(() => vi.clearAllMocks());
+  it("requests and verifies an email sign-in code", async () => {
+    requestLoginOtp.mockResolvedValue({ message: "sent" });
+    verifyLoginOtp.mockResolvedValue({ role: "customer" });
+    render(<MemoryRouter initialEntries={["/login"]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/customer/dashboard" element={<p>Customer dashboard reached</p>} /></Routes></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Email code" }));
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "customer@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send sign-in code" }));
+    await waitFor(() => expect(requestLoginOtp).toHaveBeenCalledWith("customer@example.test"));
+    fireEvent.change(screen.getByLabelText("Six-digit code"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByText("Customer dashboard reached")).toBeInTheDocument();
+    expect(verifyLoginOtp).toHaveBeenCalledWith({ email: "customer@example.test", code: "123456" });
+  });
   it("sends an admin to the admin dashboard after login", async () => {
     login.mockResolvedValue({ role: "admin" });
     render(<MemoryRouter initialEntries={["/login"]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/admin" element={<p>Admin overview reached</p>} /></Routes></MemoryRouter>);
