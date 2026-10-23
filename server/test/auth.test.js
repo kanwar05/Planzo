@@ -7,11 +7,13 @@ import app from "../src/app.js";
 import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
 import { setAccountEmailSenderForTests } from "../src/services/accountEmailService.js";
+import { setOtpEmailSenderForTests } from "../src/services/otpEmailService.js";
 
 let mongo;
 
 const strongPassword = "Planzo@123";
 let sentEmails = [];
+let sentOtps = [];
 const latestToken = () => new URL(sentEmails.at(-1).text.match(/https?:\/\/\S+/)[0]).searchParams.get("token");
 
 before(async () => {
@@ -23,7 +25,9 @@ before(async () => {
 
 beforeEach(async () => {
   sentEmails = [];
+  sentOtps = [];
   setAccountEmailSenderForTests((email) => sentEmails.push(email));
+  setOtpEmailSenderForTests((email) => sentOtps.push(email));
   await Promise.all(
     Object.values(mongoose.connection.collections).map((collection) =>
       collection.deleteMany({}),
@@ -102,6 +106,32 @@ test("login, refresh, and logout manage cookie sessions", async () => {
 
   const afterLogoutResponse = await agent.post("/api/auth/refresh");
   assert.equal(afterLogoutResponse.status, 401);
+});
+
+test("email OTP login uses the existing customer account and consumes the code", async () => {
+  await User.create({
+    name: "OTP Customer",
+    email: "otp@example.com",
+    phone: "9999999991",
+    password: strongPassword,
+    role: "customer",
+  });
+  const response = await request(app)
+    .post("/api/auth/login/otp/request")
+    .send({ email: "otp@example.com" });
+  assert.equal(response.status, 200);
+  assert.equal(sentOtps.length, 1);
+  const code = sentOtps[0].text.match(/\b\d{6}\b/)[0];
+  const agent = request.agent(app);
+  const verified = await agent
+    .post("/api/auth/login/otp/verify")
+    .send({ email: "otp@example.com", code });
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.user.email, "otp@example.com");
+  const replay = await agent
+    .post("/api/auth/login/otp/verify")
+    .send({ email: "otp@example.com", code });
+  assert.equal(replay.status, 401);
 });
 
 test("profile update validates and returns the updated user", async () => {

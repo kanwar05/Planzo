@@ -11,7 +11,7 @@ test("local core configuration needs no removed integration credentials", () => 
 });
 
 test("production requires HTTPS origins and account recovery email", () => {
-  const production = { ...base, NODE_ENV: "production", CLIENT_URL: "https://planzo.example", SMTP_HOST: "smtp.example", SMTP_FROM: "Planzo <accounts@example.com>" };
+  const production = { ...base, NODE_ENV: "production", CLIENT_URL: "https://planzo.example", SMTP_HOST: "smtp.example", SMTP_FROM: "Planzo <accounts@example.com>", SMTP_FROM_EMAIL: "accounts@example.com", SMTP_USER: "mailer@example.com", SMTP_APP_PASSWORD: "app-password", OTP_HMAC_SECRET: "otp-test-secret-with-at-least-32-characters" };
   assert.doesNotThrow(() => validateEnvironment(production));
   assert.throws(() => validateEnvironment({ ...production, CLIENT_URL: "http://planzo.example" }), /HTTPS/);
   assert.throws(() => validateEnvironment({ ...production, CLIENT_URL: "https://planzo.example/path" }), /origins/);

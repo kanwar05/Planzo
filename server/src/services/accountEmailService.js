@@ -20,8 +20,12 @@ function accountLink(path, token) {
 
 async function send(message) {
   if (process.env.NODE_ENV === "test" && testSender) return testSender(message);
-  if (!process.env.SMTP_HOST || !process.env.SMTP_FROM) {
-    throw new Error("Account email requires SMTP_HOST and SMTP_FROM.");
+  const from = process.env.SMTP_FROM_EMAIL || process.env.SMTP_FROM;
+  const password = process.env.SMTP_APP_PASSWORD || process.env.SMTP_PASS;
+  if (!process.env.SMTP_HOST || !from) {
+    throw new Error(
+      "Account email requires SMTP_HOST and SMTP_FROM_EMAIL (or SMTP_FROM).",
+    );
   }
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -30,14 +34,14 @@ async function send(message) {
       process.env.SMTP_SECURE === "true" ||
       Number(process.env.SMTP_PORT) === 465,
     auth:
-      process.env.SMTP_USER && process.env.SMTP_PASS
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      process.env.SMTP_USER && password
+        ? { user: process.env.SMTP_USER, pass: password }
         : undefined,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,
   });
-  await transport.sendMail({ from: process.env.SMTP_FROM, ...message });
+  await transport.sendMail({ from, ...message });
 }
 
 export function sendPasswordReset({ user, token }) {

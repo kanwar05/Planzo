@@ -39,7 +39,7 @@ On Windows PowerShell use `Copy-Item .env.example .env` and `npm.cmd` if script 
 
 Defaults: frontend http://localhost:5173, API http://localhost:5001/api. Health: `GET /api/health`.
 
-Configure SMTP to exercise password recovery and email-address verification. Raw email tokens are never returned through the API, including development. Configure all three Cloudinary values to enable vendor photo uploads; browsing existing photos does not require upload credentials.
+Configure SMTP to exercise password recovery, email-address verification, and customer/vendor email OTP sign-in. For Gmail, set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER`, `SMTP_APP_PASSWORD` (a Google App Password), `SMTP_FROM_NAME`, and `SMTP_FROM_EMAIL`. Set a separate random `OTP_HMAC_SECRET` (at least 32 characters). `OTP_EXPIRY_MINUTES` defaults to 5 and `OTP_RESEND_COOLDOWN_SECONDS` defaults to 60. Raw email tokens and OTPs are never returned through the API. Configure all three Cloudinary values to enable vendor photo uploads; browsing existing photos does not require upload credentials.
 
 ## Administrator provisioning
 
