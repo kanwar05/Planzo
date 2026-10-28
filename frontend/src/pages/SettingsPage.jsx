@@ -12,7 +12,7 @@ export default function SettingsPage() {
   useDocumentTitle("Account settings");
   const {
     user,
-    updateUser
+    updateUser,
   } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState({
@@ -127,13 +127,14 @@ export default function SettingsPage() {
             name: event.target.value
           }))} autoComplete="name" />
         </label>
-        <label>
-          <span className="label">Phone number</span>
-          <input type="tel" className="field" maxLength={20} value={profile.phone} onChange={event => setProfile(current => ({
+        <div>
+          <label htmlFor="profile-phone" className="label">Phone number</label>
+          <input id="profile-phone" type="tel" className="field" maxLength={20} value={profile.phone} onChange={event => setProfile(current => ({
             ...current,
             phone: event.target.value
-          }))} autoComplete="tel" />
-        </label>
+          }))} autoComplete="tel" aria-describedby="profile-phone-hint" />
+          <p id="profile-phone-hint" className="mt-2 text-xs leading-5 text-ink/65">Contact details only.</p>
+        </div>
         <label className="sm:col-span-2">
           <span className="label">Current email</span>
           <input readOnly value={user?.email || ""} className="field bg-sand/30" type="email" />

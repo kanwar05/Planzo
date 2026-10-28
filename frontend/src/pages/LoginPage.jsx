@@ -20,6 +20,11 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const openAccount = user => {
+    const defaultPath = user.role === "admin" ? "/admin" : user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+    navigate(location.state?.from?.pathname || defaultPath, { replace: true });
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     if (inFlight.current) return;
@@ -34,10 +39,7 @@ export default function LoginPage() {
       const user = method === "password"
         ? await login({ email, password: form.get("password") })
         : await verifyLoginOtp({ email, code: String(form.get("code") || "").trim() });
-      const defaultPath =
-        user.role === "admin" ? "/admin" : user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
-      const requestedPath = location.state?.from?.pathname;
-      navigate(requestedPath || defaultPath, { replace: true });
+      openAccount(user);
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to log in."));
     } finally {
@@ -76,9 +78,9 @@ export default function LoginPage() {
       <p className="mt-3 text-sm leading-6 text-ink/65">
         Sign in to continue planning your next beautiful event.
       </p>
-      <div className="mt-8 grid grid-cols-2 rounded-2xl bg-ink/5 p-1 text-sm font-bold">
-        <button type="button" onClick={() => { setMethod("password"); setOtpRequested(false); setError(""); }} className={`rounded-xl px-3 py-3 ${method === "password" ? "bg-white shadow-sm" : "text-ink/60"}`}>Password</button>
-        <button type="button" onClick={() => { setMethod("otp"); setError(""); }} className={`rounded-xl px-3 py-3 ${method === "otp" ? "bg-white shadow-sm" : "text-ink/60"}`}>Email code</button>
+      <div role="group" aria-label="Sign-in method" className="mt-8 grid gap-1 rounded-2xl bg-ink/5 p-1 text-sm font-bold">
+        <button type="button" disabled={loading} aria-pressed={method === "password"} onClick={() => { setMethod("password"); setOtpRequested(false); setError(""); }} className={`min-h-11 rounded-xl px-3 py-3 disabled:opacity-60 ${method === "password" ? "bg-white shadow-sm" : "text-ink/60"}`}>Continue with Password</button>
+        <button type="button" disabled={loading} aria-pressed={method === "otp"} onClick={() => { setMethod("otp"); setError(""); }} className={`min-h-11 rounded-xl px-3 py-3 disabled:opacity-60 ${method === "otp" ? "bg-white shadow-sm" : "text-ink/60"}`}>Continue with Email OTP</button>
       </div>
       <form onSubmit={method === "otp" && !otpRequested ? requestOtp : submit} className="mt-5 space-y-5">
         <div>

@@ -19,6 +19,15 @@ describe("account session loading", () => {
     vi.clearAllMocks();
     localStorage.clear();
   });
+  it("uses the shared cookie session for password login", async () => {
+    authService.getMe.mockResolvedValue(null);
+    const customer = { id: "existing-account", name: "Aditi", email: "aditi@example.test", role: "customer" };
+    authService.login.mockResolvedValue(customer);
+    renderSession();
+    await screen.findByText("Guest");
+    await act(async () => { await account.login({ email: customer.email, password: "Password1!" }); });
+    expect(account.isAuthenticated).toBe(true);
+  });
 
   it("keeps session loading until the cookie-backed identity has resolved", async () => {
     let resolveSession;

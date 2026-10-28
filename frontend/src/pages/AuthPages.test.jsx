@@ -6,12 +6,12 @@ import RegisterPage from "./RegisterPage";
 const { login, register, requestLoginOtp, verifyLoginOtp } = vi.hoisted(() => ({ login: vi.fn(), register: vi.fn(), requestLoginOtp: vi.fn(), verifyLoginOtp: vi.fn() }));
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ login, register, requestLoginOtp, verifyLoginOtp }) }));
 describe("account entry", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); });
   it("requests and verifies an email sign-in code", async () => {
     requestLoginOtp.mockResolvedValue({ message: "sent" });
     verifyLoginOtp.mockResolvedValue({ role: "customer" });
     render(<MemoryRouter initialEntries={["/login"]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/customer/dashboard" element={<p>Customer dashboard reached</p>} /></Routes></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: "Email code" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Email OTP" }));
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "customer@example.test" } });
     fireEvent.click(screen.getByRole("button", { name: "Send sign-in code" }));
     await waitFor(() => expect(requestLoginOtp).toHaveBeenCalledWith("customer@example.test"));
