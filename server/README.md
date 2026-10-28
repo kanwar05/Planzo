@@ -16,6 +16,8 @@ JSON responses use `success`, optional `message`, and the relevant resource. Err
 | --- | --- | --- |
 | POST | /api/auth/register | Public; name, email, phone, password, role customer/vendor |
 | POST | /api/auth/login | Public; email and password |
+| POST | /api/auth/login/otp/request | Public; email; existing generic email OTP delivery |
+| POST | /api/auth/login/otp/verify | Public; email and six-digit code; existing JWT session |
 | POST | /api/auth/refresh | Valid refresh cookie; atomically rotates credentials |
 | POST | /api/auth/logout | Revokes refresh cookie and clears cookies |
 | GET | /api/auth/me | Current active user |

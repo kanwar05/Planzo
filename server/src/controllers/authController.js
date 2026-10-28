@@ -29,7 +29,7 @@ const OTP_COOLDOWN_MS =
   Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60) * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const ACTIVE_ACCOUNT = {
-  accountStatus: { $ne: "deactivated" },
+  accountStatus: { $nin: ["deactivated", "suspended", "blocked"] },
   suspendedAt: null,
 };
 const credentialTokenFields = {
@@ -40,7 +40,7 @@ const credentialTokenFields = {
   emailChangeExpiresAt: 1,
 };
 
-function serializeUser(user) {
+export function serializeUser(user) {
   return {
     id: user._id,
     name: user.name,
@@ -101,6 +101,8 @@ function assertActive(user) {
     );
   }
   if (user.suspendedAt) throw new ApiError(403, "This account is suspended.");
+  if (["blocked", "suspended"].includes(user.accountStatus))
+    throw new ApiError(403, "This account is unavailable.");
 }
 
 function versionFilter(user) {
@@ -121,7 +123,7 @@ async function createRefreshToken(user) {
   return refreshToken;
 }
 
-async function startSession(res, user, statusCode, message) {
+export async function startSession(res, user, statusCode, message) {
   const accessToken = generateAccessToken(user._id, user.authVersion || 0);
   const refreshToken = await createRefreshToken(user);
   setAuthCookies(res, { accessToken, refreshToken });
@@ -134,7 +136,7 @@ function getRefreshTokenFromRequest(req) {
   return req.cookies?.[REFRESH_COOKIE_NAME] || "";
 }
 
-async function revokeAllUserRefreshTokens(userId) {
+export async function revokeAllUserRefreshTokens(userId) {
   await RefreshToken.updateMany(
     { userId, revokedAt: null },
     { revokedAt: new Date() },
@@ -293,7 +295,7 @@ export const refresh = asyncHandler(async (req, res) => {
       "This session is no longer valid. Please log in again.",
     );
   }
-  if (user.accountStatus === "deactivated" || user.suspendedAt) {
+  if (["deactivated", "blocked", "suspended"].includes(user.accountStatus) || user.suspendedAt) {
     await revokeAllUserRefreshTokens(user._id);
     clearAuthCookies(res);
     assertActive(user);

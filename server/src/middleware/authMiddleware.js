@@ -47,6 +47,9 @@ export const protect = asyncHandler(async (req, res, next) => {
   if (user.accountStatus === "deactivated") {
     throw new ApiError(403, "This account is deactivated.");
   }
+  if (["blocked", "suspended"].includes(user.accountStatus)) {
+    throw new ApiError(403, "This account is unavailable.");
+  }
   if (user.suspendedAt) {
     throw new ApiError(
       403,

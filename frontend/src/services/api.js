@@ -8,7 +8,7 @@ let refreshRequest = null;
 api.interceptors.response.use(response => response, async error => {
   const original = error.config;
   const url = original?.url || "";
-  const canRefresh = !["/auth/login", "/auth/login/otp", "/auth/register", "/auth/refresh", "/auth/logout", "/auth/forgot-password", "/auth/reset-password", "/auth/email-change/confirm"].some(path => url.includes(path));
+  const canRefresh = error.response?.data?.code !== "PHONE_AUTH_FAILED" && !["/auth/login", "/auth/login/otp", "/auth/register", "/auth/refresh", "/auth/logout", "/auth/forgot-password", "/auth/reset-password", "/auth/email-change/confirm"].some(path => url.includes(path));
   if (error.response?.status === 401 && original && !original._retry && canRefresh) {
     original._retry = true;
     try {

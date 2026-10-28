@@ -82,6 +82,7 @@ export function errorHandler(error, req, res, next) {
     success: false,
     message,
   };
+  if (error.publicCode === "PHONE_AUTH_FAILED") response.code = error.publicCode;
 
   if (errors) response.errors = errors;
   if (process.env.NODE_ENV !== "production") response.stack = error.stack;

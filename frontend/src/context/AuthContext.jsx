@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-const loadAuthService = () => import("../services/authService");
+let authServicePromise;
+const loadAuthService = () => authServicePromise ||= import("../services/authService");
 const AuthContext = createContext(null);
 export function AuthProvider({
   children

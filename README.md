@@ -11,6 +11,7 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 - Booking states are pending, accepted, rejected, cancelled, and completed. Accepted/completed bookings reserve one vendor date.
 - A customer's accepted/completed booking reveals only business contacts the vendor explicitly provided for sharing. Public APIs never return them or private account contacts.
 - HTTP-only cookie authentication, rotating refresh tokens, strong password hashing, single-use password recovery, and verified email changes remain.
+- Customers/vendors can use email OTP or passwords.
 
 Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
 

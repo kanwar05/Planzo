@@ -3,11 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "./SettingsPage";
 import { requestEmailChange, updateProfile } from "../services/authService";
-const {
-  updateUser
-} = vi.hoisted(() => ({
-  updateUser: vi.fn()
-}));
+const { updateUser } = vi.hoisted(() => ({ updateUser: vi.fn() }));
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
     user: {
