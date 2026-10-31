@@ -6,6 +6,7 @@ import request from "supertest";
 import app from "../src/app.js";
 import Availability from "../src/models/Availability.js";
 import Booking from "../src/models/Booking.js";
+import NotificationOutbox from "../src/models/NotificationOutbox.js";
 import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
@@ -79,7 +80,7 @@ before(async () => {
   process.env.JWT_SECRET = "booking-reliability-tests-secret-at-least-32-characters";
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri());
-  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init(), RefreshToken.init()]);
+  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init(), RefreshToken.init(), NotificationOutbox.init()]);
 });
 
 beforeEach(async () => {

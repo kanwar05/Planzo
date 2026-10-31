@@ -11,6 +11,7 @@
     "check": "node scripts/check.js",
     "data:audit": "node scripts/auditData.js",
     "admin:create": "node admin.js",
+    "email:worker": "node scripts/dispatchBookingEmails.js",
     "test": "node scripts/test.js"
   },
   "engines": {

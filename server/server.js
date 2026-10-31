@@ -10,7 +10,7 @@ async function startServer() {
       await Promise.all([
         import("./src/app.js"),
         import("./src/config/database.js"),
-        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp"].map(
+        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp", "NotificationOutbox"].map(
           (model) => import(`./src/models/${model}.js`),
         ),
       ]);

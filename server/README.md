@@ -82,6 +82,14 @@ Both admin endpoints use the same graph; admins can cancel accepted bookings but
 
 Only the associated customer receives intentionally shared vendor contacts on accepted/completed bookings. Vendors and admins can view sharing contacts for authorized management. Customer email/phone and vendor private account contact information are not exposed in booking payloads.
 
+## Booking emails
+
+Successful API booking requests notify the vendor owner; acceptance, rejection and completion notify the customer; cancellation notifies both parties, including the actor when they are a participant. Each change and its notification intent commit in the same MongoDB transaction. Invalid/unauthorized operations, reservation conflicts and repeated HTTP 409 actions enqueue nothing. Email routing reads private account addresses internally; no outbox or recipient fields are returned through the booking API. Bodies omit contact information and link to the authorized dashboard.
+
+Run `npm run email:worker` separately from the API, using the same server environment and existing SMTP/CLIENT_URL configuration. It polls every five seconds, processes serial batches of at most 25, and supports `npm run email:worker -- --once` for a scheduled batch. Atomic claims and token-fenced two-minute leases support multiple workers and recovery after restart. Delivery failures retry with bounded exponential backoff, up to five claims, then remain failed for operator review. No dispatcher runs just by importing app.js. SMTP has an unavoidable accepted-before-acknowledgement crash window, so duplicates are possible despite stable Message-IDs.
+
+See [Phase 1.2](../docs/BOOKING_PHASE_1_2.md) for worker deployment, monitoring, environment requirements, indexes, privacy and failure semantics. Password recovery, OTP and authentication behavior are unchanged.
+
 ## Administration
 
 All routes below require an active admin account.
