@@ -6,6 +6,7 @@ import request from "supertest";
 import app from "../src/app.js";
 import Availability from "../src/models/Availability.js";
 import Booking from "../src/models/Booking.js";
+import NotificationOutbox from "../src/models/NotificationOutbox.js";
 import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
@@ -58,10 +59,10 @@ before(async () => {
   process.env.JWT_SECRET = "planzo-mvp-marketplace-test-secret-with-sufficient-length";
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri());
-  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init()]);
+  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init(), NotificationOutbox.init()]);
 });
 beforeEach(async () => {
-  await Promise.all([User.deleteMany({}), Vendor.deleteMany({}), Booking.deleteMany({}), Availability.deleteMany({})]);
+  await Promise.all([User.deleteMany({}), Vendor.deleteMany({}), Booking.deleteMany({}), Availability.deleteMany({}), NotificationOutbox.deleteMany({})]);
 });
 after(async () => {
   mock.restoreAll();

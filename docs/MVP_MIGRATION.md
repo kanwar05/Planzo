@@ -60,6 +60,10 @@ db.bookings.updateMany(
 
 Re-run the audit after any approved changes. Do not run `syncIndexes`, `dropDatabase`, or delete legacy collections as part of deployment.
 
+## Booking email rollout Phase 1.2
+
+Phase 1.1 prerequisites and the existing reservation index remain unchanged. Phase 1.2 adds an internal notificationoutboxes collection with unique eventId + recipientUserId and worker scheduling/lease indexes. API startup and worker startup add/wait for these indexes with createIndexes; neither drops indexes or migrates historical bookings. No historical emails are backfilled. Review the new collection/index names in staging before production rollout, then deploy the API and separate worker using the existing SMTP/frontend-origin configuration. Mixed old/new API instances only enqueue events handled by new code, so use a coordinated rollout if every event during cutover must notify. Reverting the API does not remove queued jobs: stop the worker separately if rolling back dispatch. See [BOOKING_PHASE_1_2.md](BOOKING_PHASE_1_2.md) for the exact execution and monitoring instructions and SMTP duplicate-delivery limits.
+
 ## Indexes
 
 Startup disables automatic index creation during connection, runs the read-only date preflight, then adds/waits for core indexes with createIndexes and never drops existing indexes. The critical booking index is one_confirmed_booking_per_vendor_date: unique vendorId + eventDateOnly, filtered to accepted/completed states. MongoDB 6+ supports the $in partial filter used here. Index creation fails rather than silently ignoring duplicate legacy reservations.
@@ -81,7 +85,7 @@ Older indexes remain in the database even when removed from schema definitions. 
 
 ## Deployment changes
 
-Remove Razorpay/Stripe, Google Calendar, Twilio/SMS, reminder, invoice, payout and notification configuration from active deployment settings. Disable external webhook deliveries and old scheduler processes. Retired OAuth credentials and stored verification documents remain subject to your own retention/revocation review; this change does not contact external providers.
+Remove Razorpay/Stripe, Google Calendar, Twilio/SMS, reminder, invoice, payout and retired notification configuration from active deployment settings. Disable external webhook deliveries and old scheduler processes. The new Phase 1.2 booking email worker is explicitly deployed separately; it does not restore retired notification features. Retired OAuth credentials and stored verification documents remain subject to your own retention/revocation review; this change does not contact external providers.
 
 Set SMTP for recovery/verified email changes and Cloudinary for new vendor photo uploads. Production requires HTTPS UI origins and secure cookies. Cross-site deployments must use COOKIE_SAME_SITE=none; same-site can use lax.
 

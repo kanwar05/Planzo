@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import mongoose from "mongoose";
 import Booking, { BOOKING_STATUSES } from "../models/Booking.js";
 import Vendor from "../models/Vendor.js";
 import ApiError from "../utils/ApiError.js";
@@ -7,7 +9,8 @@ import {
 } from "../utils/availability.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
-import { withVendorBookingTransaction } from "../utils/vendorBookingTransaction.js";
+import { withBookingTransaction, withVendorBookingTransaction } from "../utils/vendorBookingTransaction.js";
+import { enqueueBookingEmails } from "../services/bookingNotificationService.js";
 import {
   hasActiveVendorOwner,
   vendorView,
@@ -103,7 +106,8 @@ export const createBooking = asyncHandler(async (req, res) => {
     vendorId: vendor._id,
     dateOnly: eventDateOnly,
   });
-  const booking = await Booking.create({
+  const bookingData = {
+    _id: new mongoose.Types.ObjectId(),
     customerId: req.user._id,
     vendorId: vendor._id,
     eventType: text(req.body, "eventType", 120),
@@ -112,6 +116,14 @@ export const createBooking = asyncHandler(async (req, res) => {
     eventLocation: text(req.body, "eventLocation", 300),
     description: text(req.body, "description", 2000),
     notes: text(req.body, "notes", 1000, true),
+  };
+  const eventId = randomUUID();
+  const booking = await withBookingTransaction(async (session) => {
+    const [created] = await Booking.create([bookingData], { session });
+    await enqueueBookingEmails({
+      booking: created, eventType: "booking_requested", eventId, session,
+    });
+    return created;
   });
   const populated = await populateBooking(Booking.findById(booking._id));
   res
@@ -209,9 +221,11 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     changes[status === "rejected" ? "rejectionReason" : "cancellationReason"] =
       reason;
   }
+  // Generate once per operation, outside the callback that the driver may retry.
+  const eventId = randomUUID();
   let updated;
   try {
-    const persist = async (session = null, currentVendor = vendor) => {
+    const persist = async (session, currentVendor = vendor) => {
       if (status === "accepted") {
         if (!(await hasActiveVendorOwner(currentVendor, session)))
           throw new ApiError(
@@ -242,13 +256,16 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
           409,
           "Booking changed while this request was being processed. Refresh and try again.",
         );
+      await enqueueBookingEmails({
+        booking: result, eventType: `booking_${status}`, eventId, session,
+      });
       return result;
     };
     updated = status === "accepted"
       ? await withVendorBookingTransaction(
         booking.vendorId, persist, isVendor ? req.user._id : undefined,
       )
-      : await persist();
+      : await withBookingTransaction(persist);
   } catch (error) {
     if (
       error.code === 11000 &&
