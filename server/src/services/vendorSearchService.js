@@ -17,15 +17,15 @@ export const isApprovedVendor = (vendor) =>
       (!vendor.verificationStatus && vendor.verified)),
   );
 
-export async function hasActiveVendorOwner(vendor) {
+export async function hasActiveVendorOwner(vendor, session = null) {
   if (!isApprovedVendor(vendor)) return false;
   return Boolean(
     await User.exists({
       _id: vendor.userId?._id || vendor.userId,
       role: "vendor",
-      accountStatus: { $ne: "deactivated" },
+      accountStatus: { $nin: ["deactivated", "blocked", "suspended"] },
       suspendedAt: null,
-    }),
+    }).session(session),
   );
 }
 
@@ -99,7 +99,7 @@ export async function searchVendors(query = {}) {
   filter.userId = {
     $in: await User.find({
       role: "vendor",
-      accountStatus: { $ne: "deactivated" },
+      accountStatus: { $nin: ["deactivated", "blocked", "suspended"] },
       suspendedAt: null,
     }).distinct("_id"),
   };

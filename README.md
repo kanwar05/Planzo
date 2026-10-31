@@ -17,7 +17,7 @@ Payments, refunds, payouts, chat, external calendars, favorites, reviews, notifi
 
 ## Local setup
 
-Use Node.js 22 or newer and MongoDB 6 or newer. Run a supported MongoDB release in production.
+Use Node.js 22 or newer and MongoDB 6 or newer configured as a replica set (Atlas is suitable). Local development can use an initialized single-node replica set named rs0; production should use a supported MongoDB release and a redundant replica set. Standalone MongoDB cannot run booking/availability transactions and startup refuses it. See the [Phase 1.1 rollout requirements](docs/MVP_MIGRATION.md#booking-reliability-phase-11) before upgrading an existing database.
 
 ```sh
 cd server
@@ -67,7 +67,7 @@ Backend tests use isolated MongoMemoryServer databases, never the configured app
 3. Use HTTPS. Choose `COOKIE_SAME_SITE=none` for cross-site UI/API deployments, or `lax` for same-site deployments. Production cookies are Secure and HttpOnly.
 4. Set `TRUST_PROXY` to the actual number of trusted proxy hops; the default is zero. Keep the API behind that proxy if enabling proxy trust.
 5. Build the frontend with its deployed `VITE_API_URL`. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
-6. Install backend production dependencies with `npm ci --omit=dev`, then run `npm start`. Startup validates configuration and waits for core indexes before listening.
+6. Install backend production dependencies with `npm ci --omit=dev`, then run `npm start`. Startup validates configuration, transaction support and canonical booking dates, then waits for core indexes before listening.
 7. Remove retired integration secrets/webhooks and old scheduled tasks from the deployment. No background jobs run in the MVP.
 
 The API checks browser origins for cookie mutations; non-browser cookie clients in production must send an allowed Origin header. Password changes, email confirmation, deactivation, and suspension revoke existing credentials. Deactivation retains account and booking history.

@@ -16,21 +16,32 @@ export function normalizeDateOnly(value, fieldName = "date") {
 export function bookingDateFilter(dateOnly) {
   const dayStart = new Date(`${dateOnly}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 86400000);
-  return { $or: [
-    { eventDateOnly: dateOnly },
-    { eventDateOnly: { $in: [null, ""] }, eventDate: { $gte: dayStart, $lt: dayEnd } },
-  ] };
+  return {
+    $or: [
+      { eventDateOnly: dateOnly },
+      { eventDateOnly: { $in: [null, ""] }, eventDate: { $gte: dayStart, $lt: dayEnd } },
+    ],
+  };
 }
 
-export async function getBookedDates(vendorId) {
-  const bookings = await Booking.find({ vendorId, status: { $in: ["accepted", "completed"] } }).select("eventDate eventDateOnly");
+export async function getBookedDates(vendorId, session = null) {
+  const bookings = await Booking.find({
+    vendorId, status: { $in: ["accepted", "completed"] },
+  }).select("eventDate eventDateOnly").session(session);
   return [...new Set(bookings.map((booking) => booking.eventDateOnly || booking.eventDate.toISOString().slice(0, 10)))].sort();
 }
 
-export async function assertVendorAvailable({ vendorId, dateOnly, excludeBookingId }) {
-  const availability = await Availability.findOne({ vendorId });
-  if (availability?.unavailableDates?.includes(dateOnly)) throw new ApiError(409, "Vendor is unavailable on this date.");
-  const filter = { vendorId, status: { $in: ["accepted", "completed"] }, ...bookingDateFilter(dateOnly) };
+export async function assertVendorAvailable({
+  vendorId, dateOnly, excludeBookingId, session = null,
+}) {
+  const availability = await Availability.findOne({ vendorId }).session(session);
+  if (availability?.unavailableDates?.includes(dateOnly))
+    throw new ApiError(409, "Vendor is unavailable on this date.");
+  const filter = {
+    vendorId, status: { $in: ["accepted", "completed"] },
+    ...bookingDateFilter(dateOnly),
+  };
   if (excludeBookingId) filter._id = { $ne: excludeBookingId };
-  if (await Booking.exists(filter)) throw new ApiError(409, "Vendor already has a booking on this date.");
+  if (await Booking.exists(filter).session(session))
+    throw new ApiError(409, "Vendor already has a booking on this date.");
 }

@@ -82,6 +82,8 @@ const vendorSchema = new mongoose.Schema(
     },
     suspended: { type: Boolean, default: false },
     suspendedAt: { type: Date, default: null },
+    // Internal transaction guard; never exposed in vendor/booking views.
+    bookingRevision: { type: Number, default: 0, select: false },
   },
   { timestamps: true, versionKey: false },
 );

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, mock, test } from "node:test";
 import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
+import { MongoMemoryReplSet } from "mongodb-memory-server";
 import request from "supertest";
 import app from "../src/app.js";
 import Availability from "../src/models/Availability.js";
@@ -30,9 +30,33 @@ const createBooking = (user, vendor, extra = {}) => request(app).post("/api/book
 const status = (user, id, nextStatus) => request(app).patch(`/api/bookings/${id}/status`)
   .set("Authorization", auth(user)).send({ status: nextStatus });
 
+async function atVendorGuard(operation) {
+  const original = Vendor.findOneAndUpdate;
+  let entered = 0;
+  let release;
+  const barrier = new Promise((resolve) => { release = resolve; });
+  const timer = setTimeout(release, 5000);
+  const mocked = mock.method(Vendor, "findOneAndUpdate", async function (...args) {
+    if (args[1]?.$inc?.bookingRevision) {
+      entered += 1;
+      if (entered >= 2) release();
+      await barrier;
+    }
+    return original.apply(this, args);
+  });
+  try {
+    const results = await operation();
+    assert.ok(entered >= 2, "both operations reached the shared database guard");
+    return results;
+  } finally {
+    clearTimeout(timer);
+    mocked.mock.restore();
+  }
+}
+
 before(async () => {
   process.env.JWT_SECRET = "planzo-mvp-marketplace-test-secret-with-sufficient-length";
-  mongo = await MongoMemoryServer.create();
+  mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri());
   await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init()]);
 });
@@ -161,16 +185,17 @@ test("simultaneous acceptance reserves exactly one date and cancellation release
   const second = await createBooking(secondCustomer, vendor);
   assert.equal(first.status, 201);
   assert.equal(second.status, 201);
-  // Hold both requests after their availability read. The real unique index must decide.
-  const originalUpdate = Booking.findOneAndUpdate;
+  // Release both requests together at the shared database guard. They must
+  // serialize even when handled concurrently by separate HTTP requests.
+  const originalUpdate = Vendor.findOneAndUpdate;
   let entered = 0;
   let release;
   const barrier = new Promise((resolve) => { release = resolve; });
   const timer = setTimeout(release, 5000);
-  const mocked = mock.method(Booking, "findOneAndUpdate", async function (...args) {
-    if (args[1]?.$set?.status === "accepted") {
+  const mocked = mock.method(Vendor, "findOneAndUpdate", async function (...args) {
+    if (args[1]?.$inc?.bookingRevision) {
       entered += 1;
-      if (entered === 2) release();
+      if (entered >= 2) release();
       await barrier;
     }
     return originalUpdate.apply(this, args);
@@ -182,7 +207,7 @@ test("simultaneous acceptance reserves exactly one date and cancellation release
     clearTimeout(timer);
     mocked.mock.restore();
   }
-  assert.equal(entered, 2);
+  assert.ok(entered >= 2);
   assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
   assert.equal(await Booking.countDocuments({ vendorId: vendor._id, status: "accepted" }), 1);
   const winnerIndex = results.findIndex((result) => result.status === 200);
@@ -210,6 +235,110 @@ test("legacy accepted dates without date keys still block new requests and remai
   assert.equal((await createBooking(customer, vendor)).status, 409);
   await Booking.collection.updateOne({ vendorId: vendor._id }, { $set: { eventDateOnly: "" } });
   assert.equal((await createBooking(customer, vendor)).status, 409);
+});
+
+test("installed unique index arbitrates competing reservation writes independently of API checks", async () => {
+  const indexes = await Booking.collection.indexes();
+  const index = indexes.find((item) => item.name === "one_confirmed_booking_per_vendor_date");
+  assert.deepEqual(index.key, { vendorId: 1, eventDateOnly: 1 });
+  assert.equal(index.unique, true);
+  assert.deepEqual(index.partialFilterExpression, { status: { $in: ["accepted", "completed"] } });
+  const [customer, owner] = await Promise.all([newUser(), newUser("vendor")]);
+  const vendor = await newVendor(owner);
+  const first = await createBooking(customer, vendor);
+  const second = await createBooking(customer, vendor);
+  const results = await Promise.allSettled([
+    Booking.collection.updateOne({ _id: new mongoose.Types.ObjectId(first.body.booking._id) }, { $set: { status: "accepted" } }),
+    Booking.collection.updateOne({ _id: new mongoose.Types.ObjectId(second.body.booking._id) }, { $set: { status: "completed" } }),
+  ]);
+  assert.equal(results.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(results.find((item) => item.status === "rejected").reason.code, 11000);
+  assert.equal(await Booking.countDocuments({ vendorId: vendor._id, status: { $in: ["accepted", "completed"] } }), 1);
+});
+
+test("acceptance and date blocking cannot both commit for the same vendor day", async () => {
+  const [customer, owner] = await Promise.all([newUser(), newUser("vendor")]);
+  const vendor = await newVendor(owner);
+  const created = await createBooking(customer, vendor);
+  const results = await atVendorGuard(() => Promise.all([
+    status(owner, created.body.booking._id, "accepted"),
+    request(app).put("/api/vendors/availability").set("Authorization", auth(owner))
+      .send({ unavailableDates: [datePlus()] }),
+  ]));
+  assert.deepEqual(results.map((item) => item.status).sort(), [200, 409]);
+  const booking = await Booking.findById(created.body.booking._id);
+  const availability = await Availability.findOne({ vendorId: vendor._id });
+  assert.equal(booking.status === "accepted", !availability?.unavailableDates.includes(datePlus()));
+  const publicVendor = await request(app).get(`/api/vendors/${vendor._id}`);
+  assert.equal(publicVendor.body.vendor.bookingRevision, undefined);
+  assert.equal(results.find((item) => item.status === 200).body.booking?.vendorId?.bookingRevision, undefined);
+});
+
+test("concurrent partial availability updates preserve both fields and reset preserves reservations", async () => {
+  const [customer, owner] = await Promise.all([newUser(), newUser("vendor")]);
+  const vendor = await newVendor(owner);
+  const saved = await atVendorGuard(() => Promise.all([
+    request(app).put("/api/vendors/availability").set("Authorization", auth(owner))
+      .send({ availableDates: [datePlus(16)] }),
+    request(app).post("/api/vendors/availability").set("Authorization", auth(owner))
+      .send({ unavailableDates: [datePlus(15)] }),
+  ]));
+  assert.deepEqual(saved.map((item) => item.status), [200, 200]);
+  const availability = await Availability.findOne({ vendorId: vendor._id });
+  assert.deepEqual([...availability.availableDates], [datePlus(16)]);
+  assert.deepEqual([...availability.unavailableDates], [datePlus(15)]);
+  // A day absent from availableDates remains open under the existing rule.
+  const created = await createBooking(customer, vendor);
+  assert.equal((await status(owner, created.body.booking._id, "accepted")).status, 200);
+  const reset = await request(app).delete("/api/vendors/availability").set("Authorization", auth(owner));
+  assert.equal(reset.status, 200);
+  assert.deepEqual(reset.body.availability.unavailableDates, []);
+  assert.deepEqual(reset.body.availability.bookedDates, [datePlus()]);
+});
+
+test("inconsistent persisted date keys cannot create or move reservations", async () => {
+  const [customer, owner] = await Promise.all([newUser(), newUser("vendor")]);
+  const vendor = await newVendor(owner);
+  const created = await createBooking(customer, vendor);
+  const id = new mongoose.Types.ObjectId(created.body.booking._id);
+  await Booking.collection.updateOne({ _id: id }, { $set: { eventDateOnly: datePlus(1) } });
+  const rejected = await status(owner, id, "accepted");
+  assert.equal(rejected.status, 409);
+  assert.match(rejected.body.message, /date needs correction/);
+  assert.equal((await Booking.findById(id)).status, "pending");
+  await Booking.collection.updateOne({ _id: id }, { $set: { eventDateOnly: datePlus(), status: "accepted" } });
+  await Booking.collection.updateOne({ _id: id }, { $set: { eventDateOnly: "not-a-date" } });
+  assert.equal((await status(owner, id, "completed")).status, 409);
+  assert.equal((await Booking.findById(id)).status, "accepted");
+});
+
+test("a cancellation winning during acceptance rolls back the transaction guard", async () => {
+  const [customer, owner] = await Promise.all([newUser(), newUser("vendor")]);
+  const vendor = await newVendor(owner);
+  const created = await createBooking(customer, vendor);
+  const previousVendor = await Vendor.findById(vendor._id).select("+bookingRevision").lean();
+  const original = Booking.findOneAndUpdate;
+  let cancelled = false;
+  const mocked = mock.method(Booking, "findOneAndUpdate", async function (...args) {
+    if (args[1]?.$set?.status === "accepted" && !cancelled) {
+      cancelled = true;
+      assert.equal((await status(customer, created.body.booking._id, "cancelled")).status, 200);
+    }
+    return original.apply(this, args);
+  });
+  let response;
+  try {
+    response = await status(owner, created.body.booking._id, "accepted");
+  } finally {
+    mocked.mock.restore();
+  }
+  assert.equal(cancelled, true);
+  assert.equal(response.status, 409);
+  assert.equal((await Booking.findById(created.body.booking._id)).status, "cancelled");
+  assert.deepEqual(await Vendor.findById(vendor._id).select("+bookingRevision").lean(), previousVendor);
+  assert.equal(await Availability.countDocuments({ vendorId: vendor._id }), 0);
+  const dates = await request(app).get(`/api/vendors/${vendor._id}/availability`);
+  assert.deepEqual(dates.body.availability.bookedDates, []);
 });
 
 test("owner date availability cannot be changed by customers or used to override booked dates", async () => {

@@ -4,7 +4,7 @@ Express REST API backed by Mongoose. See the root README for setup and deploymen
 
 ## Configuration
 
-See [.env.example](.env.example). Startup requires a valid MongoDB URI and JWT secret of at least 32 characters. Production additionally requires HTTPS frontend origins and account-recovery SMTP configuration. Cloudinary configuration is optional for read-only browsing, required for photo uploads. Partial Cloudinary or SMTP credential sets are rejected.
+See [.env.example](.env.example). Startup requires MongoDB 6+ with replica-set transactions (or a compatible mongos deployment), a valid MongoDB URI and JWT secret of at least 32 characters. Standalone MongoDB is refused. Production additionally requires HTTPS frontend origins and account-recovery SMTP configuration. Cloudinary configuration is optional for read-only browsing, required for photo uploads. Partial Cloudinary or SMTP credential sets are rejected.
 
 Cookie names retain the legacy `eventifyy_access` and `eventifyy_refresh` names for compatibility. Tokens are HttpOnly, Secure in production, and refreshed through opaque, hashed, rotating refresh credentials. Only nonsensitive account fields are returned. Bearer access tokens are supported for API clients. Admin accounts are provisioned with `npm run admin:create`.
 
@@ -63,6 +63,8 @@ Images accept JPEG, PNG or WEBP up to 5MB each, with at most eight portfolio pho
 
 Dates use YYYY-MM-DD. All dates are open unless explicitly unavailable or reserved by an accepted/completed booking. availableDates is informational, not an exclusive allowlist. Recurring hours, slots, holidays, vacation rules, and external calendar operations are gone.
 
+Acceptance and availability writes share a per-vendor transaction guard, so acceptance and blocking the same day cannot both succeed. Concurrent partial availability updates re-read omitted fields on retry. Resetting explicit dates never releases a booking reservation.
+
 ## Booking requests
 
 | Method | Path | Access / purpose |
@@ -75,6 +77,8 @@ Dates use YYYY-MM-DD. All dates are open unless explicitly unavailable or reserv
 Pending → accepted/rejected/cancelled. Accepted → completed/cancelled. Rejected, cancelled and completed are final.
 
 Customers can only cancel their own pending/accepted bookings. Vendors accept/reject their own incoming pending requests and complete accepted requests. Admins manage allowed transitions. The database enforces one accepted/completed booking per vendor/date, and conditional updates reject stale transitions. Pending requests do not reserve dates. Basic date checks currently use the UTC date boundary on the API.
+
+Both admin endpoints use the same graph; admins can cancel accepted bookings but cannot reopen or cancel terminal states. Same-status accept/reject/cancel repeats retain the existing HTTP 409 contract and leave reasons/timestamps unchanged. Requests racing another transition either commit a legal transition or return 409. Event dates must be real YYYY-MM-DD dates; today is allowed, and acceptance rechecks that a pending request has not become past or unavailable. There is no new requirement to wait until the event day before completing a booking.
 
 Only the associated customer receives intentionally shared vendor contacts on accepted/completed bookings. Vendors and admins can view sharing contacts for authorized management. Customer email/phone and vendor private account contact information are not exposed in booking payloads.
 
@@ -98,3 +102,5 @@ All routes below require an active admin account.
 ## Tests and data
 
 Run `npm run check` and `npm test`. Run `npm run data:audit` for a read-only legacy-data report; it never updates documents or removes collections. Review [migration requirements](../docs/MVP_MIGRATION.md) before deploying to an existing database.
+
+Startup also rejects invalid/mismatched/missing booking day keys before building indexes and serving traffic. The audit reports ID-only date issue samples and genuine reservation collisions grouped by the UTC eventDate, even when stored day keys disagree. See the [Phase 1.1 audit and validation report](../docs/BOOKING_PHASE_1_1.md).
