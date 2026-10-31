@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { validateEnvironment } from "./src/config/environment.js";
+import { assertCanonicalBookingDates } from "./src/utils/bookingDataAudit.js";
 
 async function startServer() {
   try {
@@ -14,6 +15,7 @@ async function startServer() {
         ),
       ]);
     await connectDatabase();
+    await assertCanonicalBookingDates();
     // Add required indexes without dropping legacy indexes or data.
     // Conflicting legacy reservations must be resolved before deployment.
     await Promise.all(

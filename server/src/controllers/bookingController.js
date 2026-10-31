@@ -7,6 +7,7 @@ import {
 } from "../utils/availability.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
+import { withVendorBookingTransaction } from "../utils/vendorBookingTransaction.js";
 import {
   hasActiveVendorOwner,
   vendorView,
@@ -191,21 +192,15 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     );
 
   const changes = { status };
-  if (status === "accepted") {
-    if (!(await hasActiveVendorOwner(vendor)))
-      throw new ApiError(
-        409,
-        "Vendor must be approved and active to accept bookings.",
-      );
-    const dateOnly =
-      booking.eventDateOnly || booking.eventDate.toISOString().slice(0, 10);
-    if (dateOnly < new Date().toISOString().slice(0, 10))
-      throw new ApiError(409, "Past booking requests cannot be accepted.");
-    await assertVendorAvailable({
-      vendorId: vendor._id,
-      dateOnly,
-      excludeBookingId: booking._id,
-    });
+  if (["accepted", "completed"].includes(status)) {
+    const dateOnly = booking.eventDate instanceof Date &&
+      Number.isFinite(booking.eventDate.getTime())
+      ? booking.eventDate.toISOString().slice(0, 10) : "";
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateOnly || "") ||
+      (booking.eventDateOnly && booking.eventDateOnly !== dateOnly)
+    )
+      throw new ApiError(409, "Booking date needs correction before reserving this date.");
     changes.eventDateOnly = dateOnly;
     changes.eventDate = new Date(`${dateOnly}T00:00:00.000Z`);
   }
@@ -216,21 +211,53 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   }
   let updated;
   try {
-    updated = await Booking.findOneAndUpdate(
-      { _id: booking._id, status: booking.status },
-      { $set: changes },
-      { new: true, runValidators: true },
-    );
+    const persist = async (session = null, currentVendor = vendor) => {
+      if (status === "accepted") {
+        if (!(await hasActiveVendorOwner(currentVendor, session)))
+          throw new ApiError(
+            409,
+            "Vendor must be approved and active to accept bookings.",
+          );
+        if (changes.eventDateOnly < new Date().toISOString().slice(0, 10))
+          throw new ApiError(409, "Past booking requests cannot be accepted.");
+        await assertVendorAvailable({
+          vendorId: currentVendor._id,
+          dateOnly: changes.eventDateOnly,
+          excludeBookingId: booking._id,
+          session,
+        });
+      }
+      const result = await Booking.findOneAndUpdate(
+        {
+          _id: booking._id,
+          status: booking.status,
+          customerId: booking.customerId,
+          vendorId: booking.vendorId,
+        },
+        { $set: changes },
+        { new: true, runValidators: true, session },
+      );
+      if (!result)
+        throw new ApiError(
+          409,
+          "Booking changed while this request was being processed. Refresh and try again.",
+        );
+      return result;
+    };
+    updated = status === "accepted"
+      ? await withVendorBookingTransaction(
+        booking.vendorId, persist, isVendor ? req.user._id : undefined,
+      )
+      : await persist();
   } catch (error) {
-    if (error.code === 11000)
+    if (
+      error.code === 11000 &&
+      ((error.keyPattern?.vendorId && error.keyPattern?.eventDateOnly) ||
+        error.message.includes("one_confirmed_booking_per_vendor_date"))
+    )
       throw new ApiError(409, "Vendor already has a booking on this date.");
     throw error;
   }
-  if (!updated)
-    throw new ApiError(
-      409,
-      "Booking changed while this request was being processed. Refresh and try again.",
-    );
   const populated = await populateBooking(Booking.findById(updated._id));
   res.json({
     success: true,

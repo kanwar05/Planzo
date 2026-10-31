@@ -5,6 +5,7 @@ import { getBookedDates, normalizeDateOnly } from "../utils/availability.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { validateObjectId } from "../utils/validation.js";
 import { hasActiveVendorOwner } from "../services/vendorSearchService.js";
+import { withVendorBookingTransaction } from "../utils/vendorBookingTransaction.js";
 
 async function getOwnedVendor(userId) {
   const vendor = await Vendor.findOne({ userId });
@@ -55,29 +56,34 @@ const dates = (input, field) => {
 
 export const updateAvailability = asyncHandler(async (req, res) => {
   const vendor = await getOwnedVendor(req.user._id);
-  const existing = await Availability.findOne({ vendorId: vendor._id });
   if (
     req.body.availableDates === undefined &&
     req.body.unavailableDates === undefined
   )
     throw new ApiError(400, "Provide availableDates or unavailableDates.");
-  const availableDates =
-    req.body.availableDates === undefined
-      ? existing?.availableDates || []
-      : dates(req.body.availableDates, "availableDates");
-  const unavailableDates =
-    req.body.unavailableDates === undefined
-      ? existing?.unavailableDates || []
-      : dates(req.body.unavailableDates, "unavailableDates");
-  if (availableDates.some((date) => unavailableDates.includes(date)))
-    throw new ApiError(400, "A date cannot be both available and unavailable.");
-  const bookedDates = await getBookedDates(vendor._id);
-  if (unavailableDates.some((date) => bookedDates.includes(date)))
-    throw new ApiError(409, "A booked date cannot be marked unavailable.");
-  const availability = await Availability.findOneAndUpdate(
-    { vendorId: vendor._id },
-    { $set: { availableDates, unavailableDates } },
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
+  // Validate inputs once; read omitted fields again on each transaction retry.
+  const providedAvailable = req.body.availableDates === undefined
+    ? undefined : dates(req.body.availableDates, "availableDates");
+  const providedUnavailable = req.body.unavailableDates === undefined
+    ? undefined : dates(req.body.unavailableDates, "unavailableDates");
+  const availability = await withVendorBookingTransaction(
+    vendor._id,
+    async (session) => {
+      const existing = await Availability.findOne({ vendorId: vendor._id }).session(session);
+      const availableDates = providedAvailable ?? existing?.availableDates ?? [];
+      const unavailableDates = providedUnavailable ?? existing?.unavailableDates ?? [];
+      if (availableDates.some((date) => unavailableDates.includes(date)))
+        throw new ApiError(400, "A date cannot be both available and unavailable.");
+      const bookedDates = await getBookedDates(vendor._id, session);
+      if (unavailableDates.some((date) => bookedDates.includes(date)))
+        throw new ApiError(409, "A booked date cannot be marked unavailable.");
+      return Availability.findOneAndUpdate(
+        { vendorId: vendor._id },
+        { $set: { availableDates, unavailableDates } },
+        { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true, session },
+      );
+    },
+    req.user._id,
   );
   res.json({
     success: true,
@@ -89,7 +95,9 @@ export const createAvailability = updateAvailability;
 
 export const deleteAvailability = asyncHandler(async (req, res) => {
   const vendor = await getOwnedVendor(req.user._id);
-  await Availability.deleteOne({ vendorId: vendor._id });
+  await withVendorBookingTransaction(vendor._id, async (session) => {
+    await Availability.deleteOne({ vendorId: vendor._id }).session(session);
+  }, req.user._id);
   res.json({
     success: true,
     message: "Availability reset.",
