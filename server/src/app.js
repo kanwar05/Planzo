@@ -3,12 +3,15 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import morgan from "morgan";
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
+import { requestLogging } from "./middleware/requestLogging.js";
+import { createReadinessHandler } from "./services/readinessService.js";
+import ApiError from "./utils/ApiError.js";
+import asyncHandler from "./utils/asyncHandler.js";
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
@@ -23,38 +26,48 @@ const rateLimitHandler = (req, res) =>
     success: false,
     message: "Too many requests. Please try again later.",
   });
-const limiter = (windowMs, limit) =>
+const limiter = (windowMs, limit, { health = false } = {}) =>
   rateLimit({
     windowMs,
     limit,
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) =>
-      process.env.NODE_ENV === "test" &&
-      req.get("x-enable-rate-limit-test") !== "true",
+      (health && ["/", "/api/health", "/api/health/live", "/api/ready"].includes(req.path)) ||
+      (process.env.NODE_ENV === "test" &&
+      req.get("x-enable-rate-limit-test") !== "true"),
     handler: rateLimitHandler,
   });
 
 app.disable("x-powered-by");
 app.set("trust proxy", Number(process.env.TRUST_PROXY || 0));
+app.use(requestLogging);
 app.use(helmet());
-if (process.env.NODE_ENV !== "test")
-  app.use(morgan(isProduction ? "combined" : "dev"));
+// Render terminates TLS at its trusted proxy. Reject plaintext API traffic;
+// never redirect a password/body or construct a redirect from the Host header.
+// Health probes remain available over the platform's internal HTTP connection.
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === "production" && !req.secure &&
+      !["/", "/api/health", "/api/health/live", "/api/ready"].includes(req.path)) {
+    return res.status(426).json({ success: false, message: "HTTPS is required." });
+  }
+  return next();
+});
 app.use(
   cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin))
         return callback(null, true);
-      const error = new Error("This origin is not allowed by CORS.");
-      error.statusCode = 403;
+      const error = new ApiError(403, "This origin is not allowed by CORS.");
       return callback(error);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["X-Request-Id"],
   }),
 );
-app.use(limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300));
+app.use(limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300, { health: true }));
 app.use(cookieParser());
 // CORS validates Origin above. Require it for production cookie mutations as
 // SameSite=None may be needed when the UI and API use different hosts.
@@ -67,8 +80,7 @@ app.use((req, res, next) => {
     !req.get("origin") &&
     (req.get("sec-fetch-site") === "cross-site" ||
       (process.env.NODE_ENV === "production" &&
-        cookieAuth &&
-        !req.get("authorization")))
+        cookieAuth))
   )
     return res.status(403).json({
       success: false,
@@ -83,9 +95,10 @@ app.use(["/api/auth", "/api/bookings", "/api/admin"], (req, res, next) => {
   next();
 });
 
-app.get(["/", "/api/health"], (req, res) =>
-  res.json({ success: true, message: "Planzo API is running." }),
+app.get(["/", "/api/health", "/api/health/live"], (req, res) =>
+  res.set("Cache-Control", "no-store").json({ success: true, message: "Planzo API is running." }),
 );
+app.get("/api/ready", asyncHandler(createReadinessHandler()));
 const authLimiter = limiter(
   15 * 60 * 1000,
   Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,

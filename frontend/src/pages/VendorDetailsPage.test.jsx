@@ -29,7 +29,8 @@ describe("vendor profile", () => {
     await screen.findByRole("heading", { name: "Celebration Studio" });
     expect(getVendorById).toHaveBeenCalledWith("vendor-1");
     expect(getVendorAvailability).toHaveBeenCalledWith("vendor-1");
-    expect(screen.getByText("Verified vendor")).toBeInTheDocument();
+    expect(screen.getByText("Approved listing")).toBeInTheDocument();
+    expect(screen.queryByText(/Verified vendor/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(formatDate("2099-12-20"))).toHaveLength(1);
     expect(screen.getByText(formatDate("2099-12-21"))).toBeInTheDocument();
     for (const link of screen.getAllByRole("link", { name: "Request booking" })) expect(link).toHaveAttribute("href", "/booking/vendor-1");
@@ -56,5 +57,18 @@ describe("vendor profile", () => {
     await screen.findByRole("heading", { name: "Celebration Studio" });
     expect(screen.getByRole("status")).toHaveTextContent("Availability could not be loaded.");
     expect(screen.getAllByRole("link", { name: "Request booking" })).toHaveLength(2);
+  });
+
+  it("shows coverage and the manual approval meaning while keeping business contacts private", async () => {
+    getVendorById.mockResolvedValueOnce({ ...vendor, city: "New Delhi", serviceAreas: ["Noida", "Gurugram"], contactDetails: { email: "private-business@example.com", phone: "8888888888" } });
+    renderProfile();
+    await screen.findByRole("heading", { name: "Celebration Studio" });
+    expect(screen.getByText("Based in New Delhi")).toBeInTheDocument();
+    const coverage = screen.getByRole("list", { name: "Service coverage areas" });
+    expect(within(coverage).getByText("Noida")).toBeInTheDocument();
+    expect(within(coverage).getByText("Gurugram")).toBeInTheDocument();
+    expect(screen.getByText(/manually reviewed for the marketplace/)).toBeInTheDocument();
+    expect(screen.queryByText("private-business@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("8888888888")).not.toBeInTheDocument();
   });
 });

@@ -47,6 +47,9 @@ const vendorSchema = new mongoose.Schema(
     description: { type: String, required: true, trim: true, maxlength: 2000 },
     pricing: { type: Number, required: true, min: 0 },
     location: { type: String, required: true, trim: true, maxlength: 160 },
+    city: { type: String, trim: true, maxlength: 100, default: "" },
+    serviceAreas: { type: [{ type: String, trim: true, maxlength: 120 }], default: [], validate: { validator: (items) => items.length <= 20, message: "Use at most 20 coverage areas." } },
+    profileRevision: { type: Number, default: 0, min: 0, select: false },
     servicesOffered: {
       type: [{ type: String, trim: true, maxlength: 120 }],
       default: [],
@@ -112,5 +115,6 @@ vendorSchema.index({
   serviceCategory: 1,
   pricing: 1,
 });
+vendorSchema.index({ verificationStatus: 1, createdAt: -1, _id: -1 }, { name: "vendor_review_queue_order" });
 
 export default mongoose.model("Vendor", vendorSchema);

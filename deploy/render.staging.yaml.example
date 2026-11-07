@@ -1,0 +1,83 @@
+# REVIEW-ONLY EXAMPLE: not Render's autodiscovered render.yaml.
+# Do not apply without checking service names, staging-only data and plan costs.
+# Select/review an existing compute plan in Render; no paid plan is provisioned here.
+# Supply identical staging secrets to both services, or link a manually managed
+# environment group. sync:false values are supported on services, not groups.
+services:
+  - type: web
+    name: planzo-staging-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/ready
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: COOKIE_SAME_SITE
+        value: none
+      - key: CLIENT_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OTP_HMAC_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_APP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+  - type: worker
+    name: planzo-staging-email-worker
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run email:worker
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 90
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OTP_HMAC_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_APP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false

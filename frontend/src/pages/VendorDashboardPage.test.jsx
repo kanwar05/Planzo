@@ -68,4 +68,17 @@ describe("vendor booking management", () => {
     await waitFor(() => expect(updateBookingStatus).toHaveBeenCalledWith("booking-1", "completed"));
     expect(await screen.findByText("completed")).toBeInTheDocument();
   });
+
+  it("shows server completion and a correction path for rejected profiles without changing booking history", async () => {
+    getMyVendorProfile.mockResolvedValueOnce({ businessName: "Event Studio", verificationStatus: "rejected",
+      verificationRejectionReason: "Clarify your location.", profileCompletion: { percent: 80, readyForReview: false, missingFields: ["location"] } });
+    getVendorRequests.mockResolvedValueOnce([{ ...request, status: "accepted" }]);
+    render(<MemoryRouter><VendorDashboardPage /></MemoryRouter>);
+    expect(await screen.findByText("80% complete")).toBeInTheDocument();
+    expect(screen.getByText(/Clarify your location/)).toBeInTheDocument();
+    expect(screen.getByText(/Complete these details for review: Service location/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Correct and resubmit" })).toHaveAttribute("href", "/vendor/profile-setup");
+    expect(screen.getByRole("button", { name: "Mark completed" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View public listing" })).not.toBeInTheDocument();
+  });
 });
