@@ -12,6 +12,9 @@
     "data:audit": "node scripts/auditData.js",
     "db:preflight": "node scripts/preflightDatabase.js",
     "email:diagnostics": "node scripts/outboxDiagnostics.js",
+    "staging:check": "node scripts/checkStagingEnvironment.js",
+    "staging:restore": "node scripts/rehearseStagingRestore.js",
+    "staging:browser": "node scripts/localBrowserRehearsal.js",
     "admin:create": "node admin.js",
     "email:worker": "node scripts/dispatchBookingEmails.js",
     "test": "node scripts/test.js"

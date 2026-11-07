@@ -18,6 +18,22 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: APP_ENV
+        value: staging
+      - key: STAGING_MONGO_HOST
+        sync: false
+      - key: STAGING_DATABASE_NAME
+        sync: false
+      - key: STAGING_FRONTEND_ORIGIN
+        sync: false
+      - key: STAGING_SMTP_HOST
+        sync: false
+      - key: STAGING_EMAIL_MODE
+        value: sandbox
+      - key: STAGING_EMAIL_RECIPIENTS
+        sync: false
+      - key: STAGING_CLOUDINARY_CLOUD_NAME
+        sync: false
       - key: TRUST_PROXY
         value: "1"
       - key: COOKIE_SAME_SITE
@@ -61,6 +77,20 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: APP_ENV
+        value: staging
+      - key: STAGING_MONGO_HOST
+        sync: false
+      - key: STAGING_DATABASE_NAME
+        sync: false
+      - key: STAGING_FRONTEND_ORIGIN
+        sync: false
+      - key: STAGING_SMTP_HOST
+        sync: false
+      - key: STAGING_EMAIL_MODE
+        value: sandbox
+      - key: STAGING_EMAIL_RECIPIENTS
+        sync: false
       - key: CLIENT_URL
         sync: false
       - key: MONGODB_URI

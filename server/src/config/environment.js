@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
+import { validateStagingEnvironment } from "./stagingSafety.js";
 
 export function validateEnvironment(env = process.env) {
+  validateStagingEnvironment(env);
   const missing = ["MONGODB_URI", "JWT_SECRET"].filter((key) => !env[key]);
   if (missing.length)
     throw new Error(`Missing required configuration: ${missing.join(", ")}.`);

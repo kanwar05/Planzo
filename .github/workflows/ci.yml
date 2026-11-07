@@ -2,6 +2,12 @@ name: Release quality gates
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      run_local_browser_rehearsal:
+        description: Run the isolated local Chrome/SMTP/database rehearsal (no hosted targets)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -37,9 +43,35 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      - run: node --test ../scripts/staging-browser.test.mjs
       - run: npm run check
       - run: npm test
       - run: npm audit --audit-level=high
+  local-browser-rehearsal:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_local_browser_rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm ci
+        working-directory: frontend
+      - name: Check runner Chrome availability
+        run: test -x /usr/bin/google-chrome
+      - run: npm run staging:browser
+        working-directory: server
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

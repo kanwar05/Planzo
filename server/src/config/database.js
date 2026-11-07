@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 import { logEvent } from "../utils/logger.js";
+import { assertStagingDatabase } from "./stagingSafety.js";
 
 export function databaseConnectionOptions(env = process.env) {
+  assertStagingDatabase(env);
   const timeout = (name, fallback) => {
     const value = env[name] === undefined ? fallback : Number(env[name]);
     if (!Number.isSafeInteger(value) || value < 1000 || value > 120000) {

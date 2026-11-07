@@ -1,6 +1,7 @@
 # ALTERNATIVE to the persistent worker, not an additional dispatch loop.
 # Review-only; create/link a staging environment group manually with the same
-# required NODE_ENV, MongoDB, CLIENT_URL, JWT/OTP and SMTP settings as the API.
+# required NODE_ENV, APP_ENV=staging, all STAGING_* isolation pins, MongoDB,
+# CLIENT_URL, JWT/OTP and sandbox SMTP settings as the API (Cloudinary optional).
 # Provider scheduling, runtime limits and plan costs require operator approval.
 services:
   - type: cron
@@ -15,3 +16,7 @@ services:
       - fromGroup: planzo-staging
       - key: NODE_VERSION
         value: "22"
+      - key: APP_ENV
+        value: staging
+      - key: STAGING_EMAIL_MODE
+        value: sandbox

@@ -1,0 +1,63 @@
+{
+  "status": "PASS",
+  "scope": "isolated_local_synthetic",
+  "method": "quiescent_bson_logical_copy",
+  "executedAt": "2026-11-07T07:40:07.436Z",
+  "hostedVerified": false,
+  "productionVerified": false,
+  "providerSnapshotTested": false,
+  "mongoDatabaseToolsTested": false,
+  "emailsSent": 0,
+  "topology": {
+    "topology": "replicaSet",
+    "transactionsSupported": true,
+    "mongodb6OrNewer": true
+  },
+  "collectionCount": 8,
+  "requiredIndexCount": 18,
+  "restoredIndexCountIncludingId": 26,
+  "sourceCounts": {
+    "availabilities": 1,
+    "bookings": 5,
+    "emailotps": 1,
+    "notificationoutboxes": 6,
+    "refreshtokens": 1,
+    "users": 3,
+    "vendormoderationaudits": 2,
+    "vendors": 1
+  },
+  "restoredCounts": {
+    "availabilities": 1,
+    "bookings": 5,
+    "emailotps": 1,
+    "notificationoutboxes": 6,
+    "refreshtokens": 1,
+    "users": 3,
+    "vendormoderationaudits": 2,
+    "vendors": 1
+  },
+  "documentCount": 20,
+  "bsonBytes": 7578,
+  "backupDurationMs": 36.16,
+  "restoreDurationMs": 1285.18,
+  "totalDurationMs": 4588.89,
+  "verification": {
+    "sourcePreflight": "PASS",
+    "restoredPreflight": "PASS",
+    "bsonRoundTripAndIndexesEqual": true,
+    "readOnlyChecksPreservedSourceAndTarget": true,
+    "reservationConflictRejected": true,
+    "outboxDuplicateRejected": true,
+    "outboxCounts": {
+      "pending": 1,
+      "processing": 1,
+      "sent": 2,
+      "failed": 2,
+      "unknown": 0,
+      "ready": 2,
+      "expiredLeases": 1,
+      "terminalFailures": 1
+    }
+  },
+  "failures": []
+}

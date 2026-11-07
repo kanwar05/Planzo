@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import net from "node:net";
 import nodemailer from "nodemailer";
 import { validateEmail } from "../utils/validation.js";
+import { assertStagingEmailRecipient } from "../config/stagingSafety.js";
 
 let testSender;
 const DELIVERY_TIMEOUT_MS = 35_000;
@@ -202,6 +203,7 @@ function cancellableSocket() {
 }
 
 export async function sendBookingEmail(job) {
+  assertStagingEmailRecipient(job?.recipientEmail);
   if (typeof job?.recipientEmail !== "string") throw new Error("Booking email requires one recipient.");
   validateEmail(job.recipientEmail);
   const message = {

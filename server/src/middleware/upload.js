@@ -1,7 +1,8 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import multer from "multer";
-import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
+import cloudinary, { isCloudinaryConfigured, destroyOwnedImage } from "../config/cloudinary.js";
+import { imageFolder } from "../config/stagingSafety.js";
 import ApiError from "../utils/ApiError.js";
 import { logEvent } from "../utils/logger.js";
 
@@ -16,13 +17,15 @@ const ownedAsset = Symbol("uploadedCloudinaryAsset");
 function imageStorage(folder) {
   return {
     _handleFile(req, file, callback) {
-      const targetFolder = typeof folder === "function" ? folder(file) : folder;
+      let targetFolder;
+      try { targetFolder = imageFolder(typeof folder === "function" ? folder(file) : folder); }
+      catch (error) { callback(error); return; }
       const publicId = `${targetFolder}/${randomUUID()}`;
       let completed = false;
       let inputFailed = false;
       let stream;
       const remove = async () =>
-        cloudinary.uploader.destroy(publicId, {
+        destroyOwnedImage(publicId, {
           resource_type: "image",
           invalidate: true,
         });
@@ -113,7 +116,7 @@ function imageStorage(folder) {
       delete file.filename;
       Promise.resolve()
         .then(() =>
-          cloudinary.uploader.destroy(publicId, {
+          destroyOwnedImage(publicId, {
             resource_type: "image",
             invalidate: true,
           }),
