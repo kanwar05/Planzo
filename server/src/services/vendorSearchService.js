@@ -1,8 +1,6 @@
 import Vendor, { SERVICE_CATEGORIES } from "../models/Vendor.js";
 import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
-import { activeAccountFilter } from "../utils/accountEligibility.js";
-import { vendorProfileCompletion } from "./vendorProfileService.js";
 
 export const approvedVendorFilter = () => ({
   suspended: { $ne: true },
@@ -25,7 +23,8 @@ export async function hasActiveVendorOwner(vendor, session = null) {
     await User.exists({
       _id: vendor.userId?._id || vendor.userId,
       role: "vendor",
-      ...activeAccountFilter(),
+      accountStatus: { $nin: ["deactivated", "blocked", "suspended"] },
+      suspendedAt: null,
     }).session(session),
   );
 }
@@ -34,52 +33,48 @@ export async function hasActiveVendorOwner(vendor, session = null) {
 export function vendorView(vendor, { contact = false, owner = false } = {}) {
   if (!vendor) return null;
   const source = vendor.toObject ? vendor.toObject() : vendor;
-  // Aggregation bypasses schema casting. Check types as well as field names so
-  // malformed legacy objects cannot expose nested private/internal properties.
-  const result = {};
-  const identifier = typeof source._id === "string" ? source._id : source._id?._bsontype === "ObjectId" && typeof source._id.toHexString === "function" ? source._id.toHexString() : "";
-  if (/^[a-f0-9]{24}$/i.test(identifier)) result._id = identifier;
-  for (const key of ["businessName", "serviceCategory", "description", "location"])
-    if (typeof source[key] === "string") result[key] = source[key];
-  if (typeof source.pricing === "number" && Number.isFinite(source.pricing)) result.pricing = source.pricing;
-  if (typeof source.verified === "boolean") result.verified = source.verified;
-  for (const key of ["createdAt", "updatedAt"])
-    if (source[key] instanceof Date && Number.isFinite(source[key].getTime())) result[key] = source[key];
-  result.servicesOffered = Array.isArray(source.servicesOffered) ? source.servicesOffered.filter((item) => typeof item === "string").slice(0, 20) : [];
-  const location = typeof source.location === "string" ? source.location : "";
-  result.city = (typeof source.city === "string" && source.city.trim()) || location.split(",")[0].trim();
-  result.serviceAreas = Array.isArray(source.serviceAreas) ? source.serviceAreas.filter((area) => typeof area === "string").slice(0, 20) : [];
-  const publicImage = (image) => {
-    const url = typeof image === "string" ? image : image?.url;
-    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return null;
-    return { url, publicId: typeof image?.publicId === "string" ? image.publicId : "" };
-  };
-  result.profileImage = publicImage(source.profileImage);
-  result.coverImage = publicImage(source.coverImage);
-  result.portfolioImages = (Array.isArray(source.portfolioImages) ? source.portfolioImages : []).map(publicImage).filter(Boolean);
-  result.verificationStatus = ["pending", "approved", "rejected"].includes(source.verificationStatus) ? source.verificationStatus : source.verified === true ? "approved" : "pending";
+  const fields = [
+    "_id",
+    "businessName",
+    "serviceCategory",
+    "description",
+    "pricing",
+    "location",
+    "servicesOffered",
+    "profileImage",
+    "coverImage",
+    "portfolioImages",
+    "verificationStatus",
+    "verified",
+    "createdAt",
+    "updatedAt",
+  ];
+  const result = Object.fromEntries(
+    fields
+      .filter((key) => source[key] !== undefined)
+      .map((key) => [key, source[key]]),
+  );
+  result.servicesOffered ||= [];
+  result.verificationStatus ||= source.verified ? "approved" : "pending";
   if (contact || owner)
     result.contactDetails = {
-      phone: typeof source.contactDetails?.phone === "string" ? source.contactDetails.phone : "",
-      email: typeof source.contactDetails?.email === "string" ? source.contactDetails.email : "",
+      phone: source.contactDetails?.phone || "",
+      email: source.contactDetails?.email || "",
     };
   if (owner) {
     result.userId = source.userId;
     result.suspended = Boolean(source.suspended);
     result.verificationRejectionReason =
-      typeof source.verificationRejectionReason === "string" ? source.verificationRejectionReason : "";
-    result.profileRevision = Number.isSafeInteger(source.profileRevision) && source.profileRevision >= 0 ? source.profileRevision : 0;
-    result.profileCompletion = vendorProfileCompletion(source);
+      source.verificationRejectionReason || "";
   }
   return result;
 }
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const numeric = (value, fallback, min = 0, max = Number.MAX_SAFE_INTEGER, integer = false) => {
+const numeric = (value, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) => {
   if (value === undefined || value === "") return fallback;
-  if (!["string", "number"].includes(typeof value) || !/^\d+(?:\.\d+)?$/.test(String(value))) throw new ApiError(400, "Invalid numeric search filter.");
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max || (integer && !Number.isInteger(parsed)))
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max)
     throw new ApiError(400, "Invalid numeric search filter.");
   return parsed;
 };
@@ -91,8 +86,8 @@ const text = (value) => {
 };
 
 export async function searchVendors(query = {}) {
-  const page = numeric(query.page, 1, 1, 100000, true);
-  const limit = numeric(query.limit, 12, 1, 100, true);
+  const page = Math.floor(numeric(query.page, 1, 1, 100000));
+  const limit = Math.floor(numeric(query.limit, 12, 1, 100));
   const minPrice = numeric(query.minPrice, 0);
   const maxPrice = numeric(query.maxPrice, Number.MAX_SAFE_INTEGER);
   if (minPrice > maxPrice)
@@ -101,22 +96,22 @@ export async function searchVendors(query = {}) {
     ...approvedVendorFilter(),
     pricing: { $gte: minPrice, $lte: maxPrice },
   };
+  filter.userId = {
+    $in: await User.find({
+      role: "vendor",
+      accountStatus: { $nin: ["deactivated", "blocked", "suspended"] },
+      suspendedAt: null,
+    }).distinct("_id"),
+  };
   const category = text(query.category);
-  if (category) {
-    if (!SERVICE_CATEGORIES.includes(category)) throw new ApiError(400, "Invalid service category.");
-    filter.serviceCategory = category;
-  }
-  filter.$and = [];
+  if (category) filter.serviceCategory = category;
   const city = text(query.city);
   if (city)
-    filter.$and.push({ $or: [
-      { city: new RegExp(`^${escapeRegex(city)}$`, "i") },
-      { city: { $in: [null, ""] }, location: new RegExp(`^${escapeRegex(city)}(?:\\s*,|$)`, "i") },
-    ] });
-  const search = text(query.search) || text(query.q);
+    filter.location = new RegExp(`^${escapeRegex(city)}(?:\\s*,|$)`, "i");
+  const search = text(query.search || query.q);
   if (search) {
     const regex = new RegExp(escapeRegex(search), "i");
-    filter.$and.push(
+    filter.$and = [
       {
         $or: [
           { businessName: regex },
@@ -124,27 +119,15 @@ export async function searchVendors(query = {}) {
           { servicesOffered: regex },
         ],
       },
-    );
+    ];
   }
-  if (!filter.$and.length) delete filter.$and;
-  // Join one owner per candidate rather than materializing every active account
-  // ID in the application. Count and page share the same eligibility pipeline.
-  const [result] = await Vendor.aggregate([
-    { $match: filter },
-    { $sort: { createdAt: -1, _id: 1 } },
-    { $lookup: {
-      from: User.collection.name,
-      let: { owner: "$userId" },
-      pipeline: [
-        { $match: { $expr: { $eq: ["$_id", "$$owner"] }, role: "vendor", ...activeAccountFilter() } },
-        { $project: { _id: 1 } },
-      ], as: "activeOwner",
-    } },
-    { $match: { "activeOwner.0": { $exists: true } } },
-    { $facet: { rows: [{ $skip: (page - 1) * limit }, { $limit: limit }], counts: [{ $count: "total" }] } },
+  const [rows, total] = await Promise.all([
+    Vendor.find(filter)
+      .sort({ createdAt: -1, _id: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    Vendor.countDocuments(filter),
   ]);
-  const rows = result.rows;
-  const total = result.counts[0]?.total || 0;
   return {
     vendors: rows.map((vendor) => vendorView(vendor)),
     pagination: {

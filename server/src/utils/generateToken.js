@@ -11,7 +11,7 @@ const cookieOptions = (maxAge) => ({
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.COOKIE_SAME_SITE || (process.env.NODE_ENV === "production" ? "none" : "lax"),
   path: "/",
-  ...(maxAge === undefined ? {} : { maxAge }),
+  maxAge,
 });
 
 const requireJwtSecret = () => {
@@ -72,7 +72,6 @@ export function setAuthCookies(res, { accessToken, refreshToken }) {
 }
 
 export function clearAuthCookies(res) {
-  // clearCookie supplies its own past expiry. Reusing maxAge would override it.
-  res.clearCookie(ACCESS_COOKIE_NAME, cookieOptions());
-  res.clearCookie(REFRESH_COOKIE_NAME, cookieOptions());
+  res.clearCookie(ACCESS_COOKIE_NAME, cookieOptions(0));
+  res.clearCookie(REFRESH_COOKIE_NAME, cookieOptions(0));
 }
