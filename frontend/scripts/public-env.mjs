@@ -1,7 +1,10 @@
 // Only VITE_API_URL is allowed in the public frontend environment.
 export function validatePublicBuildEnvironment(environment) {
   const invalidKeys = Object.keys(environment).filter(
-    (name) => name.startsWith("VITE_") && name !== "VITE_API_URL",
+    (name) =>
+      name.startsWith("VITE_") &&
+      name !== "VITE_API_URL" &&
+      name !== "VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG",
   );
 
   if (invalidKeys.length > 0) {
