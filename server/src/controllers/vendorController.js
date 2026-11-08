@@ -5,11 +5,12 @@ import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
+  pick,
   requireFields,
+  toNonNegativeNumber,
+  validateEmail,
   validateObjectId,
 } from "../utils/validation.js";
-import { normalizeVendorInput, assertExpectedVendorRevision, vendorRevisionFilter, vendorReviewChanges } from "../services/vendorProfileService.js";
-import { withBookingTransaction, lockVendorForBooking, lockAccountForBooking } from "../utils/vendorBookingTransaction.js";
 import {
   getVendorSearchMeta,
   searchVendors,
@@ -17,14 +18,66 @@ import {
   vendorView,
 } from "../services/vendorSearchService.js";
 
-async function commitVendorChanges(vendor, changes) {
-  const updated = await Vendor.findOneAndUpdate(
-    { _id: vendor._id, userId: vendor.userId, ...vendorRevisionFilter(vendor) },
-    { $set: { ...changes, ...vendorReviewChanges(vendor, changes) }, $inc: { profileRevision: 1 } },
-    { new: true, runValidators: true },
-  ).select("+contactDetails +profileRevision");
-  if (!updated) throw new ApiError(409, "The profile changed. Reload it before saving or uploading again.");
-  return updated;
+const EDITABLE_FIELDS = [
+  "businessName",
+  "serviceCategory",
+  "description",
+  "pricing",
+  "location",
+  "servicesOffered",
+  "contactDetails",
+];
+
+function normalizeVendorInput(body) {
+  const data = pick(body, EDITABLE_FIELDS);
+  for (const key of [
+    "businessName",
+    "serviceCategory",
+    "description",
+    "location",
+  ]) {
+    if (data[key] !== undefined) {
+      if (typeof data[key] !== "string" || !data[key].trim())
+        throw new ApiError(400, `${key} must be a non-empty string.`);
+      data[key] = data[key].trim();
+    }
+  }
+  if (data.pricing !== undefined)
+    data.pricing = toNonNegativeNumber(data.pricing, "Pricing");
+  if (data.servicesOffered !== undefined) {
+    if (
+      !Array.isArray(data.servicesOffered) ||
+      data.servicesOffered.length > 20 ||
+      data.servicesOffered.some(
+        (item) =>
+          typeof item !== "string" || !item.trim() || item.trim().length > 120,
+      )
+    ) {
+      throw new ApiError(
+        400,
+        "Provide at most 20 service names, each up to 120 characters.",
+      );
+    }
+    data.servicesOffered = [
+      ...new Set(data.servicesOffered.map((item) => item.trim())),
+    ];
+  }
+  if (data.contactDetails !== undefined) {
+    const contact = data.contactDetails;
+    if (!contact || typeof contact !== "object" || Array.isArray(contact))
+      throw new ApiError(400, "Contact details must be an object.");
+    for (const field of ["email", "phone"]) {
+      if (contact[field] !== undefined && typeof contact[field] !== "string")
+        throw new ApiError(400, "Business contacts must be text.");
+    }
+    const email = (contact.email || "").trim().toLowerCase();
+    const phone = (contact.phone || "").trim();
+    if (email) validateEmail(email);
+    if (phone && !/^[+()0-9 .-]{7,30}$/.test(phone))
+      throw new ApiError(400, "Please provide a valid business phone number.");
+    data.contactDetails = { email, phone };
+  }
+  return data;
 }
 
 const destroyCloudinaryImages = async (files = []) => {
@@ -82,7 +135,7 @@ const removeReplacedAssets = async (images) => {
 
 export const requireVendorProfile = asyncHandler(async (req, res, next) => {
   const vendor = await Vendor.findOne({ userId: req.user._id }).select(
-    "+contactDetails +profileRevision",
+    "+contactDetails",
   );
 
   if (!vendor) {
@@ -124,13 +177,14 @@ export const updateVendorImages = asyncHandler(async (req, res) => {
     replacedImages.push(vendor.coverImage);
   }
 
-  const changes = {};
-  if (profileFile) changes.profileImage = toCloudinaryImage(profileFile);
-  if (coverFile) changes.coverImage = toCloudinaryImage(coverFile);
-  if (portfolioFiles.length) changes.portfolioImages = [...vendor.portfolioImages.map((image) => image.toObject ? image.toObject() : image), ...portfolioFiles.map(toCloudinaryImage)];
-  let updated;
+  if (profileFile) vendor.profileImage = toCloudinaryImage(profileFile);
+  if (coverFile) vendor.coverImage = toCloudinaryImage(coverFile);
+  if (portfolioFiles.length) {
+    vendor.portfolioImages.push(...portfolioFiles.map(toCloudinaryImage));
+  }
+
   try {
-    updated = await commitVendorChanges(vendor, changes);
+    await vendor.save();
   } catch (error) {
     await destroyCloudinaryImages(uploadedFiles);
     throw error;
@@ -141,7 +195,7 @@ export const updateVendorImages = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Vendor images uploaded successfully.",
-    vendor: vendorView(updated, { owner: true }),
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
@@ -153,9 +207,10 @@ const replaceSingleVendorImage = (field, label) =>
 
     const vendor = req.vendorProfile;
     const oldImage = vendor[field];
-    let updated;
+    vendor[field] = toCloudinaryImage(req.file);
+
     try {
-      updated = await commitVendorChanges(vendor, { [field]: toCloudinaryImage(req.file) });
+      await vendor.save();
     } catch (error) {
       await destroyCloudinaryImages([req.file]);
       throw error;
@@ -166,7 +221,7 @@ const replaceSingleVendorImage = (field, label) =>
     res.status(200).json({
       success: true,
       message: `${label} uploaded successfully.`,
-      vendor: vendorView(updated, { owner: true }),
+      vendor: vendorView(vendor, { owner: true }),
     });
   });
 
@@ -182,21 +237,20 @@ export const replaceCoverImage = replaceSingleVendorImage(
 const deleteSingleVendorImage = (field, label) =>
   asyncHandler(async (req, res) => {
     const vendor = await Vendor.findOne({ userId: req.user._id }).select(
-      "+contactDetails +profileRevision",
+      "+contactDetails",
     );
 
     if (!vendor) throw new ApiError(404, "Vendor profile not found.");
     if (!vendor[field]) throw new ApiError(404, `${label} not found.`);
 
-    const oldImage = vendor[field];
-    if (oldImage.publicId && !isCloudinaryConfigured()) throw new ApiError(503, "Cloudinary image uploads are not configured.");
-    const updated = await commitVendorChanges(vendor, { [field]: null });
-    await removeReplacedAssets([oldImage]);
+    await destroyCloudinaryAsset(vendor[field].publicId, label.toLowerCase());
+    vendor[field] = null;
+    await vendor.save();
 
     res.status(200).json({
       success: true,
       message: `${label} deleted successfully.`,
-      vendor: vendorView(updated, { owner: true }),
+      vendor: vendorView(vendor, { owner: true }),
     });
   });
 
@@ -230,9 +284,24 @@ export const addPortfolioImages = asyncHandler(async (req, res) => {
   }));
 
   try {
-    const vendor = await commitVendorChanges(req.vendorProfile, {
-      portfolioImages: [...req.vendorProfile.portfolioImages.map((image) => image.toObject ? image.toObject() : image), ...uploadedImages],
-    });
+    const vendor = await Vendor.findOneAndUpdate(
+      {
+        _id: req.vendorProfile._id,
+        $expr: {
+          $lte: [
+            { $size: { $ifNull: ["$portfolioImages", []] } },
+            8 - files.length,
+          ],
+        },
+      },
+      { $push: { portfolioImages: { $each: uploadedImages } } },
+      { new: true, runValidators: true },
+    ).select("+contactDetails");
+
+    if (!vendor) {
+      await destroyCloudinaryImages(files);
+      throw new ApiError(400, "A portfolio can contain at most 8 images.");
+    }
 
     return res.status(200).json({
       success: true,
@@ -240,7 +309,9 @@ export const addPortfolioImages = asyncHandler(async (req, res) => {
       vendor: vendorView(vendor, { owner: true }),
     });
   } catch (error) {
-    await destroyCloudinaryImages(files);
+    if (!(error instanceof ApiError)) {
+      await destroyCloudinaryImages(files);
+    }
     throw error;
   }
 });
@@ -256,7 +327,7 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
   }
 
   const vendor = await Vendor.findOne({ userId: req.user._id }).select(
-    "+contactDetails +profileRevision",
+    "+contactDetails",
   );
 
   if (!vendor) {
@@ -273,16 +344,19 @@ export const removePortfolioImage = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Portfolio image not found.");
   }
 
-  if (image.publicId && !isCloudinaryConfigured()) throw new ApiError(503, "Cloudinary image uploads are not configured.");
-  const updated = await commitVendorChanges(vendor, {
-    portfolioImages: vendor.portfolioImages.filter((item) => item.url !== image.url).map((item) => item.toObject ? item.toObject() : item),
-  });
-  await removeReplacedAssets([image]);
+  if (image.publicId) {
+    await destroyCloudinaryAsset(image.publicId, "portfolio image");
+  }
+
+  vendor.portfolioImages = vendor.portfolioImages.filter(
+    (item) => item.url !== image.url,
+  );
+  await vendor.save({ validateBeforeSave: false });
 
   res.status(200).json({
     success: true,
     message: "Portfolio image deleted successfully.",
-    vendor: vendorView(updated, { owner: true }),
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
@@ -296,7 +370,7 @@ export const createVendorProfile = asyncHandler(async (req, res) => {
   ]);
 
   const existingProfile = await Vendor.findOne({ userId: req.user._id }).select(
-    "+contactDetails +profileRevision",
+    "+contactDetails",
   );
   if (existingProfile) {
     throw new ApiError(
@@ -345,7 +419,7 @@ export const getVendorById = asyncHandler(async (req, res) => {
 
 export const getMyVendorProfile = asyncHandler(async (req, res) => {
   const vendor = await Vendor.findOne({ userId: req.user._id }).select(
-    "+contactDetails +profileRevision",
+    "+contactDetails",
   );
 
   if (!vendor) throw new ApiError(404, "Vendor profile not found.");
@@ -363,37 +437,75 @@ export const updateVendorProfile = asyncHandler(async (req, res) => {
   }
 
   const vendor = await Vendor.findOne({ userId: req.user._id }).select(
-    "+contactDetails +profileRevision",
+    "+contactDetails",
   );
   if (!vendor) throw new ApiError(404, "Vendor profile not found.");
-  assertExpectedVendorRevision(req.body, vendor);
-  if (updates.contactDetails) updates.contactDetails = { phone: vendor.contactDetails?.phone || "", email: vendor.contactDetails?.email || "", ...updates.contactDetails };
-  const updated = await commitVendorChanges(vendor, updates);
+  Object.assign(vendor, updates);
+  if (vendor.verificationStatus === "rejected") {
+    vendor.verificationStatus = "pending";
+    vendor.verificationRejectionReason = "";
+  }
+  await vendor.save();
 
   res.status(200).json({
     success: true,
     message: "Vendor profile updated successfully.",
-    vendor: vendorView(updated, { owner: true }),
+    vendor: vendorView(vendor, { owner: true }),
   });
 });
 
 export const deleteVendorProfile = asyncHandler(async (req, res) => {
-  const images = await withBookingTransaction(async (session) => {
-    await lockAccountForBooking(req.user._id, session);
-    const owned = await Vendor.findOne({ userId: req.user._id }).session(session);
-    if (!owned) throw new ApiError(404, "Vendor profile not found.");
-    const vendor = await lockVendorForBooking(owned._id, session, req.user._id);
-    if (await Booking.exists({ vendorId: vendor._id }).session(session))
-      throw new ApiError(409, "Profiles with booking history cannot be deleted. Contact support to deactivate the account.");
-    const assets = [vendor.profileImage, vendor.coverImage, ...vendor.portfolioImages].filter((image) => image?.publicId);
-    if (assets.length && !isCloudinaryConfigured()) throw new ApiError(503, "Cloudinary must be configured before deleting this vendor profile.");
-    await Availability.deleteOne({ vendorId: vendor._id }).session(session);
-    await Vendor.deleteOne({ _id: vendor._id, userId: req.user._id }).session(session);
-    return assets;
+  const vendor = await Vendor.findOne({ userId: req.user._id }).select(
+    "+contactDetails",
+  );
+
+  if (!vendor) {
+    throw new ApiError(404, "Vendor profile not found.");
+  }
+
+  const bookingHistory = await Booking.exists({
+    vendorId: vendor._id,
   });
-  // Cloudinary cannot join the transaction. Delete only detached assets after
-  // commit; a provider outage must not erase an image still used by a booking.
-  await removeReplacedAssets(images);
+
+  if (bookingHistory) {
+    throw new ApiError(
+      409,
+      "Profiles with booking history cannot be deleted. Contact support to deactivate the account.",
+    );
+  }
+
+  const images = [
+    vendor.profileImage,
+    vendor.coverImage,
+    ...vendor.portfolioImages,
+  ].filter((image) => image?.publicId);
+
+  if (images.length) {
+    if (!isCloudinaryConfigured()) {
+      throw new ApiError(
+        503,
+        "Cloudinary must be configured before deleting this vendor profile.",
+      );
+    }
+
+    const results = await Promise.allSettled(
+      images.map((image) =>
+        destroyCloudinaryAsset(image.publicId, "vendor image"),
+      ),
+    );
+
+    if (results.some((result) => result.status === "rejected")) {
+      throw new ApiError(
+        502,
+        "Vendor profile was not deleted because some Cloudinary images could not be removed.",
+      );
+    }
+  }
+
+  await Promise.all([
+    Availability.deleteOne({ vendorId: vendor._id }),
+    vendor.deleteOne(),
+  ]);
 
   res.status(200).json({
     success: true,

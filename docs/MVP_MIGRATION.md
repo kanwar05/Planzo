@@ -66,10 +66,6 @@ Phase 1.1 prerequisites and the existing reservation index remain unchanged. Pha
 
 ## Indexes
 
-Phase 1.3 adds optional city/serviceAreas, an internal Vendor.profileRevision and User.bookingGuardRevision, plus an internal vendormoderationaudits collection. Missing revisions behave as zero and initialize only on normal writes; no backfill is needed. Existing location and manual approved/verified legacy records remain readable. New essential-information checks apply to approval decisions; no existing profiles are automatically approved, rejected, or hidden solely as a migration. Unknown non-active account states are now denied consistently (legacy missing/null status remains compatible).
-
-Startup adds `vendor_review_queue_order` on `{ verificationStatus: 1, createdAt: -1, _id: -1 }` and the moderation history index `{ vendorId: 1, createdAt: -1, _id: -1 }`. Existing unique owner and discovery indexes remain. Review db.vendors.getIndexes() and db.vendormoderationaudits.getIndexes() in staging before rollout; do not drop/sync existing indexes. No reservation/outbox index definition changes. Deploy API and frontend together to use inspected revisions, and coordinate old/new mutation writers during cutover: old profile/media/account code does not participate in the new guards. See [VENDOR_PHASE_1_3.md](VENDOR_PHASE_1_3.md) for moderation policy, manual smoke checks and remaining risks. No production data migration or remote deployment was executed.
-
 Startup disables automatic index creation during connection, runs the read-only date preflight, then adds/waits for core indexes with createIndexes and never drops existing indexes. The critical booking index is one_confirmed_booking_per_vendor_date: unique vendorId + eventDateOnly, filtered to accepted/completed states. MongoDB 6+ supports the $in partial filter used here. Index creation fails rather than silently ignoring duplicate legacy reservations.
 
 Older indexes remain in the database even when removed from schema definitions. After backup and staging validation, operators may review obsolete geo/rating/search/slot indexes separately. No automatic drop script is included.
@@ -94,11 +90,3 @@ Remove Razorpay/Stripe, Google Calendar, Twilio/SMS, reminder, invoice, payout a
 Set SMTP for recovery/verified email changes and Cloudinary for new vendor photo uploads. Production requires HTTPS UI origins and secure cookies. Cross-site deployments must use COOKIE_SAME_SITE=none; same-site can use lax.
 
 Retain the old deployment/database backup until staging workflows and the first production smoke pass have been reviewed. Reverting source code alone will not undo any independently approved data changes.
-
-## Production readiness Phase 1.4
-
-Phase 1.4 adds no new index definition or automatic backfill. Preserve the Phase 1.1–1.3 rollout steps above. From `server/`, run `npm run data:audit` and `npm run db:preflight` against an isolated restore before release. The new preflight reads topology, every declared core index definition, required field types, status values, canonical dates and duplicate reservation groups. It never creates a collection/index or repairs a record. A fresh database without indexes correctly reports BLOCKED until the separately reviewed additive build is rehearsed. Missing/malformed participant references or unknown booking statuses now also cause API startup refusal; map legacy values only after explicit review.
-
-Startup still performs only additive createIndexes, then verifies the installed definitions before listening; incompatible indexes are never automatically dropped/synchronized. Full preflight findings require operator review, not automatic vendor re-review or customer-data changes. OTP concurrency fixes reuse the existing challenge primary key; no auth index migration is required, and old challenge keys remain readable until normal replacement/expiry.
-
-The [Phase 1.4 release runbook](PRODUCTION_PHASE_1_4.md) documents backup/isolated restore, paused writers, approved legacy repairs, additive builds, preflight, regression/smoke verification and rollback/recovery. Restored outbox jobs retain real recipient snapshots: stop every staging worker until sandbox routing is assured. Source rollback does not unsend notifications or undo later database writes. No production preflight, provider action, migration or deployment was executed by this phase.

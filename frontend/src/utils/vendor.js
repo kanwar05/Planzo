@@ -15,13 +15,3 @@ const getImageUrl = image => {
 };
 export const getVendorImage = vendor => getImageUrl(vendor?.profileImage) || getImageUrl(vendor?.portfolioImages?.[0]) || getImageUrl(vendor?.coverImage) || fallbacks[vendor?.serviceCategory] || celebrationImage;
 export const getVendorGallery = vendor => [getImageUrl(vendor?.coverImage), ...(vendor?.portfolioImages?.map(getImageUrl) || []), getImageUrl(vendor?.profileImage)].filter((url, index, collection) => url && collection.indexOf(url) === index);
-export const vendorProfileFields = {
-  businessName: "Business name", serviceCategory: "Category", description: "Business description",
-  location: "Service location", pricing: "Starting price"
-};
-export const getVendorCompletion = vendor => {
-  const missingFields = Object.keys(vendorProfileFields).filter(key => key === "pricing"
-    ? vendor?.pricing === "" || vendor?.pricing === undefined || vendor?.pricing === null || !Number.isFinite(Number(vendor.pricing)) || Number(vendor.pricing) < 0
-    : !String(vendor?.[key] || "").trim());
-  return { percent: (5 - missingFields.length) * 20, readyForReview: !missingFields.length, missingFields };
-};

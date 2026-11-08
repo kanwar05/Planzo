@@ -1,19 +1,4 @@
 import mongoose from "mongoose";
-import { BOOKING_STATUSES } from "../models/Booking.js";
-import { safeDocumentId } from "./safeDiagnosticValues.js";
-
-export async function assertBookingReservationFields(bookings = mongoose.connection.collection("bookings")) {
-  const unsafe = await bookings.findOne({ $or: [
-    { $expr: { $not: [{ $in: [{ $ifNull: ["$status", null] }, BOOKING_STATUSES] }] } },
-    { $expr: { $ne: [{ $type: "$vendorId" }, "objectId"] } },
-    { $expr: { $ne: [{ $type: "$customerId" }, "objectId"] } },
-  ] }, { projection: { _id: 1 }, maxTimeMS: 10000 });
-  if (unsafe) {
-    const error = new Error("Booking reservation fields require operator review before startup.");
-    error.code = "BOOKING_RESERVATIONS_UNSAFE";
-    throw error;
-  }
-}
 
 // A YYYY-MM-DD key can represent only these UTC dates. Checking the BSON type
 // and range before formatting also handles dates outside JavaScript's range.
@@ -24,7 +9,7 @@ export async function auditBookingDates(
   bookings = mongoose.connection.collection("bookings"),
   { includeDuplicates = true } = {},
 ) {
-  const dateStages = [
+  const [result] = await bookings.aggregate([
     {
       $project: {
         vendorId: 1,
@@ -108,8 +93,7 @@ export async function auditBookingDates(
         },
       },
     },
-  ];
-  const [result] = await bookings.aggregate([...dateStages, {
+    {
       $facet: {
         counts: [{
           $group: {
@@ -135,24 +119,20 @@ export async function auditBookingDates(
             mismatchedDateKey: 1,
           } },
         ],
+        ...(includeDuplicates ? { duplicateReservations: [
+          { $match: { status: { $in: ["accepted", "completed"] }, validEventDate: true } },
+          {
+            $group: {
+              _id: { vendor: "$vendorId", date: "$canonicalDate" },
+              count: { $sum: 1 },
+              bookingIds: { $push: "$_id" },
+            },
+          },
+          { $match: { count: { $gt: 1 } } },
+        ] } : {}),
       },
-    }], { maxTimeMS: 30000 }).toArray();
-  let duplicates;
-  if (includeDuplicates) {
-    // Group outside the facet so MongoDB can spill to disk. Both report arrays
-    // are bounded even when a large legacy database has many collisions.
-    [duplicates] = await bookings.aggregate([
-      { $match: { status: { $in: ["accepted", "completed"] } } },
-      ...dateStages,
-      { $match: { validEventDate: true } },
-      { $group: {
-        _id: { vendor: "$vendorId", date: "$canonicalDate" },
-        count: { $sum: 1 }, bookingIds: { $firstN: { input: "$_id", n: 20 } },
-      } },
-      { $match: { count: { $gt: 1 } } },
-      { $facet: { counts: [{ $count: "value" }], samples: [{ $limit: 20 }] } },
-    ], { allowDiskUse: true, maxTimeMS: 30000 }).toArray();
-  }
+    },
+  ]).toArray();
   const { _id, ...counts } = result.counts[0] || {
     bookingsMissingDateKeys: 0,
     bookingsInvalidDates: 0,
@@ -161,12 +141,8 @@ export async function auditBookingDates(
   };
   return {
     ...counts,
-    bookingDateIssues: result.bookingDateIssues.map((issue) => ({ ...issue, bookingId: safeDocumentId(issue.bookingId) })),
-    duplicateReservationGroups: duplicates?.counts[0]?.value || 0,
-    duplicateReservations: (duplicates?.samples || []).map((group) => ({
-      _id: { vendor: safeDocumentId(group._id.vendor), date: group._id.date },
-      count: group.count, bookingIds: group.bookingIds.map(safeDocumentId).filter(Boolean),
-    })),
+    bookingDateIssues: result.bookingDateIssues,
+    duplicateReservations: result.duplicateReservations || [],
   };
 }
 
@@ -178,13 +154,11 @@ export async function assertCanonicalBookingDates(bookings) {
     report.bookingsMissingDateKeys || report.bookingsInvalidDates ||
     report.bookingsInvalidDateKeys || report.bookingsMismatchedDateKeys
   ) {
-    const error = new Error(
+    throw new Error(
       "Booking date migration is required before serving traffic. " +
       "Run npm run data:audit and follow docs/MVP_MIGRATION.md; " +
       "repair invalid dates/date keys and resolve conflicting reservations before restart.",
     );
-    error.code = "BOOKING_DATES_UNSAFE";
-    throw error;
   }
   return report;
 }

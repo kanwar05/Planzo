@@ -6,9 +6,7 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 
 - Customers register, sign in, search vendors, request bookings, follow status, cancel eligible requests, and manage their account.
 - Vendors manage business information, services, starting prices, photos, intentionally shared business contacts, booking requests, and unavailable dates.
-- Vendor setup includes city/coverage, essential-detail completion, private preview, profile/cover/portfolio management and rejection/resubmission. Material public content changes require re-review; price, shared-contact and availability edits retain approval.
 - Admins view users and bookings, approve/reject profiles, suspend accounts, and view basic counts.
-- Listing approval is manual content review, not identity verification. Admin moderation uses inspected revisions, transactional suspension and an internal audit history.
 - Search supports vendor/service name, category, city, and starting-price range. Categories include photography.
 - Booking states are pending, accepted, rejected, cancelled, and completed. Accepted/completed bookings reserve one vendor date.
 - Successful booking requests and status changes enqueue durable email notifications. A separate MongoDB-backed worker delivers them with retries; SMTP failures do not change booking state.
@@ -41,7 +39,7 @@ npm run dev
 
 On Windows PowerShell use `Copy-Item .env.example .env` and `npm.cmd` if script execution policy blocks `npm.ps1`.
 
-Defaults: frontend http://localhost:5173, API http://localhost:5001/api. Liveness: `GET /api/health`; database readiness: `GET /api/ready`.
+Defaults: frontend http://localhost:5173, API http://localhost:5001/api. Health: `GET /api/health`.
 
 Configure SMTP to exercise password recovery, email-address verification, and customer/vendor email OTP sign-in. For Gmail, set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER`, `SMTP_APP_PASSWORD` (a Google App Password), `SMTP_FROM_NAME`, and `SMTP_FROM_EMAIL`. Set a separate random `OTP_HMAC_SECRET` (at least 32 characters). `OTP_EXPIRY_MINUTES` defaults to 5 and `OTP_RESEND_COOLDOWN_SECONDS` defaults to 60. Raw email tokens and OTPs are never returned through the API. Configure all three Cloudinary values to enable vendor photo uploads; browsing existing photos does not require upload credentials.
 
@@ -71,14 +69,10 @@ Backend tests use isolated MongoMemoryServer databases, never the configured app
 2. Set production `MONGODB_URI`, a random `JWT_SECRET`, HTTPS `CLIENT_URL` origins, and SMTP delivery configuration. Set Cloudinary credentials for photo uploads.
 3. Use HTTPS. Choose `COOKIE_SAME_SITE=none` for cross-site UI/API deployments, or `lax` for same-site deployments. Production cookies are Secure and HttpOnly.
 4. Set `TRUST_PROXY` to the actual number of trusted proxy hops; the default is zero. Keep the API behind that proxy if enabling proxy trust.
-5. Build the frontend with an explicit HTTPS `VITE_API_URL`, including `/api`. Production builds reject missing/plaintext endpoints and any other `VITE_*` variable, because these values are public. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
+5. Build the frontend with its deployed `VITE_API_URL`. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
 6. Install backend production dependencies with `npm ci --omit=dev`, then run `npm start`. Startup validates configuration, transaction support and canonical booking dates, then waits for core indexes before listening.
 7. Remove retired integration secrets/webhooks and old scheduled tasks from the deployment. Deploy the new booking email worker separately with the same server environment, automatic restart and access to MongoDB/SMTP. The API does not dispatch email itself.
 
 The API checks browser origins for cookie mutations; non-browser cookie clients in production must send an allowed Origin header. Password changes, email confirmation, deactivation, and suspension revoke existing credentials. Deactivation retains account and booking history.
-
-Review [Phase 1.3 vendor lifecycle and rollout](docs/VENDOR_PHASE_1_3.md) before upgrading an existing marketplace. New review/audit indexes and optional fields are additive; no automatic production-data migration is performed.
-
-Phase 1.4 adds read-only `npm run db:preflight` and `npm run email:diagnostics` from `server/`, bounded database settings, safe request/lifecycle logs, security regressions and CI. Production API traffic requires HTTPS through the configured trusted proxy; cookie mutations always require an allowed Origin even when Authorization is present. Health probes remain accessible internally over HTTP. Follow the [staging rehearsal and release runbook](docs/PRODUCTION_PHASE_1_4.md) before launch. Review-only Render examples live in `deploy/`; no service or production migration is created automatically by these files. Backup restoration, actual browser/provider behavior and hosted failover still require staging evidence.
 
 [API reference](server/README.md) · [Migration guide](docs/MVP_MIGRATION.md) · [Refactor and validation report](docs/MVP_REFACTOR.md)
