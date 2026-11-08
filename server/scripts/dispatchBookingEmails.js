@@ -5,8 +5,6 @@ import connectDatabase from "../src/config/database.js";
 import { validateEnvironment } from "../src/config/environment.js";
 import NotificationOutbox from "../src/models/NotificationOutbox.js";
 import { validateBookingEmailConfiguration } from "../src/services/bookingEmailService.js";
-import { assertRequiredIndexes } from "../src/utils/databasePreflight.js";
-import { logEvent } from "../src/utils/logger.js";
 import {
   dispatchBookingEmailBatch,
   sanitizeBookingEmailFailure,
@@ -18,7 +16,6 @@ const polling = new AbortController();
 function stop() {
   if (stopping) return;
   stopping = true;
-  logEvent("info", "email_worker_stopping");
   polling.abort();
   // Give the bounded SMTP attempt and its DB acknowledgement time to finish.
   // If forced to exit, the durable lease makes the claim recoverable.
@@ -44,19 +41,14 @@ async function run() {
     }
     await connectDatabase();
     await NotificationOutbox.createIndexes();
-    await assertRequiredIndexes(mongoose.connection.db, { collections: [NotificationOutbox.collection.name] });
     const once = process.argv.includes("--once");
-    logEvent("info", "email_worker_started", { phase: once ? "once" : "persistent" });
     do {
       if (stopping) break;
       try {
-        const result = await dispatchBookingEmailBatch({
-          shouldStop: () => stopping,
-          logger: { warn: (_message, { category } = {}) => logEvent("warn", "email_delivery_failed", { category }) },
-        });
-        if (result.claimed) logEvent("info", "email_worker_batch", result);
+        const result = await dispatchBookingEmailBatch({ shouldStop: () => stopping });
+        if (result.claimed) console.log("Booking email dispatch batch finished.", result);
       } catch (error) {
-        logEvent("error", "email_worker_operation_failed", {
+        console.error("Booking email worker operation failed.", {
           category: sanitizeBookingEmailFailure(error),
         });
         if (once) process.exitCode = 1;
@@ -67,17 +59,12 @@ async function run() {
       });
     } while (!stopping);
   } catch (error) {
-    logEvent("error", "email_worker_startup_failed", {
+    console.error("Booking email worker startup failed.", {
       category: sanitizeBookingEmailFailure(error),
     });
     process.exitCode = 1;
   } finally {
-    try { await mongoose.disconnect(); }
-    catch {
-      logEvent("error", "email_worker_cleanup_failed");
-      process.exitCode = 1;
-    }
-    logEvent("info", "email_worker_stopped");
+    await mongoose.disconnect();
     clearTimeout(shutdownTimer);
     process.removeListener("SIGINT", stop);
     process.removeListener("SIGTERM", stop);

@@ -48,13 +48,9 @@ Passwords require 8–128 characters including lowercase, uppercase, a digit and
 | PUT / DELETE | /api/vendors/cover-image | Vendor replaces/removes cover photo |
 | POST / DELETE | /api/vendors/portfolio | Vendor adds photos (images field) / removes an owned image |
 
-Profile fields: businessName, serviceCategory, description, location, optional city, serviceAreas, pricing, servicesOffered, contactDetails. serviceAreas and servicesOffered accept at most 20 nonempty strings of up to 120 characters. City is up to 100 characters; a legacy location supplies a display/search fallback when city is absent. The existing five essential fields remain required at creation and approval; this API does not introduce partial drafts. Sharing contacts are optional phone/email and never copied from User. Public APIs omit contactDetails entirely. Existing profileImage, coverImage and portfolioImages records remain readable.
-
-Owner/admin responses additionally include profileRevision and profileCompletion. PATCH may include the revision loaded by the editor; a stale revision returns409. Legacy clients may omit it and still receive request-time compare-and-set protection. Material changes to business identity/category/description/location/city/coverage/services or public images change approved listings to pending. Starting price, protected contacts and availability are operational edits that retain approval. Rejected profiles resubmit on a valid profile save. No change reopens, cancels or removes existing bookings.
+Profile fields: businessName, serviceCategory, description, location, pricing, servicesOffered, contactDetails. Sharing contacts are optional phone/email and never copied from User. Public APIs omit contactDetails entirely. Existing profileImage, coverImage and portfolioImages records remain readable.
 
 Images accept JPEG, PNG or WEBP up to 5MB each, with at most eight portfolio photos. Server-side streams send them to Cloudinary as decoded images under server-generated IDs. Client fields cannot control upload/deletion targets.
-
-All profile/image writes compare the current review revision; concurrent changes return409 and newly rejected uploads are cleaned up. Provider deletion only targets server-held owned references after a successful database detach. Cleanup outages can leave unreferenced assets for operator cleanup; they cannot delete a newer/foreign image. Public discovery validates scalar filters/integer pagination, joins only eligible owners, and serializes typed public fields even for malformed legacy data.
 
 ## Date availability
 
@@ -108,26 +104,11 @@ All routes below require an active admin account.
 | PATCH | /api/admin/vendors/:vendorId/reject | Reject profile, optional reason |
 | PATCH | /api/admin/users/:userId/suspension | suspended boolean and required reason when suspending |
 | PATCH | /api/admin/vendors/:vendorId/suspension | Suspend/restore vendor owner account |
-| GET | /api/admin/vendors/:vendorId/audit | Paginated listing moderation history, admins only |
 | GET | /api/admin/bookings | Paginated bookings, optional status filter |
 | PATCH | /api/admin/bookings/:bookingId | Allowed booking status transition |
 
-Vendor moderation supports status/search/suspended filters and stable pagination. The review UI submits the inspected profileRevision; concurrent content changes cause409 and require inspection again. Approval requires essential profile information and an active, unsuspended vendor account. Repeated decisions do not duplicate audit records. Approval/rejection and audit insertion commit together; suspension/restoration updates account/listing/credential revocation and its audit in one transaction. Restoring a suspension does not reactivate a deactivated account. History contains actor/target IDs, action, states, revision, reason and time, without profile/contact snapshots. These actions approve marketplace listings; they do not verify identity or certify service quality.
-
-Account deactivation and vendor-profile deletion share account/vendor guards with new booking creation, so a newly submitted request cannot be orphaned by either operation. Profiles with any booking history still cannot be deleted; accounts with pending/accepted bookings still cannot deactivate. See [Phase 1.3](../docs/VENDOR_PHASE_1_3.md) for policy, compatibility and rollout details.
-
 ## Tests and data
 
-Run `npm run check` and `npm test`. Run `npm run data:audit` for the existing read-only date/legacy report, `npm run db:preflight` for topology, installed index definitions, required fields, statuses and date conflicts, and `npm run email:diagnostics` for safe aggregate queue diagnostics. None of these commands writes data/indexes or sends mail. Preflight exits nonzero on unsafe/missing configuration or findings. Review [migration requirements](../docs/MVP_MIGRATION.md) before deploying to an existing database.
+Run `npm run check` and `npm test`. Run `npm run data:audit` for a read-only legacy-data report; it never updates documents or removes collections. Review [migration requirements](../docs/MVP_MIGRATION.md) before deploying to an existing database.
 
 Startup also rejects invalid/mismatched/missing booking day keys before building indexes and serving traffic. The audit reports ID-only date issue samples and genuine reservation collisions grouped by the UTC eventDate, even when stored day keys disagree. See the [Phase 1.1 audit and validation report](../docs/BOOKING_PHASE_1_1.md).
-
-Phase 1.4 startup additionally rejects unknown/malformed booking statuses and invalid customer/vendor reference types, then verifies all installed core index definitions after additive creation. Connection selection/connect/socket/pool checkout times are bounded. Full preflight remains a required release step; it never repairs legacy data or changes approval policy.
-
-## Health, security and operations
-
-`GET /api/health` and `/api/health/live` preserve lightweight liveness. `GET /api/ready` checks a primary database ping, connected driver and shutdown state with a 1.5s HTTP deadline; it returns503 with a fixed message when unavailable. It does not depend on SMTP/Cloudinary. Render's example health path is `/api/ready`.
-
-Production API requests require HTTPS via the explicitly trusted proxy; internal health paths may use HTTP. All cookie-authenticated mutations require an allowed Origin, including requests also carrying Authorization. Cookie names/host-only Path=/ scope remain compatible. OTP challenges/attempt budgets are atomic, production errors hide provider data, and generated X-Request-Id correlates safe JSON logs without logging query strings, actual path parameters or request contents. The global limiter exempts health probes; authentication/recovery endpoint limits still apply. Rate stores are per process.
-
-The separate email worker supports the existing persistent/--once modes and structured lifecycle/failure logs. Diagnose ready age, expired leases and terminal failures with the read-only operator CLI. No dispatcher runs in the API and no automatic terminal replay is included. See [Phase 1.4](../docs/PRODUCTION_PHASE_1_4.md) for deployment settings, SMTP duplicate limits, monitoring, backup/restore, migration rehearsal, staged failure checks, CI results and remaining launch gates.

@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import multer from "multer";
 import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
-import { logEvent } from "../utils/logger.js";
 
 const imageTypes = new Map([
   [".jpg", "image/jpeg"],
@@ -28,7 +27,9 @@ function imageStorage(folder) {
         });
       const cleanFailure = () =>
         remove().catch(() => {
-          logEvent("error", "image_cleanup_failed", { category: "incomplete_upload" });
+          console.error(
+            "Cloudinary could not clean up an incomplete business photo.",
+          );
         });
       const detach = () => {
         req.removeListener("aborted", abortInput);
@@ -89,7 +90,6 @@ function imageStorage(folder) {
             resource_type: "image", // Cloudinary decodes the image, rejecting disguised files.
             allowed_formats: ["jpg", "jpeg", "png", "webp"],
             overwrite: false,
-            timeout: 30_000,
             transformation: [{ quality: "auto" }],
           },
           (error, result) => {
