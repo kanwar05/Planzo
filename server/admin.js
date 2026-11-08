@@ -1,8 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import User from "./src/models/User.js";
-import { databaseConnectionOptions } from "./src/config/database.js";
-import { errorCategory, logEvent } from "./src/utils/logger.js";
 
 async function createAdmin() {
   const fields = [
@@ -31,7 +29,7 @@ async function createAdmin() {
   const email = process.env.ADMIN_EMAIL.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     throw new Error("ADMIN_EMAIL is invalid.");
-  await mongoose.connect(process.env.MONGODB_URI, databaseConnectionOptions());
+  await mongoose.connect(process.env.MONGODB_URI);
   if (await User.exists({ email }))
     throw new Error(
       "An account already exists for ADMIN_EMAIL; no role or password was changed.",
@@ -50,10 +48,7 @@ async function createAdmin() {
 
 createAdmin()
   .catch((error) => {
-    logEvent("error", "admin_provision_failed", { category: errorCategory(error) });
+    console.error(error.message);
     process.exitCode = 1;
   })
-  .finally(async () => {
-    try { await mongoose.disconnect(); }
-    catch { logEvent("error", "admin_provision_cleanup_failed"); process.exitCode = 1; }
-  });
+  .finally(() => mongoose.disconnect());

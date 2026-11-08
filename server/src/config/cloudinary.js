@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from "cloudinary";
-import { assertStagingImageDeletion } from "./stagingSafety.js";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -16,8 +15,3 @@ export const isCloudinaryConfigured = () =>
   );
 
 export default cloudinary;
-
-export function destroyOwnedImage(publicId, options) {
-  assertStagingImageDeletion(publicId);
-  return cloudinary.uploader.destroy(publicId, options);
-}

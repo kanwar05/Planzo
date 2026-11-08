@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import { assertStagingEmailRecipient } from "../config/stagingSafety.js";
 
 let testSender;
 let transporter;
@@ -11,7 +10,6 @@ export function setOtpEmailSenderForTests(sender) {
 }
 
 export async function sendLoginOtp({ email, code }) {
-  assertStagingEmailRecipient(email);
   const expiryMinutes = Number(process.env.OTP_EXPIRY_MINUTES || 5);
   const message = {
     to: email,

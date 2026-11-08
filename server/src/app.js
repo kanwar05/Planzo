@@ -43,10 +43,6 @@ app.disable("x-powered-by");
 app.set("trust proxy", Number(process.env.TRUST_PROXY || 0));
 app.use(requestLogging);
 app.use(helmet());
-app.use((req, res, next) => {
-  if (process.env.APP_ENV === "staging") res.set("X-Robots-Tag", "noindex, nofollow");
-  next();
-});
 // Render terminates TLS at its trusted proxy. Reject plaintext API traffic;
 // never redirect a password/body or construct a redirect from the Host header.
 // Health probes remain available over the platform's internal HTTP connection.

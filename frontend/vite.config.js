@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react(), {
     name: "planzo-public-build-configuration",
     configResolved(config) {
-      if (config.command === "build") validatePublicBuildEnvironment(config.env, { staging: process.env.APP_ENV === "staging" });
+      if (config.command === "build") validatePublicBuildEnvironment(config.env);
     },
   }],
   server: { watch: { ignored: ["**/.cache/**"] } },

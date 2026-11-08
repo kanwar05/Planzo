@@ -1,7 +1,7 @@
 import Booking from "../models/Booking.js";
 import Vendor from "../models/Vendor.js";
 import Availability from "../models/Availability.js";
-import { isCloudinaryConfigured, destroyOwnedImage } from "../config/cloudinary.js";
+import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
@@ -32,7 +32,7 @@ const destroyCloudinaryImages = async (files = []) => {
     files
       .map((file) => file.filename)
       .filter(Boolean)
-      .map((publicId) => Promise.resolve().then(() => destroyOwnedImage(publicId))),
+      .map((publicId) => cloudinary.uploader.destroy(publicId)),
   );
 };
 
@@ -53,7 +53,7 @@ const destroyCloudinaryAsset = async (publicId, label = "image") => {
 
   let result;
   try {
-    result = await destroyOwnedImage(publicId, {
+    result = await cloudinary.uploader.destroy(publicId, {
       resource_type: "image",
       invalidate: true,
     });

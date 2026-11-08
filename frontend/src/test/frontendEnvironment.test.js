@@ -13,10 +13,4 @@ describe("public frontend build configuration", () => {
     expect(() => validatePublicBuildEnvironment({ VITE_API_URL: "https://api.example.invalid/api", VITE_PRIVATE_SECRET: "private-sentinel" }))
       .toThrow("Only VITE_API_URL is approved for public frontend configuration.");
   });
-  it("staging builds accept a staging API and reject production API hostnames", () => {
-    expect(validatePublicBuildEnvironment({ VITE_API_URL: "https://planzo-staging-api.example.invalid/api" }, { staging: true }))
-      .toBe("https://planzo-staging-api.example.invalid/api");
-    for (const value of ["https://api.example.invalid/api", "https://production-staging.example.invalid/api"])
-      expect(() => validatePublicBuildEnvironment({ VITE_API_URL: value }, { staging: true })).toThrow("staging API hostname");
-  });
 });

@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import { assertStagingEmailRecipient } from "../config/stagingSafety.js";
 
 let testSender;
 
@@ -20,7 +19,6 @@ function accountLink(path, token) {
 }
 
 async function send(message) {
-  assertStagingEmailRecipient(message.to);
   if (process.env.NODE_ENV === "test" && testSender) return testSender(message);
   const from = process.env.SMTP_FROM_EMAIL || process.env.SMTP_FROM;
   const password = process.env.SMTP_APP_PASSWORD || process.env.SMTP_PASS;
