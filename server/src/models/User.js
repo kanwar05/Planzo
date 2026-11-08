@@ -36,6 +36,7 @@ const userSchema = new mongoose.Schema(
       default: "customer",
     },
     authVersion: { type: Number, default: 0, min: 0 },
+    bookingGuardRevision: { type: Number, default: 0, select: false },
     accountStatus: {
       type: String,
       enum: ["active", "deactivated"],
@@ -70,6 +71,7 @@ const userSchema = new mongoose.Schema(
         for (const field of [
           "password",
           "authVersion",
+          "bookingGuardRevision",
           "passwordResetTokenHash",
           "passwordResetExpiresAt",
           "passwordResetConsumedAt",

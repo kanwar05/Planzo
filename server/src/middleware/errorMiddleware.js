@@ -1,11 +1,13 @@
+import ApiError from "../utils/ApiError.js";
+import { errorCategory, logEvent } from "../utils/logger.js";
+
 export function notFound(req, res, next) {
-  const error = new Error(`Route not found: ${req.method} ${req.originalUrl}`);
-  error.statusCode = 404;
+  const error = new ApiError(404, "Route not found.");
   next(error);
 }
 
 export function errorHandler(error, req, res, next) {
-  let statusCode = error.statusCode || 500;
+  let statusCode = Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode <= 599 ? error.statusCode : 500;
   let message = error.message || "Internal server error.";
   let errors = error.errors;
 
@@ -13,9 +15,9 @@ export function errorHandler(error, req, res, next) {
     statusCode = 400;
     message = "Validation failed.";
     errors = Object.fromEntries(
-      Object.entries(error.errors).map(([field, detail]) => [
+      Object.entries(error.errors || {}).map(([field, detail]) => [
         field,
-        detail.message,
+        detail?.message || "Invalid value.",
       ]),
     );
   }
@@ -69,14 +71,22 @@ export function errorHandler(error, req, res, next) {
     message = "The multipart upload contains too many fields.";
   }
 
-  if (
-    statusCode >= 500 &&
-    process.env.NODE_ENV === "production" &&
-    !error.statusCode
-  ) {
-    message = "Internal server error.";
-    errors = undefined;
+  if (process.env.NODE_ENV === "production") {
+    // Only application-authored ApiError messages are safe for 5xx responses.
+    // Provider/network errors may themselves carry statusCode and private data.
+    if (statusCode >= 500 && !(error instanceof ApiError)) message = "Internal server error.";
+    const mappedClientError = ["ValidationError", "CastError"].includes(error.name) || error.code === 11000 ||
+      ["entity.parse.failed", "entity.too.large"].includes(error.type) ||
+      ["LIMIT_FILE_SIZE", "LIMIT_FILE_COUNT", "LIMIT_UNEXPECTED_FILE", "LIMIT_PART_COUNT", "LIMIT_FIELD_COUNT", "LIMIT_FIELD_KEY", "LIMIT_FIELD_VALUE"].includes(error.code);
+    if (statusCode < 500 && !(error instanceof ApiError) && !mappedClientError) {
+      message = "Request could not be processed.";
+      errors = undefined;
+    }
+    if (statusCode >= 500) errors = undefined;
+    // Mongoose messages can echo rejected private values; retain field keys only.
+    if (error.name === "ValidationError") errors = Object.fromEntries(Object.keys(error.errors || {}).map((field) => [field, "Invalid value."]));
   }
+  if (statusCode >= 500) logEvent("error", "http_error", { requestId: req.requestId, statusCode, category: errorCategory(error) });
 
   const response = {
     success: false,

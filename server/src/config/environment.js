@@ -47,6 +47,23 @@ export function validateEnvironment(env = process.env) {
     )
       throw new Error(`${key} is invalid.`);
   }
+  for (const [key, fallback, min, max] of [
+    ["RATE_LIMIT_MAX", 300, 1, 100000],
+    ["AUTH_RATE_LIMIT_MAX", 10, 1, 10000],
+    ["PASSWORD_RESET_REQUEST_MAX", 3, 1, 10000],
+    ["PASSWORD_RESET_ATTEMPT_MAX", 10, 1, 10000],
+    ["ACCESS_COOKIE_MAX_AGE_MS", 15 * 60 * 1000, 1, 86400000],
+    ["REFRESH_COOKIE_MAX_AGE_MS", 30 * 86400000, 1, 365 * 86400000],
+    ["MONGO_SERVER_SELECTION_TIMEOUT_MS", 10000, 1000, 120000],
+    ["MONGO_CONNECT_TIMEOUT_MS", 10000, 1000, 120000],
+    ["MONGO_SOCKET_TIMEOUT_MS", 20000, 1000, 120000],
+    ["MONGO_WAIT_QUEUE_TIMEOUT_MS", 5000, 1000, 120000],
+    ["SLOW_REQUEST_MS", 1000, 100, 60000],
+  ]) {
+    const value = Number(env[key] ?? fallback);
+    if (!Number.isSafeInteger(value) || value < min || value > max)
+      throw new Error(`${key} must be an integer between ${min} and ${max}.`);
+  }
   if (
     env.COOKIE_SAME_SITE &&
     !["lax", "strict", "none"].includes(env.COOKIE_SAME_SITE)
@@ -106,10 +123,14 @@ export function validateEnvironment(env = process.env) {
       "Set all three Cloudinary variables to enable photo uploads.",
     );
   try {
-    jwt.sign({ configurationCheck: true }, env.JWT_SECRET, {
+    const token = jwt.sign({ configurationCheck: true }, env.JWT_SECRET, {
       expiresIn: env.JWT_ACCESS_EXPIRES_IN || "15m",
     });
+    const payload = jwt.decode(token);
+    const seconds = payload.exp - payload.iat;
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400)
+      throw new Error("Invalid access lifetime.");
   } catch {
-    throw new Error("JWT_ACCESS_EXPIRES_IN is invalid.");
+    throw new Error("JWT_ACCESS_EXPIRES_IN must produce an access lifetime between 1 second and 24 hours; use units such as 15m.");
   }
 }

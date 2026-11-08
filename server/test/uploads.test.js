@@ -77,6 +77,7 @@ test("profile and cover uploads stream to decoded image hosting and retain contr
     assert.equal(uploads.at(-1).options.resource_type, "image");
     assert.deepEqual(uploads.at(-1).options.allowed_formats, ["jpg", "jpeg", "png", "webp"]);
     assert.equal(uploads.at(-1).options.overwrite, false);
+    assert.equal(uploads.at(-1).options.timeout, 30_000);
   }
   assert.equal(destroyed.length, 0);
 });

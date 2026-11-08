@@ -7,6 +7,7 @@ import app from "../src/app.js";
 import Availability from "../src/models/Availability.js";
 import Booking from "../src/models/Booking.js";
 import NotificationOutbox from "../src/models/NotificationOutbox.js";
+import VendorModerationAudit from "../src/models/VendorModerationAudit.js";
 import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
@@ -31,19 +32,24 @@ const createBooking = (user, vendor, extra = {}) => request(app).post("/api/book
 const status = (user, id, nextStatus) => request(app).patch(`/api/bookings/${id}/status`)
   .set("Authorization", auth(user)).send({ status: nextStatus });
 
-async function atVendorGuard(operation) {
+async function atVendorGuard(operation, guardedUpdate = (update) => update?.$inc?.bookingRevision) {
   const original = Vendor.findOneAndUpdate;
   let entered = 0;
   let release;
   const barrier = new Promise((resolve) => { release = resolve; });
   const timer = setTimeout(release, 5000);
-  const mocked = mock.method(Vendor, "findOneAndUpdate", async function (...args) {
-    if (args[1]?.$inc?.bookingRevision) {
-      entered += 1;
-      if (entered >= 2) release();
-      await barrier;
+  const mocked = mock.method(Vendor, "findOneAndUpdate", function (...args) {
+    const query = original.apply(this, args);
+    if (guardedUpdate(args[1])) {
+      const execute = query.exec.bind(query);
+      query.exec = async (...options) => {
+        entered += 1;
+        if (entered >= 2) release();
+        await barrier;
+        return execute(...options);
+      };
     }
-    return original.apply(this, args);
+    return query;
   });
   try {
     const results = await operation();
@@ -59,10 +65,68 @@ before(async () => {
   process.env.JWT_SECRET = "planzo-mvp-marketplace-test-secret-with-sufficient-length";
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongo.getUri());
-  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init(), NotificationOutbox.init()]);
+  await Promise.all([User.init(), Vendor.init(), Booking.init(), Availability.init(), NotificationOutbox.init(), VendorModerationAudit.init()]);
+});
+
+test("a bounded burst of requests and acceptances preserves one reservation and exact outbox intent counts", async () => {
+  const [owner, customer] = await Promise.all([newUser("vendor"), newUser()]);
+  const vendor = await newVendor(owner);
+  const requests = await Promise.all(Array.from({ length: 6 }, () => createBooking(customer, vendor)));
+  assert.ok(requests.every((response) => response.status === 201), requests.map((response) => response.body.message).join("; "));
+  assert.equal(await Booking.countDocuments({ status: "pending" }), 6);
+  const results = await Promise.all(requests.map((response) => status(owner, response.body.booking._id, "accepted")));
+  assert.equal(results.filter((response) => response.status === 200).length, 1);
+  assert.equal(results.filter((response) => response.status === 409).length, 5);
+  assert.equal(await Booking.countDocuments({ status: { $in: ["accepted", "completed"] } }), 1);
+  assert.equal(await NotificationOutbox.countDocuments({ eventType: "booking_requested" }), 6);
+  assert.equal(await NotificationOutbox.countDocuments({ eventType: "booking_accepted" }), 1);
+});
+
+test("vendor suspension racing acceptance serializes without bypassing listing eligibility or duplicating emails", async () => {
+  const [owner, customer, admin] = await Promise.all([newUser("vendor"), newUser(), newUser("admin")]);
+  const vendor = await newVendor(owner);
+  const created = await createBooking(customer, vendor);
+  assert.equal(created.status, 201);
+  const [accepted, suspended] = await atVendorGuard(() => Promise.all([
+    status(owner, created.body.booking._id, "accepted"),
+    request(app).patch(`/api/admin/vendors/${vendor._id}/suspension`).set("Authorization", auth(admin))
+      .send({ suspended: true, reason: "Staging safety test", profileRevision: 0 }),
+  ]), (update) => update?.$inc?.bookingRevision || update?.$inc?.profileRevision);
+  assert.equal(suspended.status, 200, suspended.body.message);
+  assert.ok([200, 403, 409].includes(accepted.status), accepted.body.message);
+  assert.ok((await User.findById(owner._id)).suspendedAt);
+  const booking = await Booking.findById(created.body.booking._id);
+  assert.equal(booking.status, accepted.status === 200 ? "accepted" : "pending");
+  assert.equal(await NotificationOutbox.countDocuments({ eventType: "booking_accepted" }), accepted.status === 200 ? 1 : 0);
+  assert.equal(await VendorModerationAudit.countDocuments({ action: "suspend" }), 1);
+  assert.equal((await createBooking(customer, vendor)).status, 404);
+});
+
+test("a transient transaction failure after insertion retries with one booking, one job and rolled-back guards", async () => {
+  const [owner, customer] = await Promise.all([newUser("vendor"), newUser()]);
+  const vendor = await newVendor(owner);
+  const original = Booking.create;
+  let attempts = 0;
+  const intercepted = mock.method(Booking, "create", async function (...args) {
+    const result = await original.apply(this, args);
+    attempts++;
+    if (attempts === 1) throw new mongoose.mongo.MongoServerError({
+      message: "Injected staging-only transient failure", code: 112, errorLabels: ["TransientTransactionError"],
+    });
+    return result;
+  });
+  try {
+    const response = await createBooking(customer, vendor);
+    assert.equal(response.status, 201, response.body.message);
+    assert.equal(attempts, 2);
+    assert.equal(await Booking.countDocuments(), 1);
+    assert.equal(await NotificationOutbox.countDocuments(), 1);
+    assert.equal((await Vendor.findById(vendor._id).select("+bookingRevision")).bookingRevision, 1);
+    assert.equal((await User.findById(customer._id).select("+bookingGuardRevision")).bookingGuardRevision, 1);
+  } finally { intercepted.mock.restore(); }
 });
 beforeEach(async () => {
-  await Promise.all([User.deleteMany({}), Vendor.deleteMany({}), Booking.deleteMany({}), Availability.deleteMany({}), NotificationOutbox.deleteMany({})]);
+  await Promise.all([User.deleteMany({}), Vendor.deleteMany({}), Booking.deleteMany({}), Availability.deleteMany({}), NotificationOutbox.deleteMany({}), VendorModerationAudit.deleteMany({})]);
 });
 after(async () => {
   mock.restoreAll();

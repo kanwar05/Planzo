@@ -22,16 +22,16 @@ import {
   sendPasswordReset,
 } from "../services/accountEmailService.js";
 import { sendLoginOtp } from "../services/otpEmailService.js";
+import { activeAccountFilter, isActiveAccount } from "../utils/accountEligibility.js";
+import { withBookingTransaction, lockAccountForBooking, lockVendorForBooking } from "../utils/vendorBookingTransaction.js";
+import { logEvent } from "../utils/logger.js";
 
 const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
 const OTP_EXPIRY_MS = Number(process.env.OTP_EXPIRY_MINUTES || 5) * 60 * 1000;
 const OTP_COOLDOWN_MS =
   Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60) * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-const ACTIVE_ACCOUNT = {
-  accountStatus: { $nin: ["deactivated", "suspended", "blocked"] },
-  suspendedAt: null,
-};
+const ACTIVE_ACCOUNT = activeAccountFilter();
 const credentialTokenFields = {
   passwordResetTokenHash: 1,
   passwordResetExpiresAt: 1,
@@ -103,6 +103,7 @@ function assertActive(user) {
   if (user.suspendedAt) throw new ApiError(403, "This account is suspended.");
   if (["blocked", "suspended"].includes(user.accountStatus))
     throw new ApiError(403, "This account is unavailable.");
+  if (!isActiveAccount(user)) throw new ApiError(403, "This account is unavailable.");
 }
 
 function versionFilter(user) {
@@ -136,11 +137,11 @@ function getRefreshTokenFromRequest(req) {
   return req.cookies?.[REFRESH_COOKIE_NAME] || "";
 }
 
-export async function revokeAllUserRefreshTokens(userId) {
+export async function revokeAllUserRefreshTokens(userId, session = null) {
   await RefreshToken.updateMany(
     { userId, revokedAt: null },
     { revokedAt: new Date() },
-  );
+  ).session(session);
 }
 
 function readCredentialToken(body, message) {
@@ -176,18 +177,35 @@ export const requestLoginOtp = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
   if (!user || user.role === "admin") return res.status(200).json(response);
   const code = generateOtp();
-  await EmailOtp.deleteMany({ email, consumedAt: null });
-  await EmailOtp.create({
-    email,
-    codeHash: otpHash(code),
-    expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
-    requestedAt: new Date(),
-  });
+  let issued;
+  try {
+    // One deterministic challenge per account uses the existing unique _id.
+    // Concurrent issuers either replace an old challenge or lose the upsert to
+    // that key; the loser keeps the same generic response and sends no email.
+    issued = await EmailOtp.findOneAndUpdate({
+      _id: user._id,
+      $or: [
+        { requestedAt: { $lte: new Date(Date.now() - OTP_COOLDOWN_MS) } },
+        { requestedAt: { $exists: false } },
+        { consumedAt: { $ne: null } },
+      ],
+    }, { $set: {
+      email, codeHash: otpHash(code), attempts: 0, consumedAt: null,
+      expiresAt: new Date(Date.now() + OTP_EXPIRY_MS), requestedAt: new Date(),
+    } }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
+  } catch (error) {
+    if (error.code === 11000 && error.keyPattern?._id)
+      return res.status(200).json(response);
+    throw error;
+  }
+  // Preserve compatibility with older randomly keyed challenges. Only the
+  // winner of the conditional issue can invalidate these prior active codes.
+  await EmailOtp.deleteMany({ email, consumedAt: null, _id: { $ne: user._id } });
   try {
     await sendLoginOtp({ email, code });
-  } catch (error) {
-    await EmailOtp.deleteMany({ email, codeHash: otpHash(code) });
-    console.error(`OTP email delivery failed: ${error.message}`);
+  } catch {
+    await EmailOtp.deleteMany({ _id: issued._id, codeHash: issued.codeHash, requestedAt: issued.requestedAt });
+    logEvent("error", "auth_email_delivery_failed", { category: "otp" });
     throw new ApiError(
       503,
       "Sign-in code could not be sent. Please try again later.",
@@ -207,12 +225,20 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
     email,
     consumedAt: null,
     expiresAt: { $gt: new Date() },
-  });
+  }).sort({ requestedAt: -1, _id: -1 });
   if (!otp || otp.attempts >= OTP_MAX_ATTEMPTS) {
     throw new ApiError(401, "The sign-in code is invalid or expired.");
   }
-  if (!crypto.timingSafeEqual(Buffer.from(otp.codeHash), Buffer.from(otpHash(code)))) {
-    await EmailOtp.updateOne({ _id: otp._id }, { $inc: { attempts: 1 } });
+  // Claim an attempt before comparing the code. A read-then-increment counter
+  // lets parallel guesses all pass the budget check against the same snapshot.
+  const attempted = await EmailOtp.findOneAndUpdate({
+    _id: otp._id, codeHash: otp.codeHash, consumedAt: null,
+    ...(otp.requestedAt ? { requestedAt: otp.requestedAt } : {}),
+    expiresAt: { $gt: new Date() },
+    $or: [{ attempts: { $gte: 0, $lt: OTP_MAX_ATTEMPTS } }, { attempts: { $exists: false } }],
+  }, { $inc: { attempts: 1 } }, { new: true });
+  if (!attempted || typeof attempted.codeHash !== "string" || !/^[a-f0-9]{64}$/i.test(attempted.codeHash) ||
+    !crypto.timingSafeEqual(Buffer.from(attempted.codeHash), Buffer.from(otpHash(code)))) {
     throw new ApiError(401, "The sign-in code is invalid or expired.");
   }
   const user = await User.findOne({
@@ -225,6 +251,7 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
     {
       _id: otp._id,
       codeHash: otp.codeHash,
+      ...(otp.requestedAt ? { requestedAt: otp.requestedAt } : {}),
       consumedAt: null,
       expiresAt: { $gt: new Date() },
     },
@@ -295,7 +322,7 @@ export const refresh = asyncHandler(async (req, res) => {
       "This session is no longer valid. Please log in again.",
     );
   }
-  if (["deactivated", "blocked", "suspended"].includes(user.accountStatus) || user.suspendedAt) {
+  if (!isActiveAccount(user)) {
     await revokeAllUserRefreshTokens(user._id);
     clearAuthCookies(res);
     assertActive(user);
@@ -348,9 +375,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
         $unset: { passwordResetTokenHash: 1, passwordResetExpiresAt: 1 },
       },
     );
-    console.error(
-      "Account recovery email could not be delivered. Check SMTP configuration.",
-    );
+    logEvent("error", "auth_email_delivery_failed", { category: "password_reset" });
   }
   return res.status(200).json(response);
 });
@@ -554,34 +579,36 @@ export const deleteAccount = asyncHandler(async (req, res) => {
       403,
       "Administrator accounts must be managed by another administrator.",
     );
-  const vendor = await Vendor.findOne({ userId: user._id });
-  const filter = vendor
-    ? {
-        $or: [{ customerId: user._id }, { vendorId: vendor._id }],
-        status: { $in: ["pending", "accepted"] },
-      }
-    : { customerId: user._id, status: { $in: ["pending", "accepted"] } };
-  if (await Booking.exists(filter)) {
-    throw new ApiError(
-      409,
-      "Cancel or complete active bookings before deactivating your account.",
-    );
-  }
-  // Preserve users, vendor profiles and booking history; this endpoint deactivates access.
-  await User.updateOne(
-    { _id: user._id },
-    {
-      $set: { accountStatus: "deactivated", deactivatedAt: new Date() },
-      $inc: { authVersion: 1 },
-      $unset: credentialTokenFields,
-    },
-  );
-  if (vendor) {
-    vendor.suspended = true;
-    vendor.suspendedAt = new Date();
-    await vendor.save();
-  }
-  await revokeAllUserRefreshTokens(user._id);
+  await withBookingTransaction(async (session) => {
+    await lockAccountForBooking(user._id, session);
+    const vendor = await Vendor.findOne({ userId: user._id }).session(session);
+    if (vendor) await lockVendorForBooking(vendor._id, session, user._id);
+    const filter = vendor
+      ? {
+          $or: [{ customerId: user._id }, { vendorId: vendor._id }],
+          status: { $in: ["pending", "accepted"] },
+        }
+      : { customerId: user._id, status: { $in: ["pending", "accepted"] } };
+    if (await Booking.exists(filter).session(session)) {
+      throw new ApiError(409, "Cancel or complete active bookings before deactivating your account.");
+    }
+    // Preserve users, vendor profiles and booking history; only access is deactivated.
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: { accountStatus: "deactivated", deactivatedAt: new Date() },
+        $inc: { authVersion: 1 },
+        $unset: credentialTokenFields,
+      },
+    ).session(session);
+    if (vendor) {
+      await Vendor.updateOne({ _id: vendor._id }, {
+        $set: { suspended: true, suspendedAt: new Date() },
+        $inc: { profileRevision: 1 },
+      }).session(session);
+    }
+    await revokeAllUserRefreshTokens(user._id, session);
+  });
   clearAuthCookies(res);
   res
     .status(200)

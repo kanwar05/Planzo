@@ -9,7 +9,7 @@ import {
 } from "../utils/availability.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
-import { withBookingTransaction, withVendorBookingTransaction } from "../utils/vendorBookingTransaction.js";
+import { withBookingTransaction, withVendorBookingTransaction, lockAccountForBooking, lockVendorForBooking } from "../utils/vendorBookingTransaction.js";
 import { enqueueBookingEmails } from "../services/bookingNotificationService.js";
 import {
   hasActiveVendorOwner,
@@ -119,6 +119,10 @@ export const createBooking = asyncHandler(async (req, res) => {
   };
   const eventId = randomUUID();
   const booking = await withBookingTransaction(async (session) => {
+    await lockAccountForBooking(req.user._id, session);
+    const currentVendor = await lockVendorForBooking(vendor._id, session);
+    if (!(await hasActiveVendorOwner(currentVendor, session))) throw new ApiError(404, "Approved vendor not found.");
+    await assertVendorAvailable({ vendorId: vendor._id, dateOnly: eventDateOnly, session });
     const [created] = await Booking.create([bookingData], { session });
     await enqueueBookingEmails({
       booking: created, eventType: "booking_requested", eventId, session,

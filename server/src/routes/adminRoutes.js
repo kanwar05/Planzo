@@ -10,6 +10,7 @@ import {
   editBooking,
   setUserSuspension,
   setVendorSuspension,
+  getVendorModerationAudit,
 } from "../controllers/adminController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
 
@@ -19,6 +20,7 @@ router.get("/stats", getAdminStats);
 router.get("/users", getUsers);
 router.get("/vendors", getVendorsForAdmin);
 router.get("/vendors/unverified", getUnverifiedVendors);
+router.get("/vendors/:vendorId/audit", getVendorModerationAudit);
 router.patch("/vendors/:vendorId/verify", verifyVendor);
 router.patch("/vendors/:vendorId/reject", rejectVendor);
 router.patch("/vendors/:vendorId/suspension", setVendorSuspension);
