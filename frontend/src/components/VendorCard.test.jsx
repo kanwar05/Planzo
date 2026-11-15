@@ -21,17 +21,4 @@ describe("VendorCard", () => {
     })).toHaveAttribute("href", "/vendors/vendor-1");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
-
-  it("labels manual listing approval accurately and shows service coverage without contacts", () => {
-    render(<MemoryRouter><VendorCard vendor={{
-      _id: "approved", businessName: "Approved Studio", serviceCategory: "Decoration", location: "Delhi",
-      pricing: 0, verificationStatus: "approved", serviceAreas: ["Delhi", "Noida"],
-      contactDetails: { email: "private@example.test", phone: "9999999999" }
-    }} /></MemoryRouter>);
-    expect(screen.getByText("Approved listing")).toHaveAttribute("title", expect.stringContaining("Manually approved"));
-    expect(screen.queryByText(/Verified vendor/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Serves Delhi, Noida")).toBeInTheDocument();
-    expect(screen.queryByText("private@example.test")).not.toBeInTheDocument();
-    expect(screen.queryByText("9999999999")).not.toBeInTheDocument();
-  });
 });

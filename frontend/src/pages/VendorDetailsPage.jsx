@@ -85,16 +85,12 @@ export default function VendorDetailsPage() {
       <div className="grid gap-8 pb-12 pt-7 sm:pt-10 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12 lg:pb-20">
         <div className="min-w-0">
           <header className="border-b border-ink/10 pb-7 sm:pb-9">
-            <div className="flex flex-wrap items-center gap-3"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-coral">{vendor.serviceCategory}</p>{approved && <span className="inline-flex items-center gap-1.5 rounded-full bg-sage px-2.5 py-1.5 text-[10px] font-bold text-ink"><BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />Approved listing</span>}</div>
+            <div className="flex flex-wrap items-center gap-3"><p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-coral">{vendor.serviceCategory}</p>{approved && <span className="inline-flex items-center gap-1.5 rounded-full bg-sage px-2.5 py-1.5 text-[10px] font-bold text-ink"><BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />Verified vendor</span>}</div>
             <h1 className="mt-4 break-words font-editorial text-[2.5rem] leading-[1.1] tracking-tight sm:text-5xl">{vendor.businessName}</h1>
             <p className="mt-4 flex items-start gap-2 text-sm leading-6 text-ink/65"><MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" /><span className="min-w-0 break-words">{vendor.location || "Location available on request"}</span></p>
-            {vendor.city && vendor.city !== vendor.location && <p className="mt-2 text-xs text-ink/65">Based in {vendor.city}</p>}
-            {approved && <p className="mt-3 text-xs leading-6 text-ink/65">This business listing has been manually reviewed for the marketplace. Identity verification is not provided.</p>}
           </header>
 
           <section className="border-b border-ink/10 py-7 sm:py-9"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink/65">Meet your event people</p><h2 className="mt-2 font-editorial text-3xl">A little about us.</h2><p className="mt-5 whitespace-pre-line break-words text-sm leading-8 text-ink/70">{vendor.description || "This vendor hasn’t added a business introduction yet. Include your event needs in your booking request to start the conversation."}</p></section>
-
-          {vendor.serviceAreas?.length > 0 && <section className="border-b border-ink/10 py-7 sm:py-9"><h2 className="font-editorial text-3xl">Where we work.</h2><ul aria-label="Service coverage areas" className="mt-5 flex flex-wrap gap-2">{vendor.serviceAreas.map((area, index) => <li key={`${area}-${index}`} className="max-w-full break-words rounded-xl bg-sand px-4 py-3 text-xs leading-6">{area}</li>)}</ul></section>}
 
           <section className="border-b border-ink/10 py-7 sm:py-9"><h2 className="font-editorial text-3xl">Thoughtfully taken care of.</h2><p className="mt-2 text-xs leading-6 text-ink/65">Services offered by {vendor.businessName}.</p><ul className="mt-5 grid gap-3 sm:grid-cols-2">{(vendor.servicesOffered?.length ? vendor.servicesOffered : [vendor.serviceCategory]).map((service, index) => <li key={`${service}-${index}`} className="flex items-start gap-3 rounded-xl border border-ink/8 bg-white px-4 py-4 text-xs leading-6"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sage"><Check className="h-3 w-3" aria-hidden="true" /></span><span className="min-w-0 break-words">{service}</span></li>)}</ul></section>
 

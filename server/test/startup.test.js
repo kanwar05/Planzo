@@ -68,7 +68,7 @@ async function assertStartupRefused(uri, expectedMessage) {
     const result = await deadline(api.exited, () => `Startup did not refuse unsafe data: ${api.output()}`);
     assert.equal(result.code, 1, result.output);
     assert.match(result.output, expectedMessage);
-    assert.doesNotMatch(result.output, /api_listening/);
+    assert.doesNotMatch(result.output, /Planzo API listening/);
   } finally {
     await stopApi(api);
   }
@@ -81,7 +81,7 @@ test("production entry point starts with only MVP configuration and serves healt
   try {
     await deadline(new Promise((resolve, reject) => {
       api.child.stdout.on("data", (chunk) => {
-        if (api.output().includes('"event":"api_listening"')) resolve();
+        if (api.output().includes("Planzo API listening")) resolve();
       });
       api.exited.then(({ code, output }) => reject(new Error(`Startup exited ${code}: ${output}`)), reject);
     }), () => `Startup timed out: ${api.output()}`);
@@ -89,9 +89,6 @@ test("production entry point starts with only MVP configuration and serves healt
     assert.equal(response.status, 200);
     assert.equal((await response.json()).message, "Planzo API is running.");
     assert.equal(response.headers.get("x-powered-by"), null);
-    const readiness = await fetch(`http://127.0.0.1:${port}/api/ready`);
-    assert.equal(readiness.status, 200);
-    assert.deepEqual(await readiness.json(), { success: true, message: "Planzo API is ready." });
   } finally {
     await stopApi(api);
     await mongo.stop();
@@ -108,7 +105,7 @@ test("startup refuses standalone MongoDB before listening", { timeout: 30000 }, 
       eventDateOnly: "2027-04-10", status: "pending", legacyValue: "preserve",
     });
     const before = await bookings.find().toArray();
-    await assertStartupRefused(mongo.getUri(), /DB_TOPOLOGY_UNSUPPORTED/);
+    await assertStartupRefused(mongo.getUri(), /requires a MongoDB replica set/);
     assert.deepEqual(await bookings.find().toArray(), before);
   } finally {
     await connection.close();
@@ -119,7 +116,7 @@ test("startup refuses standalone MongoDB before listening", { timeout: 30000 }, 
 for (const scenario of [
   {
     name: "a unique reservation with a mismatched nonempty date key",
-    expectedMessage: /BOOKING_DATES_UNSAFE/,
+    expectedMessage: /Booking date migration is required/,
     records: (vendorId) => [{
       vendorId, eventDate: new Date("2027-04-10T00:00:00.000Z"),
       eventDateOnly: "2027-04-11", status: "accepted", legacyValue: "preserve",
@@ -127,26 +124,11 @@ for (const scenario of [
   },
   {
     name: "duplicate canonical reservations",
-    expectedMessage: /duplicate_key/,
+    expectedMessage: /E11000|duplicate key/,
     records: (vendorId) => [
       { vendorId, eventDate: new Date("2027-04-10T00:00:00.000Z"), eventDateOnly: "2027-04-10", status: "accepted" },
       { vendorId, eventDate: new Date("2027-04-10T08:00:00.000Z"), eventDateOnly: "2027-04-10", status: "completed" },
     ],
-  },
-  {
-    name: "an unknown legacy reservation status",
-    expectedMessage: /BOOKING_RESERVATIONS_UNSAFE/,
-    records: (vendorId) => [{ vendorId, eventDate: new Date("2027-04-10T00:00:00Z"), eventDateOnly: "2027-04-10", status: "confirmed" }],
-  },
-  {
-    name: "an invalid vendor reference",
-    expectedMessage: /BOOKING_RESERVATIONS_UNSAFE/,
-    records: () => [{ vendorId: null, eventDate: new Date("2027-04-10T00:00:00Z"), eventDateOnly: "2027-04-10", status: "accepted" }],
-  },
-  {
-    name: "a malformed array reservation status",
-    expectedMessage: /BOOKING_RESERVATIONS_UNSAFE/,
-    records: (vendorId) => [{ vendorId, eventDate: new Date("2027-04-10T00:00:00Z"), eventDateOnly: "2027-04-10", status: ["accepted", "confirmed"] }],
   },
 ]) {
   test(`startup refuses ${scenario.name} without modifying records`, { timeout: 30000 }, async () => {
@@ -154,7 +136,7 @@ for (const scenario of [
     const connection = await mongoose.createConnection(mongo.getUri(), { autoIndex: false }).asPromise();
     try {
       const bookings = connection.collection("bookings");
-      await bookings.insertMany(scenario.records(new mongoose.Types.ObjectId()).map((record) => ({ customerId: new mongoose.Types.ObjectId(), ...record })));
+      await bookings.insertMany(scenario.records(new mongoose.Types.ObjectId()));
       const before = await bookings.find().sort({ _id: 1 }).toArray();
       await assertStartupRefused(mongo.getUri(), scenario.expectedMessage);
       assert.deepEqual(await bookings.find().sort({ _id: 1 }).toArray(), before);

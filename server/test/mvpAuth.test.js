@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import mongoose from "mongoose";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 import app from "../src/app.js";
 import Booking from "../src/models/Booking.js";
@@ -34,7 +34,7 @@ async function signIn(details = {}) {
 before(async () => {
   process.env.NODE_ENV = "test";
   process.env.JWT_SECRET = "mvp-auth-test-secret-at-least-32-characters";
-  mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
   await Promise.all([User.init(), RefreshToken.init(), Vendor.init(), Booking.init()]);
 });

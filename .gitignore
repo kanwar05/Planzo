@@ -4,8 +4,6 @@ dist/
 .vite-cache/
 .env
 .env.local
-.env.*
-!.env.example
 .cache/
 coverage/
 *.log

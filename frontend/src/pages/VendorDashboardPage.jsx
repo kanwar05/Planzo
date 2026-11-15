@@ -12,7 +12,6 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getVendorRequests, updateBookingStatus } from "../services/bookingService";
 import { getMyVendorProfile } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
-import { getVendorCompletion, vendorProfileFields } from "../utils/vendor";
 export default function VendorDashboardPage() {
   useDocumentTitle("Booking requests");
   const [bookings, setBookings] = useState([]);
@@ -55,7 +54,6 @@ export default function VendorDashboardPage() {
   };
   const shown = bookings.filter(booking => !filter || booking.status === filter);
   const pendingCount = bookings.filter(booking => booking.status === "pending").length;
-  const completion = vendor?.profileCompletion || getVendorCompletion(vendor);
   return <div className="space-y-6 sm:space-y-8">
     <Toast message={message} onClose={() => setMessage("")} />
     <WorkspaceHeader eyebrow="Your business" title="Booking requests" description={vendor?.businessName ? `${vendor.businessName} · Every detail, in one place.` : "Manage the events you help bring to life."} action={<Button to="/vendor/profile-setup" variant="outline">Manage profile <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>} />
@@ -64,12 +62,6 @@ export default function VendorDashboardPage() {
       {vendor.verificationStatus !== "approved" && <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Profile approval: <strong className="capitalize">
           {vendor.verificationStatus || "pending"}
         </strong>. {vendor.verificationRejectionReason || "Your business appears publicly once an admin approves it."}</p>}
-      <section aria-label="Listing readiness" className="rounded-2xl border border-ink/10 bg-white p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-bold">Your marketplace listing</h2><span className="text-sm font-bold">{completion.percent}% complete</span></div>
-        <progress aria-label="Essential profile completion" value={completion.percent} max={100} className="mt-3 h-2 w-full accent-[#b5673e]" />
-        <p className="mt-3 text-sm leading-6 text-ink/65">{vendor.suspended ? "Your listing is suspended and hidden from discovery." : !completion.readyForReview ? `Complete these details for review: ${completion.missingFields.map(key => vendorProfileFields[key] || key).join(", ")}.` : vendor.verificationStatus === "approved" ? "Your listing is approved for the marketplace." : vendor.verificationStatus === "rejected" ? "Update your profile using the review feedback, then save to resubmit." : "Your profile is waiting for manual listing review."}</p>
-        <div className="mt-3 flex flex-wrap gap-3"><Button to="/vendor/profile-setup" variant="outline" className="w-full sm:w-auto">{vendor.verificationStatus === "rejected" ? "Correct and resubmit" : "Update business profile"}</Button>{vendor.verificationStatus === "approved" && !vendor.suspended && vendor._id && <Button to={`/vendors/${vendor._id}`} variant="ghost">View public listing <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>}</div>
-      </section>
       <BookingMetrics bookings={bookings} />
       <div className="grid gap-4 rounded-3xl bg-sand p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
         <div className="flex items-start gap-3">
