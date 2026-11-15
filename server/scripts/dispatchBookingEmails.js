@@ -8,7 +8,7 @@ import { validateBookingEmailConfiguration } from "../src/services/bookingEmailS
 import {
   dispatchBookingEmailBatch,
   sanitizeBookingEmailFailure,
-} from "../src/services/bookingEmailDispatcher.js";
+} from "../src/workers/bookingEmailDispatcher.js";
 
 let stopping = false;
 let shutdownTimer;

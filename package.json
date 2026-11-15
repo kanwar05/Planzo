@@ -1,1 +1,16 @@
-{}
+{
+  "name": "planzo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repository commands for the Planzo MERN marketplace",
+  "scripts": {
+    "check": "npm --prefix server run check",
+    "check:security": "node scripts/security-check.mjs --all-files --history",
+    "test:operations": "node --test scripts/security-check.test.mjs scripts/staging-verify.test.mjs",
+    "test": "npm run test:operations && npm --prefix server test && npm --prefix frontend test",
+    "build": "npm --prefix frontend run build"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

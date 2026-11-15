@@ -4,6 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import Logo from "./Logo";
 import Button from "./Button";
 import { useAuth } from "../context/AuthContext";
+import { getDashboardPath } from "../utils/navigation";
 const links = [{ label: "Explore vendors", to: "/vendors" }, { label: "Our services", to: "/services" }, { label: "How it works", to: "/#how-it-works" }];
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -16,7 +17,7 @@ export default function Navbar() {
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
   }, [open]);
-  const dashboard = user?.role === "admin" ? "/admin" : user?.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+  const dashboard = getDashboardPath(user?.role);
   return <header className="sticky top-0 z-50 border-b border-ink/[0.07] bg-cream/95 backdrop-blur-md">
     <div className="container-shell flex h-16 items-center justify-between gap-4 md:h-20">
       <Logo />

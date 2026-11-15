@@ -1,4 +1,4 @@
-// Only VITE_API_URL is allowed in the public frontend environment.
+// Public builds allow the API URL and Vercel's public observability configuration.
 export function validatePublicBuildEnvironment(environment) {
   const invalidKeys = Object.keys(environment).filter(
     (name) =>

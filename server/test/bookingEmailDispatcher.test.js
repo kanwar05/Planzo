@@ -12,7 +12,7 @@ import {
   claimBookingEmail,
   deliverClaimedBookingEmail,
   dispatchBookingEmailBatch,
-} from "../src/services/bookingEmailDispatcher.js";
+} from "../src/workers/bookingEmailDispatcher.js";
 
 let mongo;
 const start = new Date("2028-04-01T00:00:00.000Z");

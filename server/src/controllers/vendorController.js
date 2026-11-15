@@ -264,7 +264,7 @@ export const removeCoverImage = deleteSingleVendorImage(
 );
 
 export const addPortfolioImages = asyncHandler(async (req, res) => {
-  const files = req.files || [];
+  const files = Array.isArray(req.files) ? req.files : [];
 
   if (!files.length) {
     throw new ApiError(

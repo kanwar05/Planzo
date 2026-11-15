@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getDashboardPath } from "../utils/navigation";
 
 export default function ProtectedRoute({ allowedRoles = [] }) {
   const { isAuthenticated, loading, user } = useAuth();
@@ -21,13 +22,7 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
   }
 
   if (allowedRoles.length && !allowedRoles.includes(user.role)) {
-    const destination =
-      user.role === "admin"
-        ? "/admin"
-        : user.role === "vendor"
-          ? "/vendor/dashboard"
-          : "/customer/dashboard";
-    return <Navigate to={destination} replace />;
+    return <Navigate to={getDashboardPath(user.role)} replace />;
   }
 
   return <Outlet />;

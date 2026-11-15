@@ -156,7 +156,7 @@ export async function assertCanonicalBookingDates(bookings) {
   ) {
     throw new Error(
       "Booking date migration is required before serving traffic. " +
-      "Run npm run data:audit and follow docs/MVP_MIGRATION.md; " +
+      "Run npm run data:audit and follow docs/OPERATIONS.md; " +
       "repair invalid dates/date keys and resolve conflicting reservations before restart.",
     );
   }

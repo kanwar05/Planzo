@@ -6,6 +6,7 @@ import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getApiError } from "../utils/apiError";
+import { getDashboardPath } from "../utils/navigation";
 
 export default function LoginPage() {
   useDocumentTitle("Welcome back");
@@ -21,7 +22,7 @@ export default function LoginPage() {
   const location = useLocation();
 
   const openAccount = user => {
-    const defaultPath = user.role === "admin" ? "/admin" : user.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+    const defaultPath = getDashboardPath(user.role);
     navigate(location.state?.from?.pathname || defaultPath, { replace: true });
   };
 

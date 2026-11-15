@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUpRight, CalendarCheck2, Check, ChevronRight, Compass, MapPin, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarCheck2, Check, ChevronRight, Compass, MapPin, Search, ShieldCheck, Sparkles } from "lucide-react";
 import * as motion from "motion/react-m";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";

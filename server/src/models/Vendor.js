@@ -9,6 +9,11 @@ export const SERVICE_CATEGORIES = [
   "Photographer",
   "Event Planner",
   "Rental Services",
+  "Reel Creator & Editor",
+  "Makeup Artist",
+  "Pre-Wedding Shoot",
+  "Drone Operator",
+  "Rental Supplier",
 ];
 
 const imageSchema = new mongoose.Schema(
