@@ -2,7 +2,7 @@
 
 Planzo is a MERN event-services marketplace for discovering approved vendors and sending booking requests. It keeps the existing React/Vite/Tailwind frontend and Express/Mongoose backend.
 
-## MVP features
+## Existing functionality
 
 - Customers register, sign in, search vendors, request bookings, follow status, cancel eligible requests, and manage their account.
 - Vendors manage business information, services, starting prices, photos, intentionally shared business contacts, booking requests, and unavailable dates.
@@ -18,9 +18,47 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 
 Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
 
+## Architecture
+
+```text
+Planzo/
+├── .github/workflows/       # CI quality and security gates
+├── docs/                   # Cleanup record and operating instructions
+├── scripts/                # Repository security and staging checks
+├── frontend/
+│   ├── public/             # Public fonts, licenses and favicon
+│   ├── scripts/            # Public-build validation and manual browser QA
+│   └── src/
+│       ├── assets/         # Bundled application images
+│       ├── components/     # Shared UI and dashboard parts
+│       ├── context/        # Authentication state
+│       ├── data/           # Service-category presentation data
+│       ├── hooks/
+│       ├── layouts/
+│       ├── pages/
+│       ├── routes/
+│       ├── services/       # HTTP clients grouped by resource
+│       ├── test/           # Shared frontend test setup
+│       └── utils/
+└── server/
+    ├── scripts/            # Database checks, worker and verification commands
+    ├── src/
+    │   ├── config/
+    │   ├── controllers/
+    │   ├── middleware/
+    │   ├── models/
+    │   ├── routes/
+    │   ├── services/
+    │   ├── utils/
+    │   └── workers/         # Durable booking-email delivery
+    └── test/               # Isolated backend regression tests
+```
+
+The frontend and server keep separate dependency manifests and lockfiles. Root commands orchestrate them without npm workspaces or shared runtime dependencies. Frontend component and page tests stay beside the code they exercise. See the [cleanup record](docs/CLEANUP.md) for the changes and remaining review items.
+
 ## Local setup
 
-Use Node.js 22 or newer and MongoDB 6 or newer configured as a replica set (Atlas is suitable). Local development can use an initialized single-node replica set named rs0; production should use a supported MongoDB release and a redundant replica set. Standalone MongoDB cannot run booking/availability transactions and startup refuses it. See the [Phase 1.1 rollout requirements](docs/MVP_MIGRATION.md#booking-reliability-phase-11) before upgrading an existing database.
+Use Node.js 22 or newer; [.nvmrc](.nvmrc) selects Node 22. MongoDB 6 or newer must support replica-set transactions (Atlas is suitable). Local development can use an initialized single-node replica set named rs0; production should use a supported MongoDB release and a redundant replica set. Standalone MongoDB cannot run booking/availability transactions and startup refuses it. See [database preflight and rollout](docs/OPERATIONS.md#database-preflight-and-rollout) before upgrading an existing database.
 
 ```sh
 cd server
@@ -45,7 +83,7 @@ Defaults: frontend http://localhost:5173, API http://localhost:5001/api. Livenes
 
 Configure SMTP to exercise password recovery, email-address verification, and customer/vendor email OTP sign-in. For Gmail, set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER`, `SMTP_APP_PASSWORD` (a Google App Password), `SMTP_FROM_NAME`, and `SMTP_FROM_EMAIL`. Set a separate random `OTP_HMAC_SECRET` (at least 32 characters). `OTP_EXPIRY_MINUTES` defaults to 5 and `OTP_RESEND_COOLDOWN_SECONDS` defaults to 60. Raw email tokens and OTPs are never returned through the API. Configure all three Cloudinary values to enable vendor photo uploads; browsing existing photos does not require upload credentials.
 
-Booking emails reuse that SMTP configuration and the first `CLIENT_URL` origin. From `server/`, run `npm run email:worker` as a separate persistent process, or `npm run email:worker -- --once` as a scheduled batch. Without a worker, committed notifications remain queued. See [Phase 1.2 operations and delivery limits](docs/BOOKING_PHASE_1_2.md) before enabling production dispatch.
+Booking emails reuse that SMTP configuration and the first `CLIENT_URL` origin. From `server/`, run `npm run email:worker` as a separate persistent process, or `npm run email:worker -- --once` as a scheduled batch. Without a worker, committed notifications remain queued. See [worker operations and delivery limits](docs/OPERATIONS.md#booking-email-worker) before enabling production dispatch.
 
 ## Administrator provisioning
 
@@ -53,32 +91,48 @@ Set `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PHONE`, and a strong `ADMIN_PASSWORD` in
 
 ## Verification
 
+After installing dependencies separately in `server/` and `frontend/`, run from the repository root:
+
 ```sh
-cd server
 npm run check
 npm test
-
-cd ../frontend
-npm test
-npm run build
+npm run check:security
 ```
+
+`check` runs backend JavaScript syntax checks. `test` runs operational-script tests, backend tests and frontend tests sequentially; `npm run test:operations` runs the operational tests independently. There is currently no ESLint configuration or lint command. `check:security` scans tracked/untracked source and local Git history and reports paths and rule names without printing matched credential values.
+
+Production builds require an explicit HTTPS API endpoint:
+
+```sh
+# POSIX shell; replace with the intended deployment endpoint.
+VITE_API_URL=https://staging-api.example.invalid/api npm run build
+```
+
+```powershell
+$env:VITE_API_URL = 'https://staging-api.example.invalid/api'
+npm.cmd run build
+```
+
+Dependency audit commands are `npm --prefix server audit --audit-level=high` and `npm --prefix frontend audit --audit-level=high`.
 
 Backend tests use isolated MongoMemoryServer databases, never the configured application database. The test runner downloads a test binary into ignored `server/.cache/mongodb` when needed. To use an installed MongoDB executable, set `MONGOMS_SYSTEM_BINARY` and matching `MONGOMS_VERSION` before `npm test`.
 
+Manual browser checks use isolated API fixtures and an installed Chrome executable. After building, run `node frontend/scripts/verify-ui.mjs` or `node frontend/scripts/measure-ui.mjs` from the root. Set `CHROME_PATH` when Chrome is not at the scripts' Windows default. These checks do not verify hosted integrations.
+
 ## Deployment
 
-1. Back up existing data and follow [the migration guide](docs/MVP_MIGRATION.md). Run `npm run data:audit` before rollout; it is read-only.
-2. Set production `MONGODB_URI`, a random `JWT_SECRET`, HTTPS `CLIENT_URL` origins, and SMTP delivery configuration. Set Cloudinary credentials for photo uploads.
+1. Back up existing data and follow [database preflight and rollout](docs/OPERATIONS.md#database-preflight-and-rollout). From `server/`, run the read-only `npm run data:audit` and `npm run db:preflight` commands before rollout.
+2. Set production `MONGODB_URI`, independent random `JWT_SECRET` and `OTP_HMAC_SECRET` values, HTTPS `CLIENT_URL` origins, and SMTP delivery configuration. Set Cloudinary credentials for photo uploads.
 3. Use HTTPS. Choose `COOKIE_SAME_SITE=none` for cross-site UI/API deployments, or `lax` for same-site deployments. Production cookies are Secure and HttpOnly.
 4. Set `TRUST_PROXY` to the actual number of trusted proxy hops; the default is zero. Keep the API behind that proxy if enabling proxy trust.
-5. Build the frontend with an explicit HTTPS `VITE_API_URL`, including `/api`. Production builds reject missing/plaintext endpoints and any other `VITE_*` variable, because these values are public. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
+5. Build the frontend with an explicit HTTPS `VITE_API_URL`, including `/api`. Production builds reject missing/plaintext endpoints and any `VITE_*` name except `VITE_API_URL` and Vercel's `VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG`. All such values are public; never put server secrets in them. Configure SPA fallback to `index.html`; `frontend/vercel.json` already supports this.
 6. Install backend production dependencies with `npm ci --omit=dev`, then run `npm start`. Startup validates configuration, transaction support and canonical booking dates, then waits for core indexes before listening.
-7. Remove retired integration secrets/webhooks and old scheduled tasks from the deployment. Deploy the new booking email worker separately with the same server environment, automatic restart and access to MongoDB/SMTP. The API does not dispatch email itself.
+7. Remove retired integration secrets/webhooks and old scheduled tasks from the deployment. Deploy the booking email worker separately with the same server environment, automatic restart and access to MongoDB/SMTP. The API does not dispatch email itself.
 
 The API checks browser origins for cookie mutations; non-browser cookie clients in production must send an allowed Origin header. Password changes, email confirmation, deactivation, and suspension revoke existing credentials. Deactivation retains account and booking history.
 
-Review [Phase 1.3 vendor lifecycle and rollout](docs/VENDOR_PHASE_1_3.md) before upgrading an existing marketplace. New review/audit indexes and optional fields are additive; no automatic production-data migration is performed.
+Review the [operations runbook](docs/OPERATIONS.md) before upgrading an existing marketplace. Existing review/audit indexes and optional fields are additive; no automatic production-data migration is performed.
 
-Phase 1.4 adds read-only `npm run db:preflight` and `npm run email:diagnostics` from `server/`, bounded database settings, safe request/lifecycle logs, security regressions and CI. Production API traffic requires HTTPS through the configured trusted proxy; cookie mutations always require an allowed Origin even when Authorization is present. Health probes remain accessible internally over HTTP. Follow the [staging rehearsal and release runbook](docs/PRODUCTION_PHASE_1_4.md) before launch. Review-only Render examples live in `deploy/`; no service or production migration is created automatically by these files. Backup restoration, actual browser/provider behavior and hosted failover still require staging evidence.
+The server includes read-only `npm run db:preflight` and `npm run email:diagnostics`, bounded database settings, safe request/lifecycle logs, security regressions and CI. Production API traffic requires HTTPS through the configured trusted proxy; cookie mutations always require an allowed Origin even when Authorization is present. Health probes remain accessible internally over HTTP. Follow the [staging verification instructions](docs/OPERATIONS.md#verification-and-staging-probes) before launch. No backend hosting service is provisioned by the repository. Backup restoration, actual browser/provider behavior and hosted failover still require staging evidence.
 
-[API reference](server/README.md) · [Migration guide](docs/MVP_MIGRATION.md) · [Refactor and validation report](docs/MVP_REFACTOR.md)
+[API reference](server/README.md) · [Operations](docs/OPERATIONS.md) · [Cleanup and validation record](docs/CLEANUP.md)

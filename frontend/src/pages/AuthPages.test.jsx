@@ -20,14 +20,26 @@ describe("account entry", () => {
     expect(await screen.findByText("Customer dashboard reached")).toBeInTheDocument();
     expect(verifyLoginOtp).toHaveBeenCalledWith({ email: "customer@example.test", code: "123456" });
   });
-  it("sends an admin to the admin dashboard after login", async () => {
-    login.mockResolvedValue({ role: "admin" });
-    render(<MemoryRouter initialEntries={["/login"]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/admin" element={<p>Admin overview reached</p>} /></Routes></MemoryRouter>);
-    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "admin@example.test" } });
+  it.each([
+    ["admin", "/admin"],
+    ["vendor", "/vendor/dashboard"],
+    ["customer", "/customer/dashboard"],
+  ])("sends a %s to their dashboard after password login", async (role, destination) => {
+    login.mockResolvedValue({ role });
+    render(<MemoryRouter initialEntries={["/login"]}><Routes><Route path="/login" element={<LoginPage />} /><Route path={destination} element={<p>Dashboard reached</p>} /></Routes></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: `${role}@example.test` } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Password1!" } });
     fireEvent.click(screen.getByRole("button", { name: "Log in" }));
-    expect(await screen.findByText("Admin overview reached")).toBeInTheDocument();
-    expect(login).toHaveBeenCalledWith({ email: "admin@example.test", password: "Password1!" });
+    expect(await screen.findByText("Dashboard reached")).toBeInTheDocument();
+    expect(login).toHaveBeenCalledWith({ email: `${role}@example.test`, password: "Password1!" });
+  });
+  it("returns to the saved pathname after login", async () => {
+    login.mockResolvedValue({ role: "customer" });
+    render(<MemoryRouter initialEntries={[{ pathname: "/login", state: { from: { pathname: "/booking/vendor-1" } } }]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/booking/vendor-1" element={<p>Booking request reached</p>} /></Routes></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "customer@example.test" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Password1!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByText("Booking request reached")).toBeInTheDocument();
   });
   it.each(["customer", "vendor"])("registers a %s with the selected role", async (role) => {
     register.mockResolvedValue({ role });

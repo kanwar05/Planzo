@@ -11,62 +11,10 @@ import asyncHandler from "../utils/asyncHandler.js";
 import { requireFields, validateObjectId } from "../utils/validation.js";
 import { withBookingTransaction, withVendorBookingTransaction, lockAccountForBooking, lockVendorForBooking } from "../utils/vendorBookingTransaction.js";
 import { enqueueBookingEmails } from "../services/bookingNotificationService.js";
-import {
-  hasActiveVendorOwner,
-  vendorView,
-} from "../services/vendorSearchService.js";
-
-export const populateBooking = (query) =>
-  query
-    .populate("customerId", "name")
-    .populate(
-      "vendorId",
-      "businessName serviceCategory pricing location description servicesOffered profileImage coverImage portfolioImages verified verificationStatus userId +contactDetails",
-    );
+import { hasActiveVendorOwner } from "../services/vendorSearchService.js";
+import { bookingView, populateBooking } from "../services/bookingViewService.js";
 
 const identity = (value) => String(value?._id || value || "");
-
-export function bookingView(booking, viewer) {
-  const source = booking.toObject ? booking.toObject() : booking;
-  const keys = [
-    "_id",
-    "eventType",
-    "eventDate",
-    "eventDateOnly",
-    "eventLocation",
-    "description",
-    "notes",
-    "status",
-    "rejectionReason",
-    "cancellationReason",
-    "createdAt",
-    "updatedAt",
-  ];
-  const result = Object.fromEntries(
-    keys
-      .filter((key) => source[key] !== undefined)
-      .map((key) => [key, source[key]]),
-  );
-  result.description ||= "";
-  result.notes ||= "";
-  result.customerId = source.customerId?.name
-    ? { _id: source.customerId._id, name: source.customerId.name }
-    : source.customerId;
-  const isCustomer =
-    viewer.role === "customer" &&
-    identity(source.customerId) === identity(viewer);
-  const isOwner =
-    viewer.role === "vendor" &&
-    identity(source.vendorId?.userId) === identity(viewer);
-  const shareContact =
-    viewer.role === "admin" ||
-    isOwner ||
-    (isCustomer && ["accepted", "completed"].includes(source.status));
-  result.vendorId = source.vendorId?.businessName
-    ? vendorView(source.vendorId, { contact: shareContact })
-    : source.vendorId;
-  return result;
-}
 
 const text = (body, key, limit, optional = false) => {
   const value = body[key];

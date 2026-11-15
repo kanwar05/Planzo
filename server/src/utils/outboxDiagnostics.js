@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { BOOKING_EMAIL_POLICY } from "../services/bookingEmailDispatcher.js";
+import { BOOKING_EMAIL_POLICY } from "../workers/bookingEmailDispatcher.js";
 import { safeDocumentId, safeDiagnosticDate } from "./safeDiagnosticValues.js";
 
 const statuses = ["pending", "processing", "sent", "failed"];

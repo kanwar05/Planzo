@@ -6,11 +6,8 @@ import VendorModerationAudit from "../models/VendorModerationAudit.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { validateObjectId } from "../utils/validation.js";
-import {
-  bookingView,
-  populateBooking,
-  updateBookingStatus,
-} from "./bookingController.js";
+import { updateBookingStatus } from "./bookingController.js";
+import { bookingView, populateBooking } from "../services/bookingViewService.js";
 import { vendorView } from "../services/vendorSearchService.js";
 import {
   assertReviewableVendor, vendorProfileCompletion, vendorRevisionFilter,

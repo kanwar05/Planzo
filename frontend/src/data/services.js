@@ -14,6 +14,11 @@ import {
   PartyPopper,
   Armchair,
   Camera,
+  Clapperboard,
+  Sparkles,
+  Heart,
+  Plane,
+  Package,
 } from "lucide-react";
 import venueImage from "../assets/optimized/punjab_heritage_venue.webp";
 import cateringImage from "../assets/optimized/tablescape_details_macro_1788675492844.webp";
@@ -24,6 +29,8 @@ import plannerImage from "../assets/optimized/editorial_hero_event_1788675428596
 import rentalImage from "../assets/optimized/event_build_day.webp";
 import photographyImage from "../assets/optimized/luxury_wedding_editorial_1788675454322.webp";
 import photographySmall from "../assets/optimized/luxury_wedding_editorial_1788675454322-small.webp";
+import makeupImage from "../assets/optimized/indian_woman_event_producer.webp";
+import makeupSmall from "../assets/optimized/indian_woman_event_producer-small.webp";
 
 export const services = [
   { title: "Venue Booking", slug: "venue", description: "Distinctive spaces for celebrations of every size.", icon: Building2, image: venueImage, imageSmall: venueSmall },
@@ -34,4 +41,9 @@ export const services = [
   { title: "Event Planner", slug: "planner", description: "Calm, capable experts handling every moving detail.", icon: PartyPopper, image: plannerImage, imageSmall: plannerSmall },
   { title: "Rental Services", slug: "rental", description: "Furniture, lighting and essentials, delivered on time.", icon: Armchair, image: rentalImage, imageSmall: rentalSmall },
   { title: "Photographer", slug: "photographer", description: "Thoughtful photographs that preserve the moments that matter.", icon: Camera, image: photographyImage, imageSmall: photographySmall },
+  { title: "Reel Creator & Editor", slug: "reel-creator-editor", description: "Creative reels and polished edits that bring your celebration to life.", icon: Clapperboard, image: photographyImage, imageSmall: photographySmall },
+  { title: "Makeup Artist", slug: "makeup-artist", description: "Personalised makeup for a confident, camera-ready celebration.", icon: Sparkles, image: makeupImage, imageSmall: makeupSmall },
+  { title: "Pre-Wedding Shoot", slug: "pre-wedding-shoot", description: "Beautifully captured moments that tell your story before the big day.", icon: Heart, image: photographyImage, imageSmall: photographySmall },
+  { title: "Drone Operator", slug: "drone-operator", description: "Aerial perspectives that capture your celebration from above.", icon: Plane, image: venueImage, imageSmall: venueSmall },
+  { title: "Rental Supplier", slug: "rental-supplier", description: "Event equipment and celebration essentials supplied with care.", icon: Package, image: rentalImage, imageSmall: rentalSmall },
 ];

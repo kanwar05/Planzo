@@ -52,7 +52,7 @@ export default async function connectDatabase() {
   }
   if (!topology.transactionsSupported) {
     const error = new Error(
-      "Booking reliability requires a MongoDB replica set (or mongos) for transactions. See docs/MVP_MIGRATION.md.",
+      "Booking reliability requires a MongoDB replica set (or mongos) for transactions. See docs/OPERATIONS.md.",
     );
     error.code = "DB_TOPOLOGY_UNSUPPORTED";
     throw error;

@@ -38,6 +38,9 @@ const profileData = (extra = {}) => ({
   contactDetails: { email: "shared-business@example.com", phone: "+919999888877" },
   ...extra,
 });
+const newServiceCategories = [
+  "Reel Creator & Editor", "Makeup Artist", "Pre-Wedding Shoot", "Drone Operator", "Rental Supplier",
+];
 
 function newUser(role = "vendor", extra = {}) {
   sequence += 1;
@@ -135,6 +138,82 @@ after(async () => {
   }
   await mongoose.disconnect();
   if (mongo) await mongo.stop();
+});
+
+test("both category metadata endpoints retain existing categories and expose all five additions", async () => {
+  const expected = [
+    "DJ", "Catering", "Decoration", "Venue Booking", "Mehndi Artist", "Photographer", "Event Planner", "Rental Services",
+    ...newServiceCategories,
+  ];
+  for (const path of ["/api/vendors/categories", "/api/vendors/search/meta"]) {
+    const response = await request(app).get(path);
+    assert.equal(response.status, 200, response.body.message);
+    assert.deepEqual(response.body.categories, expected);
+  }
+});
+
+for (const serviceCategory of newServiceCategories) {
+  test(`${serviceCategory} supports onboarding, profile edits, discovery and booking`, async () => {
+    const [owner, customer, admin] = await Promise.all([newUser(), newUser("customer"), newUser("admin")]);
+    const created = await createProfile(owner, { serviceCategory });
+    assert.equal(created.status, 201, created.body.message);
+    assert.equal(created.body.vendor.serviceCategory, serviceCategory);
+    assert.equal(created.body.vendor.profileCompletion.readyForReview, true);
+
+    // Round-trip through the legacy rental category to exercise both edit directions.
+    const legacyEdit = await editProfile(owner, { serviceCategory: "Rental Services", profileRevision: created.body.vendor.profileRevision });
+    assert.equal(legacyEdit.status, 200, legacyEdit.body.message);
+    assert.equal(legacyEdit.body.vendor.serviceCategory, "Rental Services");
+    const edited = await editProfile(owner, { serviceCategory, profileRevision: legacyEdit.body.vendor.profileRevision });
+    assert.equal(edited.status, 200, edited.body.message);
+    assert.equal(edited.body.vendor.serviceCategory, serviceCategory);
+    assert.equal(edited.body.vendor.profileCompletion.readyForReview, true);
+
+    const vendor = edited.body.vendor;
+    const approved = await request(app).patch(`/api/admin/vendors/${vendor._id}/verify`).set("Authorization", auth(admin))
+      .send({ profileRevision: vendor.profileRevision });
+    assert.equal(approved.status, 200, approved.body.message);
+    for (const query of [
+      { category: serviceCategory, city: "Delhi", minPrice: 14000, maxPrice: 16000 },
+      { search: serviceCategory },
+      { q: serviceCategory },
+    ]) {
+      const listed = await request(app).get("/api/vendors").query(query);
+      assert.equal(listed.status, 200, listed.body.message);
+      assert.deepEqual(listed.body.vendors.map((row) => row._id), [vendor._id]);
+      assert.equal(listed.body.vendors[0].serviceCategory, serviceCategory);
+    }
+    const legacyRental = await request(app).get("/api/vendors").query({ category: "Rental Services" });
+    assert.equal(legacyRental.status, 200, legacyRental.body.message);
+    assert.deepEqual(legacyRental.body.vendors, []);
+    const detail = await request(app).get(`/api/vendors/${vendor._id}`);
+    assert.equal(detail.status, 200, detail.body.message);
+    assert.equal(detail.body.vendor.serviceCategory, serviceCategory);
+
+    const booking = await requestBooking(customer, vendor);
+    assert.equal(booking.status, 201, booking.body.message);
+    assert.equal(booking.body.booking.vendorId.serviceCategory, serviceCategory);
+    const accepted = await changeBooking(owner, booking.body.booking._id, "accepted");
+    assert.equal(accepted.status, 200, accepted.body.message);
+    assert.equal(accepted.body.booking.vendorId.serviceCategory, serviceCategory);
+    assert.equal(accepted.body.booking.status, "accepted");
+    const events = await NotificationOutbox.find({ bookingId: booking.body.booking._id }).lean();
+    assert.equal(events.length, 2);
+    assert.ok(events.every((event) => event.payload.service === serviceCategory));
+  });
+}
+
+test("unsupported service categories remain invalid for profile creation, editing and discovery", async () => {
+  const owner = await newUser();
+  const invalidCreate = await createProfile(owner, { serviceCategory: "Unsupported category" });
+  assert.equal(invalidCreate.status, 400, invalidCreate.body.message);
+  assert.equal(await Vendor.countDocuments({ userId: owner._id }), 0);
+  const vendor = await seedVendor(owner, { serviceCategory: "Rental Services" });
+  const invalidEdit = await editProfile(owner, { serviceCategory: "Unsupported category" });
+  assert.equal(invalidEdit.status, 400, invalidEdit.body.message);
+  assert.equal((await Vendor.findById(vendor._id)).serviceCategory, "Rental Services");
+  const invalidSearch = await request(app).get("/api/vendors").query({ category: "Unsupported category" });
+  assert.equal(invalidSearch.status, 400, invalidSearch.body.message);
 });
 
 test("complete vendor onboarding preserves normalized business fields and cannot self-approve or replace ownership", async () => {

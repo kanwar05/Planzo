@@ -32,16 +32,6 @@ export function validateObjectId(value, fieldName = "id") {
   }
 }
 
-export function toNonNegativeNumber(value, fieldName) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number) || number < 0) {
-    throw new ApiError(400, `${fieldName} must be a non-negative number.`);
-  }
-
-  return number;
-}
-
 export function pick(source, allowedFields) {
   return allowedFields.reduce((result, field) => {
     if (source[field] !== undefined) result[field] = source[field];

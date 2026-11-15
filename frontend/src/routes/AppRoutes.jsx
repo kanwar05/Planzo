@@ -4,6 +4,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import { useAuth } from "../context/AuthContext";
 import MainLayout from "../layouts/MainLayout";
 import HomePage from "../pages/HomePage";
+import { getDashboardPath } from "../utils/navigation";
 const AuthLayout = lazy(() => import("../layouts/AuthLayout"));
 const DashboardLayout = lazy(() => import("../layouts/DashboardLayout"));
 const AdminDashboardPage = lazy(() => import("../pages/AdminDashboardPage"));
@@ -54,7 +55,7 @@ function DashboardRedirect() {
   const {
     user
   } = useAuth();
-  const to = user?.role === "admin" ? "/admin" : user?.role === "vendor" ? "/vendor/dashboard" : "/customer/dashboard";
+  const to = getDashboardPath(user?.role);
   return <Navigate to={to} replace />;
 }
 export const appRoutes = [{

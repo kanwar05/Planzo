@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import NotificationOutbox from "../models/NotificationOutbox.js";
-import { sendBookingEmail } from "./bookingEmailService.js";
+import { sendBookingEmail } from "../services/bookingEmailService.js";
 
 export const BOOKING_EMAIL_POLICY = Object.freeze({
   maxAttempts: 5,
