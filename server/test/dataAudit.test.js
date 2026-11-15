@@ -5,6 +5,16 @@ import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { auditBookingDates, assertCanonicalBookingDates } from "../src/utils/bookingDataAudit.js";
 
+function normalizeDocument(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? { $date: "Invalid Date" } : { $date: value.toISOString() };
+  if (value instanceof mongoose.Types.ObjectId) return { $oid: value.toString() };
+  if (Array.isArray(value)) return value.map(normalizeDocument);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [key, normalizeDocument(nestedValue)]));
+  }
+  return value;
+}
+
 test("legacy data audit detects date collisions without modifying application records", { timeout: 30000 }, async () => {
   const mongo = await MongoMemoryServer.create();
   try {
@@ -37,7 +47,7 @@ test("legacy data audit detects date collisions without modifying application re
     assert.equal(startupDates.bookingsMissingDateKeys, report.bookingsMissingDateKeys);
     assert.equal(report.vendorsUsingLegacyApproval, 1);
     assert.equal(report.availabilityRecordsWithRetiredRules, 1);
-    assert.deepEqual(await bookings.find().sort({ _id: 1 }).toArray(), before);
+    assert.deepEqual(normalizeDocument(await bookings.find().sort({ _id: 1 }).toArray()), normalizeDocument(before));
   } finally {
     await mongoose.disconnect();
     await mongo.stop();
@@ -88,7 +98,7 @@ test("date audit handles corrupt BSON dates and keys and groups conflicts by the
     assert.equal(report.bookingDateIssues.length, 13);
     assert.equal(JSON.stringify(report).includes("private customer details"), false);
     await assert.rejects(assertCanonicalBookingDates(bookings), /migration is required.*data:audit/);
-    assert.deepEqual(await bookings.find().sort({ _id: 1 }).toArray(), before);
+    assert.deepEqual(normalizeDocument(await bookings.find().sort({ _id: 1 }).toArray()), normalizeDocument(before));
   } finally {
     await mongoose.disconnect();
     await mongo.stop();
