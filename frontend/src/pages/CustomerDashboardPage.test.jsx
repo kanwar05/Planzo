@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomerDashboardPage from "./CustomerDashboardPage";
 import { getMyBookings, updateBookingStatus } from "../services/bookingService";
+vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: { role: "customer", emailVerified: true } }) }));
 vi.mock("../services/bookingService", () => ({
   getMyBookings: vi.fn(),
   updateBookingStatus: vi.fn()

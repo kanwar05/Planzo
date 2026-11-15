@@ -7,11 +7,13 @@ import RefreshToken from "../models/RefreshToken.js";
 import EmailOtp from "../models/EmailOtp.js";
 import NotificationOutbox from "../models/NotificationOutbox.js";
 import VendorModerationAudit from "../models/VendorModerationAudit.js";
+import VendorPackage from "../models/VendorPackage.js";
+import Quotation from "../models/Quotation.js";
 import { inspectDatabaseTopology } from "../config/database.js";
 import { auditBookingDates } from "./bookingDataAudit.js";
 import { safeDocumentId } from "./safeDiagnosticValues.js";
 
-const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit];
+const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation];
 const MAX_TIME_MS = 30000;
 const failure = (code) => Object.assign(new Error("Read-only database preflight failed."), { code });
 const canonical = (value, key) => {
@@ -100,6 +102,7 @@ export async function inspectDatabaseData(db = mongoose.connection.db) {
   const statuses = [];
   for (const [collection, field, allowed] of [
     ["bookings", "status", ["pending", "accepted", "rejected", "cancelled", "completed"]],
+    ["bookings", "quotationStatus", ["none", "offered", "rejected", "accepted", null]],
     ["vendors", "verificationStatus", ["pending", "approved", "rejected", null, ""]],
     ["users", "accountStatus", ["active", "deactivated", "blocked", "suspended", null]],
     ["users", "role", ["customer", "vendor", "admin", null]],

@@ -10,7 +10,7 @@ vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: account.user,
 vi.mock("../services/authService", () => ({ requestEmailVerification: vi.fn(), verifyInitialEmail }));
 function Destination() {
   const location = useLocation();
-  return <p>Destination: {location.pathname}; business: {location.state?.businessName}</p>;
+  return <p>Destination: {location.pathname}; business: {location.state?.businessName}; package: {location.state?.packageId}</p>;
 }
 function renderFlow(initialEntries) {
   return render(<MemoryRouter initialEntries={initialEntries}><Routes>
@@ -60,6 +60,14 @@ describe("booking intent through registration and verification", () => {
     fillRegistration("vendor");
     await verifyEmail();
     expect(await screen.findByText(/Destination: \/vendor\/profile-setup; business: Celebration Studio/)).toBeInTheDocument();
+  });
+  it("preserves a validated package id through guest registration and verification", async () => {
+    const packageId = "1234567890abcdef12345678";
+    renderFlow([{ pathname: "/booking/vendor-1", state: { packageId } }]);
+    fireEvent.click(await screen.findByRole("link", { name: "Create an account" }));
+    fillRegistration();
+    await verifyEmail();
+    expect(await screen.findByText(new RegExp(`Destination: /booking/vendor-1;.*package: ${packageId}`))).toBeInTheDocument();
   });
   it("uses an internal fallback when registration receives an unsafe saved destination", async () => {
     renderFlow([{ pathname: "/register", state: { from: { pathname: "//evil.example" } } }]);

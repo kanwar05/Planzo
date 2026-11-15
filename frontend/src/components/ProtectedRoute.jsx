@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getDashboardPath } from "../utils/navigation";
+import { getDashboardPath, getPackageIntent } from "../utils/navigation";
 
 export default function ProtectedRoute({ allowedRoles = [], requireVerified = false }) {
   const { isAuthenticated, loading, user } = useAuth();
@@ -18,7 +18,7 @@ export default function ProtectedRoute({ allowedRoles = [], requireVerified = fa
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location, ...getPackageIntent(location.state?.packageId) }} replace />;
   }
 
   if (allowedRoles.length && !allowedRoles.includes(user.role)) {
@@ -26,7 +26,7 @@ export default function ProtectedRoute({ allowedRoles = [], requireVerified = fa
   }
 
   if (requireVerified && user.role !== "admin" && user.emailVerified !== true) {
-    return <Navigate to="/verify-account-email" state={{ from: location }} replace />;
+    return <Navigate to="/verify-account-email" state={{ from: location, ...getPackageIntent(location.state?.packageId) }} replace />;
   }
 
   return <Outlet />;

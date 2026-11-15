@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import packageSnapshotSchema from "./packageSnapshotSchema.js";
+import { agreementSchema } from "./quotationSchemas.js";
 
 export const BOOKING_STATUSES = [
   "pending",
@@ -34,6 +36,12 @@ const bookingSchema = new mongoose.Schema(
     // Optional additive metadata: old bookings need no backfill. Never serialized.
     idempotencyKeyHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
     requestHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
+    selectedPackage: { type: packageSnapshotSchema, default: undefined },
+    quotationRevision: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
+    quotationStatus: { type: String, enum: ["none", "offered", "rejected", "accepted"], default: "none" },
+    // Written only by customer quotation acceptance, together with reservation.
+    // No profile/package/status endpoint accepts updates to this snapshot.
+    acceptedAgreement: { type: agreementSchema, default: undefined },
     status: {
       type: String,
       enum: BOOKING_STATUSES,

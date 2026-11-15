@@ -18,6 +18,8 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 - Customer booking creation and vendor marketplace writes require verified email ownership. Existing accounts can still sign in, view history, manage their account and cancel their own eligible bookings while completing verification.
 - Booking dates use UTC calendar days throughout the API and UI. Completion is permitted only after the full event date has elapsed.
 - Booking creation supports customer-scoped `Idempotency-Key` retries; the booking form reuses a key while retrying an unchanged request. Cancellation/rejection dialogs collect optional reasons.
+- Vendors manage structured INR service packages; customers can select one or keep a custom booking request. Package selection survives safe login/registration redirects.
+- Vendors send itemized quotation revisions. Customer acceptance saves the exact commercial agreement and reserves the date atomically; quoted/package bookings require that acceptance. Existing custom requests without quotations retain direct vendor acceptance.
 
 Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
 
@@ -141,3 +143,5 @@ The server includes read-only `npm run db:preflight` and `npm run email:diagnost
 [API reference](server/README.md) · [Operations](docs/OPERATIONS.md) · [Cleanup and validation record](docs/CLEANUP.md)
 
 See [booking security and rollout](docs/BOOKING_SECURITY.md) for the email-verification policy, additive database fields/index, UTC boundaries, retry contract and verification evidence.
+
+See [packages, quotations and rollout](docs/PACKAGES_QUOTATIONS.md) for the commercial workflow, API additions, new collections/indexes, compatibility rules and staging checks. Drain older API writers before enabling commercial bookings.

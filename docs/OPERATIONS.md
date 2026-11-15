@@ -55,6 +55,8 @@ For an existing database:
 
 Preserve retired collections/fields until retention and compatibility have been reviewed separately. The booking-security rollout adds nullable email ownership proof, credential-version binding on OTP challenges and optional private booking retry metadata with a partial unique index. No ownership backfill or booking rewrite is performed. Follow [booking security rollout](BOOKING_SECURITY.md#database-and-rollout) before serving the updated API.
 
+The package/quotation release adds two collections, four secondary indexes and optional commercial booking snapshots. Follow [commercial database and rollout](PACKAGES_QUOTATIONS.md#database-and-rollout): drain older API writers, complete additive startup/index checks with traffic held, rerun preflight, then deploy the matching UI. Legacy bookings need no fabricated agreement backfill. Do not roll commercial bookings back to API writers that can bypass customer quotation acceptance.
+
 ## Booking email worker
 
 Run one explicit deployment mode: a persistent supervised worker, or a scheduled one-batch process. The API does not dispatch booking email. The worker uses the same `MONGODB_URI`, SMTP configuration and first `CLIENT_URL` origin as the API; shared environment validation also requires the existing authentication secrets. Keep host clocks synchronized.

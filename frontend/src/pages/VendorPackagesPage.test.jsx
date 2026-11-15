@@ -1,0 +1,53 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import VendorPackagesPage from "./VendorPackagesPage";
+import { createPackage, deactivatePackage, getMyPackages, updatePackage } from "../services/packageService";
+import { getMyVendorProfile } from "../services/vendorService";
+vi.mock("../services/packageService", () => ({ createPackage: vi.fn(), deactivatePackage: vi.fn(), getMyPackages: vi.fn(), updatePackage: vi.fn() }));
+vi.mock("../services/vendorService", () => ({ getMyVendorProfile: vi.fn() }));
+const item = { _id: "package-1", title: "Celebration styling", description: "Flowers and styling", serviceCategory: "Decoration", priceAmount: 1200050, priceType: "starting", pricingUnit: "event", includedServices: ["Flowers"], exclusions: [], addOns: [], active: true, revision: 3 };
+const renderPage = () => render(<MemoryRouter><VendorPackagesPage /></MemoryRouter>);
+describe("vendor package management", () => {
+  beforeEach(() => { vi.resetAllMocks(); getMyVendorProfile.mockResolvedValue({ serviceCategory: "Decoration" }); getMyPackages.mockResolvedValue([]); });
+  it("creates a package using exact integer prices and structured add-ons", async () => {
+    createPackage.mockResolvedValue({ ...item, title: "Garden styling", revision: 1 });
+    renderPage();
+    await screen.findByText("No service packages yet");
+    fireEvent.click(screen.getByRole("button", { name: "Create package" }));
+    fireEvent.change(screen.getByLabelText("Package title"), { target: { value: "Garden styling" } });
+    fireEvent.change(screen.getByLabelText("Package description"), { target: { value: "Seasonal floral styling" } });
+    fireEvent.change(screen.getByLabelText("Price in INR"), { target: { value: "12000.50" } });
+    fireEvent.change(screen.getByLabelText("Included services and deliverables"), { target: { value: "Flowers\nStage setup" } });
+    fireEvent.change(screen.getByLabelText("Optional add-ons"), { target: { value: "Extra hour | 1500.25 | hour" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save package" }));
+    await waitFor(() => expect(createPackage).toHaveBeenCalledWith(expect.objectContaining({ priceAmount: 1200050, serviceCategory: "Decoration", includedServices: ["Flowers", "Stage setup"], addOns: [{ title: "Extra hour", priceAmount: 150025, pricingUnit: "hour" }] }), expect.any(String)));
+    expect(await screen.findByRole("status")).toHaveTextContent("Package saved.");
+  });
+  it("submits the inspected revision on edits and soft-deactivation", async () => {
+    getMyPackages.mockResolvedValue([item]);
+    updatePackage.mockResolvedValue({ ...item, title: "Updated styling", revision: 4 });
+    deactivatePackage.mockResolvedValue({ ...item, title: "Updated styling", revision: 5, active: false });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Celebration styling" }));
+    fireEvent.change(screen.getByLabelText("Package title"), { target: { value: "Updated styling" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save package" }));
+    await waitFor(() => expect(updatePackage).toHaveBeenCalledWith("package-1", expect.objectContaining({ revision: 3, title: "Updated styling" })));
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Updated styling" }));
+    await waitFor(() => expect(deactivatePackage).toHaveBeenCalledWith("package-1", 4));
+    expect(await screen.findByText(/Inactive · Revision 5/)).toBeInTheDocument();
+  });
+  it("keeps an uncertain create immutable and retries its original key", async () => {
+    createPackage.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValueOnce(item);
+    renderPage(); await screen.findByText("No service packages yet");
+    fireEvent.click(screen.getByRole("button", { name: "Create package" }));
+    for (const [label, value] of [["Package title", "Styling"], ["Package description", "Styling brief"], ["Price in INR", "10.01"], ["Included services and deliverables", "Flowers"]]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Save package" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Package title")).toBeDisabled();
+    const original = createPackage.mock.calls[0];
+    fireEvent.click(screen.getByRole("button", { name: "Save package" }));
+    await waitFor(() => expect(createPackage).toHaveBeenCalledTimes(2));
+    expect(createPackage.mock.calls[1]).toEqual(original);
+  });
+});

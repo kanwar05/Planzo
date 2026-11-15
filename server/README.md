@@ -77,7 +77,7 @@ Acceptance and availability writes share a per-vendor transaction guard, so acce
 
 | Method | Path | Access / purpose |
 | --- | --- | --- |
-| POST | /api/bookings | Customer submits vendorId, eventDate, eventLocation, eventType, description, optional notes |
+| POST | /api/bookings | Customer submits vendorId, eventDate, eventLocation, eventType, description, optional notes and packageId |
 | GET | /api/bookings/my-bookings | Customer's bookings only |
 | GET | /api/bookings/vendor-requests | Vendor's incoming bookings only |
 | PATCH | /api/bookings/:id/status | Authorized participant/admin changes status; optional reason |
@@ -85,6 +85,8 @@ Acceptance and availability writes share a per-vendor transaction guard, so acce
 Pending → accepted/rejected/cancelled. Accepted → completed/cancelled. Rejected, cancelled and completed are final.
 
 Customers can only cancel their own pending/accepted bookings. Vendors accept/reject their own incoming pending requests and complete accepted requests. Admins manage allowed transitions. The database enforces one accepted/completed booking per vendor/date, and conditional updates reject stale transitions. Pending requests do not reserve dates. Basic date checks currently use the UTC date boundary on the API.
+
+Direct acceptance applies only to custom requests without quotation history. Package-selected or quoted requests require the associated customer's explicit acceptance of the latest unexpired quotation. Vendor/admin status endpoints cannot bypass this requirement. Quotation acceptance commits the agreement snapshot, accepted status, date reservation and existing email intent together. Quote rejection keeps the booking pending. See [commercial API and rollout](../docs/PACKAGES_QUOTATIONS.md#api-additions) for package CRUD, quotation endpoints, integer-paise validation, retries and new database indexes.
 
 Both admin endpoints use the same graph; admins can cancel accepted bookings but cannot reopen or cancel terminal states. Same-status accept/reject/cancel repeats retain the existing HTTP 409 contract and leave reasons/timestamps unchanged. Requests racing another transition either commit a legal transition or return 409. Event dates must be real YYYY-MM-DD UTC calendar dates; today is allowed, and acceptance rechecks that a pending request has not become past or unavailable. Completion requires an accepted booking whose whole UTC event date has ended, including admin actions, and the transaction rechecks eligibility. Cancellation/rejection remain independent of the event date and accept optional plain-text `reason` up to 1,000 characters; invalid types/lengths fail validation, while unsafe control/bidi characters are removed and line endings normalized.
 

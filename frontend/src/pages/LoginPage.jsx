@@ -6,7 +6,7 @@ import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getApiError } from "../utils/apiError";
-import { getDashboardPath, getSafeReturnPath } from "../utils/navigation";
+import { getDashboardPath, getPackageIntent, getSafeReturnPath } from "../utils/navigation";
 
 export default function LoginPage() {
   useDocumentTitle("Welcome back");
@@ -23,7 +23,7 @@ export default function LoginPage() {
 
   const openAccount = user => {
     const defaultPath = getDashboardPath(user.role);
-    navigate(getSafeReturnPath(location.state?.from?.pathname, defaultPath), { replace: true });
+    navigate(getSafeReturnPath(location.state?.from?.pathname, defaultPath), { replace: true, state: getPackageIntent(location.state?.packageId || location.state?.from?.state?.packageId) });
   };
 
   const submit = async (event) => {
@@ -146,7 +146,7 @@ export default function LoginPage() {
       </form>
       <p className="mt-7 border-t border-ink/10 pt-6 text-center text-sm leading-7 text-ink/65">
         New to Planzo?{" "}
-        <Link to="/register" state={{ from: { pathname: getSafeReturnPath(location.state?.from?.pathname) } }} className="font-bold text-coral">
+        <Link to="/register" state={{ from: { pathname: getSafeReturnPath(location.state?.from?.pathname) }, ...getPackageIntent(location.state?.packageId || location.state?.from?.state?.packageId) }} className="font-bold text-coral">
           Create an account
         </Link>
       </p>

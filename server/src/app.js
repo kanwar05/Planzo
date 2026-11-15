@@ -7,6 +7,8 @@ import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
+import packageRoutes from "./routes/packageRoutes.js";
+import quotationRoutes from "./routes/quotationRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import { requestLogging } from "./middleware/requestLogging.js";
 import { createReadinessHandler } from "./services/readinessService.js";
@@ -124,7 +126,9 @@ app.use(
 );
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/vendors", packageRoutes);
 app.use("/api/vendors", vendorRoutes);
+app.use("/api/bookings", quotationRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use(notFound);
 app.use(errorHandler);

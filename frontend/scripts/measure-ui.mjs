@@ -50,6 +50,7 @@ function fixture(url, method) {
   if (p === "/auth/me") return role ? [200, { user: { _id: role + "-1", name: "Planzo " + role, email: role + "@example.test", phone: "9999999991", role, emailVerified: true } }] : [401, { message: "Please log in." }];
   if (p === "/auth/refresh") return [401, { message: "Please log in." }];
   if (p === "/vendors") return [200, { vendors: [vendor], pagination: pageInfo }];
+  if (p === "/vendors/packages/mine" || /^\/vendors\/[^/]+\/packages$/.test(p)) return [200, { packages: [] }];
   if (p === "/vendors/me") return [200, { vendor: owner }];
   if (p.endsWith("/availability")) return [200, dates];
   if (p === "/vendors/vendor-1") return [200, { vendor }];
