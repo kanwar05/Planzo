@@ -37,7 +37,9 @@ describe("customer bookings", () => {
     fireEvent.click(await screen.findByRole("button", {
       name: "Cancel booking"
     }));
-    await waitFor(() => expect(updateBookingStatus).toHaveBeenCalledWith("booking-1", "cancelled"));
+    fireEvent.change(screen.getByLabelText("Cancellation reason (optional)"), { target: { value: "The venue is no longer available." } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cancellation" }));
+    await waitFor(() => expect(updateBookingStatus).toHaveBeenCalledWith("booking-1", "cancelled", "The venue is no longer available."));
     expect(await screen.findByText("cancelled")).toBeInTheDocument();
     expect(screen.queryByRole("button", {
       name: "Cancel booking"
@@ -57,7 +59,8 @@ describe("customer bookings", () => {
     fireEvent.click(await screen.findByRole("button", {
       name: "Cancel booking"
     }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("This booking has already changed.");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cancellation" }));
+    expect(await screen.findByText("This booking has already changed.")).toBeInTheDocument();
     expect(screen.getByRole("button", {
       name: "Cancel booking"
     })).toBeEnabled();

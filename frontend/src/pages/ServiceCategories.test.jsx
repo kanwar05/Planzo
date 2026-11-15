@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import RegisterPage from "./RegisterPage";
 import ServicesPage from "./ServicesPage";
 import VendorProfilePage from "./VendorProfilePage";
+import VerifyAccountEmailPage from "./VerifyAccountEmailPage";
 import VendorsPage from "./VendorsPage";
 import { useAuth } from "../context/AuthContext";
+import { requestEmailVerification, verifyInitialEmail } from "../services/authService";
 import { createVendorProfile, getMyVendorProfile, getVendors, updateVendorProfile } from "../services/vendorService";
 
 vi.mock("../context/AuthContext", () => ({ useAuth: vi.fn() }));
+vi.mock("../services/authService", () => ({ requestEmailVerification: vi.fn(), verifyInitialEmail: vi.fn() }));
 vi.mock("../services/vendorService", () => ({
   createVendorProfile: vi.fn(), getMyVendorProfile: vi.fn(), getVendors: vi.fn(), updateVendorProfile: vi.fn()
 }));
@@ -24,8 +27,15 @@ const profile = {
 
 describe("additional marketplace service categories", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    useAuth.mockReturnValue({ register: vi.fn().mockResolvedValue({ role: "vendor" }) });
+    vi.resetAllMocks();
+    const auth = { user: { role: "vendor", emailVerified: true }, updateUser: next => { auth.user = next; } };
+    auth.register = vi.fn().mockImplementation(async payload => {
+      auth.user = { role: "vendor", email: payload.email, emailVerified: false };
+      return auth.user;
+    });
+    useAuth.mockImplementation(() => auth);
+    requestEmailVerification.mockResolvedValue({ message: "Code sent." });
+    verifyInitialEmail.mockImplementation(async () => ({ ...auth.user, emailVerified: true }));
     getMyVendorProfile.mockResolvedValue(profile);
     getVendors.mockResolvedValue({ vendors: [], pagination: { total: 0, pages: 1 } });
     vi.stubGlobal("IntersectionObserver", class {
@@ -54,6 +64,7 @@ describe("additional marketplace service categories", () => {
     render(<MemoryRouter initialEntries={["/register?role=vendor"]}>
       <Routes>
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-account-email" element={<VerifyAccountEmailPage />} />
         <Route path="/vendor/profile-setup" element={<VendorProfilePage />} />
       </Routes>
     </MemoryRouter>);
@@ -64,6 +75,10 @@ describe("additional marketplace service categories", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "SecurePassword1!" } });
     fireEvent.change(screen.getByLabelText("Service category"), { target: { value: category } });
     fireEvent.click(screen.getByRole("button", { name: "Create vendor account" }));
+
+    fireEvent.change(await screen.findByLabelText("Six-digit verification code"), { target: { value: "123456" } });
+    expect(createVendorProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Verify email and continue" }));
 
     expect(await screen.findByLabelText("Category")).toHaveValue(category);
     expect(screen.getByLabelText("Business name")).toHaveValue(profile.businessName);

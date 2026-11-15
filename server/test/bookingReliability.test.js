@@ -11,6 +11,7 @@ import RefreshToken from "../src/models/RefreshToken.js";
 import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
+import { afterEventDay } from "./helpers/bookingClock.js";
 
 let mongo;
 let sequence = 0;
@@ -28,6 +29,7 @@ function newUser(role = "customer") {
     phone: `987650${String(sequence).padStart(4, "0")}`,
     password,
     role,
+    emailVerifiedAt: new Date(),
   });
 }
 
@@ -112,7 +114,7 @@ test("the complete status matrix preserves customer, vendor and admin business r
       for (const to of states) {
         const booking = await seedBooking(fixture, {
           status: from,
-          eventDate: new Date(`${datePlus(day++)}T00:00:00.000Z`),
+          eventDate: new Date(`${datePlus(from === "accepted" && to === "completed" ? -day++ : day++)}T00:00:00.000Z`),
         });
         const previous = await stored(booking._id);
         const expected = !actor.actions.includes(to) ? 403
@@ -267,7 +269,7 @@ test("accepted and completed bookings conflict across admin and vendor actions w
   assert.equal((await change(fixture.owner, first._id, "accepted")).status, 200);
   assert.equal((await change(fixture.admin, second._id, "accepted", undefined, true)).status, 409);
   assert.equal((await create(fixture.customer, fixture.vendor)).status, 409);
-  assert.equal((await change(fixture.owner, first._id, "completed")).status, 200);
+  assert.equal((await afterEventDay(first._id, () => change(fixture.owner, first._id, "completed"))).status, 200);
   assert.equal((await change(fixture.owner, second._id, "accepted")).status, 409);
   assert.equal((await change(fixture.admin, first._id, "cancelled", undefined, true)).status, 409);
   assert.equal((await stored(second._id)).status, "pending");

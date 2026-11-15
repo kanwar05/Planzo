@@ -25,6 +25,7 @@ import { sendLoginOtp } from "../services/otpEmailService.js";
 import { activeAccountFilter, isActiveAccount } from "../utils/accountEligibility.js";
 import { withBookingTransaction, lockAccountForBooking, lockVendorForBooking } from "../utils/vendorBookingTransaction.js";
 import { logEvent } from "../utils/logger.js";
+import { hasVerifiedEmail } from "../utils/emailVerification.js";
 
 const TOKEN_LIFETIME_MS = 15 * 60 * 1000;
 const OTP_EXPIRY_MS = Number(process.env.OTP_EXPIRY_MINUTES || 5) * 60 * 1000;
@@ -47,6 +48,7 @@ export function serializeUser(user) {
     email: user.email,
     phone: user.phone,
     role: user.role,
+    emailVerified: hasVerifiedEmail(user),
     createdAt: user.createdAt,
   };
 }
@@ -160,22 +162,16 @@ function generateOtp() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
-export const requestLoginOtp = asyncHandler(async (req, res) => {
-  requireFields(req.body, ["email"]);
-  const email = textField(req.body, "email").toLowerCase();
-  validateEmail(email);
-  const response = {
-    success: true,
-    message: "If an eligible account exists, a sign-in code has been sent.",
-  };
+async function issueMailboxOtp(user) {
+  const email = user.email;
+  const authVersion = user.authVersion || 0;
   const recent = await EmailOtp.findOne({
     email,
+    ...versionFilter(user),
     consumedAt: null,
     requestedAt: { $gt: new Date(Date.now() - OTP_COOLDOWN_MS) },
   });
-  if (recent) return res.status(200).json(response);
-  const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
-  if (!user || user.role === "admin") return res.status(200).json(response);
+  if (recent) return;
   const code = generateOtp();
   let issued;
   try {
@@ -188,14 +184,16 @@ export const requestLoginOtp = asyncHandler(async (req, res) => {
         { requestedAt: { $lte: new Date(Date.now() - OTP_COOLDOWN_MS) } },
         { requestedAt: { $exists: false } },
         { consumedAt: { $ne: null } },
+        { authVersion: { $ne: authVersion } },
+        { email: { $ne: email } },
       ],
     }, { $set: {
-      email, codeHash: otpHash(code), attempts: 0, consumedAt: null,
+      email, authVersion, codeHash: otpHash(code), attempts: 0, consumedAt: null,
       expiresAt: new Date(Date.now() + OTP_EXPIRY_MS), requestedAt: new Date(),
     } }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
   } catch (error) {
     if (error.code === 11000 && error.keyPattern?._id)
-      return res.status(200).json(response);
+      return;
     throw error;
   }
   // Preserve compatibility with older randomly keyed challenges. Only the
@@ -204,35 +202,53 @@ export const requestLoginOtp = asyncHandler(async (req, res) => {
   try {
     await sendLoginOtp({ email, code });
   } catch {
-    await EmailOtp.deleteMany({ _id: issued._id, codeHash: issued.codeHash, requestedAt: issued.requestedAt });
+    await EmailOtp.deleteMany({
+      _id: issued._id, authVersion: issued.authVersion,
+      codeHash: issued.codeHash, requestedAt: issued.requestedAt,
+    });
     logEvent("error", "auth_email_delivery_failed", { category: "otp" });
     throw new ApiError(
       503,
       "Sign-in code could not be sent. Please try again later.",
     );
   }
-  return res.status(200).json(response);
+}
+
+export const requestLoginOtp = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["email"]);
+  const email = textField(req.body, "email").toLowerCase();
+  validateEmail(email);
+  const user = await User.findOne({ email, ...ACTIVE_ACCOUNT });
+  if (user && user.role !== "admin") await issueMailboxOtp(user);
+  return res.status(200).json({
+    success: true,
+    message: "If an eligible account exists, a sign-in code has been sent.",
+  });
 });
 
-export const verifyLoginOtp = asyncHandler(async (req, res) => {
-  requireFields(req.body, ["email", "code"]);
-  const email = textField(req.body, "email").toLowerCase();
-  const code = textField(req.body, "code");
-  validateEmail(email);
-  if (!/^\d{6}$/.test(code))
-    throw new ApiError(400, "Sign-in code must be six digits.");
+async function verifyMailboxOtp(email, code, expectedUser) {
   const otp = await EmailOtp.findOne({
     email,
     consumedAt: null,
     expiresAt: { $gt: new Date() },
-  }).sort({ requestedAt: -1, _id: -1 });
+  }).sort({ requestedAt: -1, _id: -1 }).lean();
   if (!otp || otp.attempts >= OTP_MAX_ATTEMPTS) {
     throw new ApiError(401, "The sign-in code is invalid or expired.");
   }
+  // Legacy codes without a version remain readable only for unchanged version-0
+  // accounts. Inspect raw BSON through lean() so malformed versions fail closed
+  // rather than disappearing through Mongoose's number casting.
+  const issuedVersion = otp.authVersion === undefined ? 0 : otp.authVersion;
+  if (!Number.isSafeInteger(issuedVersion) || issuedVersion < 0 ||
+      (expectedUser && (expectedUser.authVersion || 0) !== issuedVersion))
+    throw new ApiError(401, "The sign-in code is invalid or expired.");
+  const challengeVersion = otp.authVersion === undefined
+    ? { authVersion: { $exists: false } } : { authVersion: issuedVersion };
   // Claim an attempt before comparing the code. A read-then-increment counter
   // lets parallel guesses all pass the budget check against the same snapshot.
   const attempted = await EmailOtp.findOneAndUpdate({
     _id: otp._id, codeHash: otp.codeHash, consumedAt: null,
+    ...challengeVersion,
     ...(otp.requestedAt ? { requestedAt: otp.requestedAt } : {}),
     expiresAt: { $gt: new Date() },
     $or: [{ attempts: { $gte: 0, $lt: OTP_MAX_ATTEMPTS } }, { attempts: { $exists: false } }],
@@ -243,6 +259,8 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
   }
   const user = await User.findOne({
     email,
+    ...versionFilter({ authVersion: issuedVersion }),
+    ...(expectedUser ? { _id: expectedUser._id } : {}),
     ...ACTIVE_ACCOUNT,
     role: { $in: ["customer", "vendor"] },
   });
@@ -251,6 +269,7 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
     {
       _id: otp._id,
       codeHash: otp.codeHash,
+      ...challengeVersion,
       ...(otp.requestedAt ? { requestedAt: otp.requestedAt } : {}),
       consumedAt: null,
       expiresAt: { $gt: new Date() },
@@ -259,7 +278,57 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
     { new: true },
   );
   if (!consumed) throw new ApiError(401, "The sign-in code is invalid or expired.");
+  // A proof for an old address or credential version cannot verify a changed
+  // account. This conditional write also fences concurrent email confirmation.
+  const verified = await User.findOneAndUpdate(
+    { _id: user._id, email, ...versionFilter(user), ...ACTIVE_ACCOUNT },
+    { $set: { emailVerifiedAt: hasVerifiedEmail(user) ? user.emailVerifiedAt : new Date() } },
+    { new: true },
+  );
+  if (!verified) throw new ApiError(401, "The sign-in code is invalid or expired.");
+  return verified;
+}
+
+export const verifyLoginOtp = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["email", "code"]);
+  const email = textField(req.body, "email").toLowerCase();
+  const code = textField(req.body, "code");
+  validateEmail(email);
+  if (!/^\d{6}$/.test(code))
+    throw new ApiError(400, "Sign-in code must be six digits.");
+  const user = await verifyMailboxOtp(email, code);
   await startSession(res, user, 200, "Logged in successfully.");
+});
+
+export const requestEmailVerification = asyncHandler(async (req, res) => {
+  if (hasVerifiedEmail(req.user) || req.user.role === "admin")
+    return res.json({ success: true, message: "Your email address is already verified." });
+  const user = await User.findOne({
+    _id: req.user._id, email: req.user.email, ...versionFilter(req.user), ...ACTIVE_ACCOUNT,
+  });
+  if (!user) throw new ApiError(401, "Your account changed. Please log in again.");
+  // Ignore any supplied address: an authenticated request proves only the
+  // account's current mailbox, using the same cooldown and attempt budget.
+  await issueMailboxOtp(user);
+  res.json({ success: true, message: "A verification code has been sent to your email address." });
+});
+
+export const verifyEmailOwnership = asyncHandler(async (req, res) => {
+  requireFields(req.body, ["code"]);
+  const code = textField(req.body, "code");
+  if (!/^\d{6}$/.test(code))
+    throw new ApiError(400, "Verification code must be six digits.");
+  let user;
+  try {
+    user = await verifyMailboxOtp(req.user.email, code, req.user);
+  } catch (error) {
+    // Distinguish a rejected mailbox code from an expired access session so the
+    // browser does not refresh and silently spend a second verification attempt.
+    if (error instanceof ApiError && error.statusCode === 401)
+      error.publicCode = "OTP_VERIFICATION_FAILED";
+    throw error;
+  }
+  res.json({ success: true, message: "Email address verified.", user: serializeUser(user) });
 });
 
 export const register = asyncHandler(async (req, res) => {
@@ -514,7 +583,7 @@ export const confirmEmailChange = asyncHandler(async (req, res) => {
   const user = await User.findOneAndUpdate(
     { ...filter, _id: pending._id, ...versionFilter(pending) },
     {
-      $set: { email: pending.pendingEmail },
+      $set: { email: pending.pendingEmail, emailVerifiedAt: new Date() },
       $inc: { authVersion: 1 },
       $unset: credentialTokenFields,
     },

@@ -47,6 +47,18 @@ describe("admin booking controls", () => {
     expect(within(dialog).getByRole("button", { name: "Confirm cancellation" })).toBeEnabled();
     expect(screen.queryByText("Booking cancelled.")).not.toBeInTheDocument();
   });
+  it("submits the administrator's cancellation reason and safely displays stored text", async () => {
+    const reason = '<img src=x onerror="alert(1)"> Venue unavailable.';
+    getAdminBookings.mockResolvedValueOnce({ bookings: [booking], pagination: { page: 1, pages: 1 } })
+      .mockResolvedValueOnce({ bookings: [{ ...booking, status: "cancelled", cancellationReason: reason }], pagination: { page: 1, pages: 1 } });
+    const { container } = render(<MemoryRouter><AdminBookingsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel booking" }));
+    fireEvent.change(screen.getByLabelText("Cancellation reason (optional)"), { target: { value: `  ${reason}  ` } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm cancellation" }));
+    await waitFor(() => expect(updateBookingStatus).toHaveBeenCalledWith("booking-1", "cancelled", reason));
+    expect(await screen.findByText(reason, { exact: false })).toBeInTheDocument();
+    expect(container.querySelector("img[onerror]")).toBeNull();
+  });
 
   it("retains the booking status filter API contract", async () => {
     render(<MemoryRouter><AdminBookingsPage /></MemoryRouter>);

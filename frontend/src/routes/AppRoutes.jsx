@@ -26,6 +26,7 @@ const VendorDetailsPage = lazy(() => import("../pages/VendorDetailsPage"));
 const VendorProfilePage = lazy(() => import("../pages/VendorProfilePage"));
 const VendorsPage = lazy(() => import("../pages/VendorsPage"));
 const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
+const VerifyAccountEmailPage = lazy(() => import("../pages/VerifyAccountEmailPage"));
 function Page({ component: Component }) {
   const { pathname } = useLocation();
   return (
@@ -92,12 +93,19 @@ export const appRoutes = [{
     element: <Page component={VerifyEmailPage} />
   }]
 }, {
+  element: <ProtectedRoute />,
+  children: [{
+    element: <Layout component={AuthLayout} />,
+    children: [{ path: "/verify-account-email", element: <Page component={VerifyAccountEmailPage} /> }]
+  }]
+}, {
   element: <ProtectedRoute allowedRoles={["customer"]} />,
   children: [{
     element: <MainLayout />,
     children: [{
       path: "/booking/:vendorId",
-      element: <Page component={BookingRequestPage} />
+      element: <ProtectedRoute requireVerified />,
+      children: [{ index: true, element: <Page component={BookingRequestPage} /> }]
     }]
   }, {
     element: <Layout component={DashboardLayout} />,
@@ -118,10 +126,12 @@ export const appRoutes = [{
       element: <Page component={VendorDashboardPage} />
     }, {
       path: "/vendor/availability",
-      element: <Page component={VendorAvailabilityPage} />
+      element: <ProtectedRoute requireVerified />,
+      children: [{ index: true, element: <Page component={VendorAvailabilityPage} /> }]
     }, {
       path: "/vendor/profile-setup",
-      element: <Page component={VendorProfilePage} />
+      element: <ProtectedRoute requireVerified />,
+      children: [{ index: true, element: <Page component={VendorProfilePage} /> }]
     }, {
       path: "/vendor/settings",
       element: <Page component={SettingsPage} />

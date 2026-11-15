@@ -17,6 +17,9 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    // Additive ownership proof. Existing/missing values remain unverified;
+    // password authentication alone must never backfill this timestamp.
+    emailVerifiedAt: { type: Date, default: null },
     phone: {
       type: String,
       required: [true, "Phone number is required."],

@@ -13,8 +13,11 @@ import { getVendorRequests, updateBookingStatus } from "../services/bookingServi
 import { getMyVendorProfile } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
 import { getVendorCompletion, vendorProfileFields } from "../utils/vendor";
+import { useAuth } from "../context/AuthContext";
 export default function VendorDashboardPage() {
   useDocumentTitle("Booking requests");
+  const { user } = useAuth();
+  const verified = user?.emailVerified === true;
   const [bookings, setBookings] = useState([]);
   const [vendor, setVendor] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,17 +41,19 @@ export default function VendorDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
-  const update = async (id, status) => {
-    if (busy) return;
+  const update = async (id, status, reason) => {
+    if (busy || !verified) return false;
     setBusy(id);
     setError("");
     setMessage("");
     try {
-      await updateBookingStatus(id, status);
+      await updateBookingStatus(id, status, ...(reason === undefined ? [] : [reason]));
       setBookings(await getVendorRequests());
       setMessage(status === "completed" ? "Booking marked completed." : `Booking ${status}.`);
+      return true;
     } catch (err) {
       setError(getApiError(err, "Unable to update this request."));
+      return false;
     } finally {
       setBusy("");
     }
@@ -95,7 +100,7 @@ export default function VendorDashboardPage() {
         </label>
       </div>
       <div className="space-y-4">
-        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy)} onStatus={update} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
+        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy) || !verified} onStatus={update} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
       </div>
     </>}
   </div>;

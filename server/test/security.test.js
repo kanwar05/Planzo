@@ -25,6 +25,16 @@ test("CORS rejects unknown browser origins", async () => {
   assert.equal(response.body.message, "This origin is not allowed by CORS.");
 });
 
+test("trusted browser preflights allow the booking idempotency header", async () => {
+  const response = await request(app).options("/api/bookings")
+    .set("Origin", "http://localhost:5173")
+    .set("Access-Control-Request-Method", "POST")
+    .set("Access-Control-Request-Headers", "content-type,idempotency-key");
+  assert.equal(response.status, 204);
+  assert.match(response.headers["access-control-allow-headers"], /Idempotency-Key/i);
+  assert.equal(response.headers["access-control-allow-credentials"], "true");
+});
+
 test("auth endpoints return a clean response when rate limited", async () => {
   let response;
 

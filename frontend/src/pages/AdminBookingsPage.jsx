@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, MapPin, UserRound } from "lucide-react";
 import Button from "../components/Button";
 import Card from "../components/Card";
-import Dialog from "../components/Dialog";
+import BookingReasonDialog from "../components/BookingReasonDialog";
 import BookingStatus, { bookingStatuses } from "../components/BookingStatus";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -50,17 +50,19 @@ export default function AdminBookingsPage() {
     load();
     return () => { loadVersion.current += 1; };
   }, [load]);
-  const cancel = async id => {
-    if (busy) return;
+  const cancel = async (id, reason) => {
+    if (busy) return false;
     setBusy(id);
     setError("");
     try {
-      await updateBookingStatus(id, "cancelled");
+      await updateBookingStatus(id, "cancelled", ...(reason === undefined ? [] : [reason]));
       setPendingCancellation(null);
       await load();
       setMessage("Booking cancelled.");
+      return true;
     } catch (err) {
       setError(getApiError(err, "Unable to cancel booking."));
+      return false;
     } finally {
       setBusy("");
     }
@@ -106,14 +108,13 @@ export default function AdminBookingsPage() {
             {booking.description}
           </p>}
           {booking.notes && <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-ink/65"><strong className="text-ink">Notes: </strong>{booking.notes}</p>}
+          {booking.status === "cancelled" && booking.cancellationReason && <p className="mt-3 whitespace-pre-line break-words text-sm">Cancellation reason: {booking.cancellationReason}</p>}
+          {booking.status === "rejected" && booking.rejectionReason && <p className="mt-3 whitespace-pre-line break-words text-sm">Rejection reason: {booking.rejectionReason}</p>}
           {["pending", "accepted"].includes(booking.status) && <div className="mt-5 border-t border-ink/10 pt-4"><Button className="w-full !text-red-800 sm:w-auto" variant="outline" disabled={Boolean(busy)} loading={busy === booking._id} onClick={() => { setError(""); setPendingCancellation(booking); }}>Cancel booking</Button></div>}
         </Card>) : <EmptyState title={error ? "Bookings unavailable" : "No bookings found"} description={error ? "Try again to load the booking directory." : "Booking requests with this status will appear here."} />}
       </div>
       <Pagination pagination={pagination} page={page} onPage={setPage} disabled={Boolean(busy)} />
     </>}
-    <Dialog open={Boolean(pendingCancellation)} onClose={() => { if (!busy) setPendingCancellation(null); }} title="Cancel this booking?" description="Review the event before confirming. The booking will be marked as cancelled." footer={<><Button variant="outline" disabled={Boolean(busy)} onClick={() => setPendingCancellation(null)}>Keep booking</Button><Button disabled={Boolean(busy)} loading={Boolean(busy)} onClick={() => cancel(pendingCancellation._id)}>Confirm cancellation</Button></>}>
-      {pendingCancellation && <div className="rounded-2xl bg-sand p-4 text-sm leading-7"><p className="font-bold">{pendingCancellation.vendorId?.businessName || "Vendor unavailable"}</p><p>{pendingCancellation.eventType} · {formatDate(pendingCancellation.eventDate)}</p><p className="break-words text-ink/65">{pendingCancellation.eventLocation}</p></div>}
-      <WorkspaceError message={pendingCancellation ? error : ""} />
-    </Dialog>
+    <BookingReasonDialog booking={pendingCancellation} status="cancelled" busy={Boolean(busy)} error={pendingCancellation ? error : ""} onClose={() => { if (!busy) setPendingCancellation(null); }} onConfirm={reason => cancel(pendingCancellation._id, reason)} />
   </div>;
 }

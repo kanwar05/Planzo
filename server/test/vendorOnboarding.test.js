@@ -14,6 +14,7 @@ import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import VendorModerationAudit from "../src/models/VendorModerationAudit.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
+import { afterEventDay } from "./helpers/bookingClock.js";
 
 let mongo;
 let sequence = 0;
@@ -46,7 +47,8 @@ function newUser(role = "vendor", extra = {}) {
   sequence += 1;
   return User.create({
     name: `${role} ${sequence}`, email: `onboarding-${sequence}@example.com`,
-    phone: `988880${String(sequence).padStart(4, "0")}`, password, role, ...extra,
+    phone: `988880${String(sequence).padStart(4, "0")}`, password, role,
+    emailVerifiedAt: new Date(), ...extra,
   });
 }
 
@@ -471,7 +473,8 @@ test("material re-review preserves booking history, reserved dates, allowed comp
   const accepted = mine.body.bookings.find((booking) => booking._id === first.body.booking._id);
   assert.equal(accepted.status, "accepted");
   assert.equal(accepted.vendorId.contactDetails.email, "shared-business@example.com");
-  assert.equal((await changeBooking(owner, first.body.booking._id, "completed")).status, 200);
+  assert.equal((await afterEventDay(first.body.booking._id,
+    () => changeBooking(owner, first.body.booking._id, "completed"))).status, 200);
   assert.equal(await Booking.countDocuments({ vendorId: vendor._id, status: "completed", eventDateOnly: datePlus(20) }), 1);
   assert.equal(await NotificationOutbox.countDocuments({ bookingId: before._id, eventType: "booking_completed" }), 1);
   assert.equal((await request(app).delete("/api/vendors/profile").set("Authorization", auth(owner))).status, 409);

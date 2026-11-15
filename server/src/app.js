@@ -63,7 +63,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     exposedHeaders: ["X-Request-Id"],
   }),
 );
@@ -112,8 +112,8 @@ const confirmationLimiter = limiter(
   Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10,
 );
 app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
-app.use(["/api/auth/login/otp/request"], recoveryLimiter);
-app.use(["/api/auth/login/otp/verify"], confirmationLimiter);
+app.use(["/api/auth/login/otp/request", "/api/auth/email-verification/request"], recoveryLimiter);
+app.use(["/api/auth/login/otp/verify", "/api/auth/email-verification/verify"], confirmationLimiter);
 app.use(
   ["/api/auth/forgot-password", "/api/auth/email-change"],
   recoveryLimiter,

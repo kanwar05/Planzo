@@ -11,6 +11,7 @@ import VendorModerationAudit from "../src/models/VendorModerationAudit.js";
 import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
+import { afterEventDay } from "./helpers/bookingClock.js";
 
 let mongo;
 let sequence = 0;
@@ -19,7 +20,8 @@ const datePlus = (days = 14) => new Date(Date.now() + days * 86400000).toISOStri
 const newUser = (role = "customer") => {
   sequence += 1;
   return User.create({ name: `${role} ${sequence}`, email: `private-${sequence}@example.com`,
-    phone: `999900${String(sequence).padStart(4, "0")}`, password: "PlanzoSecure123!", role });
+    phone: `999900${String(sequence).padStart(4, "0")}`, password: "PlanzoSecure123!", role,
+    emailVerifiedAt: new Date() });
 };
 const newVendor = (user, extra = {}) => Vendor.create({ userId: user._id,
   businessName: "Bright Events", serviceCategory: "Decoration", description: "Decor for celebrations.",
@@ -201,7 +203,7 @@ test("booking ownership and status transitions are enforced for every role", asy
   assert.equal((await status(owner, id, "completed")).status, 409);
   assert.equal((await status(owner, id, "accepted")).status, 200);
   assert.equal((await status(owner, id, "rejected")).status, 409);
-  assert.equal((await status(owner, id, "completed")).status, 200);
+  assert.equal((await afterEventDay(id, () => status(owner, id, "completed"))).status, 200);
   assert.equal((await status(customer, id, "cancelled")).status, 409);
   assert.equal((await status(admin, id, "pending")).status, 409);
   const otherBookings = await request(app).get("/api/bookings/my-bookings").set("Authorization", auth(stranger));
@@ -233,7 +235,7 @@ test("only the booking customer gets intentionally shared contacts after accepta
   const requests = await request(app).get("/api/bookings/vendor-requests").set("Authorization", auth(owner));
   assert.equal(requests.body.bookings[0].customerId.phone, undefined);
   assert.equal(requests.body.bookings[0].customerId.email, undefined);
-  await status(owner, id, "completed");
+  assert.equal((await afterEventDay(id, () => status(owner, id, "completed"))).status, 200);
   const completed = await request(app).get("/api/bookings/my-bookings").set("Authorization", auth(customer));
   assert.equal(completed.body.bookings[0].vendorId.contactDetails.email, "business@example.com");
   await Vendor.updateOne({ _id: vendor._id }, { $unset: { contactDetails: "" } });
@@ -283,7 +285,8 @@ test("simultaneous acceptance reserves exactly one date and cancellation release
   assert.equal((await status(owner, loser.body.booking._id, "accepted")).status, 200);
   const dates = await request(app).get(`/api/vendors/${vendor._id}/availability`);
   assert.deepEqual(dates.body.availability.bookedDates, [datePlus()]);
-  await status(owner, loser.body.booking._id, "completed");
+  assert.equal((await afterEventDay(loser.body.booking._id,
+    () => status(owner, loser.body.booking._id, "completed"))).status, 200);
   assert.equal((await createBooking(customer, vendor)).status, 409);
 });
 

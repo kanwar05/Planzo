@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../components/Button";
 import Toast from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getApiError } from "../utils/apiError";
+import { getSafeReturnPath } from "../utils/navigation";
 
 export default function RegisterPage() {
   useDocumentTitle("Create account");
@@ -16,6 +17,7 @@ export default function RegisterPage() {
   const inFlight = useRef(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const submit = async (event) => {
     event.preventDefault();
@@ -35,17 +37,17 @@ export default function RegisterPage() {
         role: tab,
       });
 
-      if (user.role === "vendor") {
-        navigate("/vendor/profile-setup", {
-          replace: true,
-          state: {
-            businessName: form.get("businessName"),
-            serviceCategory: form.get("serviceCategory"),
-          },
-        });
-      } else {
-        navigate("/customer/dashboard", { replace: true });
-      }
+      const destination = user.role === "vendor" ? "/vendor/profile-setup"
+        : getSafeReturnPath(location.state?.from?.pathname);
+      const destinationState = user.role === "vendor" ? {
+        businessName: form.get("businessName"), serviceCategory: form.get("serviceCategory"),
+      } : undefined;
+      navigate(user.emailVerified === true ? destination : "/verify-account-email", {
+        replace: true,
+        state: user.emailVerified === true ? destinationState : {
+          from: { pathname: destination }, destinationState,
+        },
+      });
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to create your account."));
     } finally {
@@ -149,7 +151,7 @@ export default function RegisterPage() {
       </form>
       <p className="mt-6 border-t border-ink/10 pt-6 text-center text-sm leading-7 text-ink/65">
         Already have an account?{" "}
-        <Link to="/login" className="font-bold text-coral">
+        <Link to="/login" state={{ from: { pathname: getSafeReturnPath(location.state?.from?.pathname) } }} className="font-bold text-coral">
           Log in
         </Link>
       </p>

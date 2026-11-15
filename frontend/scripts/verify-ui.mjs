@@ -48,7 +48,7 @@ const dates = { availability: { availableDates: [], unavailableDates: ["2027-02-
 const pageInfo = { page: 1, pages: 1, total: 1, hasNextPage: false };
 function fixture(url, method) {
   const p = new URL(url).pathname.replace(/^.*\/api/, "");
-  if (p === "/auth/me") return role ? [200, { user: { _id: role + "-1", name: "Planzo " + role, email: role + "@example.test", phone: "9999999991", role } }] : [401, { message: "Please log in." }];
+  if (p === "/auth/me") return role ? [200, { user: { _id: role + "-1", name: "Planzo " + role, email: role + "@example.test", phone: "9999999991", role, emailVerified: true } }] : [401, { message: "Please log in." }];
   if (p === "/auth/refresh") return [401, { message: "Please log in." }];
   if (p === "/vendors") return [200, { vendors: [vendor], pagination: pageInfo }];
   if (p === "/vendors/me") return [200, { vendor: owner }];

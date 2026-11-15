@@ -16,7 +16,7 @@ const auth = (user) => `Bearer ${generateAccessToken(user._id, user.authVersion 
 async function user(role = "vendor") {
   sequence += 1;
   return User.create({ name: `Account ${sequence}`, email: `private-${sequence}@example.com`,
-    phone: "9876543210", password: "PlanzoSecure123!", role });
+    phone: "9876543210", password: "PlanzoSecure123!", role, emailVerifiedAt: new Date() });
 }
 const profile = (owner, extra = {}) => Vendor.create({
   userId: owner._id, businessName: "Bright Events", serviceCategory: "Decoration",

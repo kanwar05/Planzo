@@ -8,46 +8,59 @@ export const populateBooking = (query) =>
       "businessName serviceCategory pricing location description servicesOffered profileImage coverImage portfolioImages verified verificationStatus userId +contactDetails",
     );
 
-const identity = (value) => String(value?._id || value || "");
+function referenceId(value) {
+  const identifier = typeof value === "string"
+    ? value
+    : value?._bsontype === "ObjectId" && typeof value.toHexString === "function"
+      ? value.toHexString()
+      : "";
+  return /^[a-f0-9]{24}$/i.test(identifier) ? identifier.toLowerCase() : null;
+}
+
+const identity = (value) => referenceId(value) || referenceId(value?._id);
+const record = (value) => value !== null && typeof value === "object" &&
+  !Array.isArray(value) && value._bsontype !== "ObjectId";
+
+function customerView(customer) {
+  if (!record(customer)) return identity(customer);
+  const result = {};
+  const id = identity(customer);
+  if (id) result._id = id;
+  if (typeof customer.name === "string") result.name = customer.name;
+  return result;
+}
 
 export function bookingView(booking, viewer) {
-  const source = booking.toObject ? booking.toObject() : booking;
-  const keys = [
-    "_id",
-    "eventType",
-    "eventDate",
-    "eventDateOnly",
-    "eventLocation",
-    "description",
-    "notes",
-    "status",
-    "rejectionReason",
-    "cancellationReason",
-    "createdAt",
-    "updatedAt",
-  ];
-  const result = Object.fromEntries(
-    keys
-      .filter((key) => source[key] !== undefined)
-      .map((key) => [key, source[key]]),
-  );
+  const source = typeof booking?.toObject === "function" ? booking.toObject() : booking || {};
+  const result = {};
+  const id = identity(source);
+  if (id) result._id = id;
+  for (const key of ["eventType", "eventDateOnly", "eventLocation", "description", "notes", "status"])
+    if (typeof source[key] === "string") result[key] = source[key];
+  for (const key of ["eventDate", "createdAt", "updatedAt"])
+    if (source[key] instanceof Date && Number.isFinite(source[key].getTime())) result[key] = source[key];
   result.description ||= "";
   result.notes ||= "";
-  result.customerId = source.customerId?.name
-    ? { _id: source.customerId._id, name: source.customerId.name }
-    : source.customerId;
+  result.customerId = customerView(source.customerId);
+  const viewerId = identity(viewer);
   const isCustomer =
-    viewer.role === "customer" &&
-    identity(source.customerId) === identity(viewer);
+    viewer?.role === "customer" && viewerId &&
+    identity(source.customerId) === viewerId;
   const isOwner =
-    viewer.role === "vendor" &&
-    identity(source.vendorId?.userId) === identity(viewer);
+    viewer?.role === "vendor" && viewerId &&
+    identity(source.vendorId?.userId) === viewerId;
+  const isParticipant = viewer?.role === "admin" || isOwner || isCustomer;
+  if (isParticipant)
+    for (const key of ["rejectionReason", "cancellationReason"])
+      if (typeof source[key] === "string") result[key] = source[key];
   const shareContact =
-    viewer.role === "admin" ||
+    viewer?.role === "admin" ||
     isOwner ||
     (isCustomer && ["accepted", "completed"].includes(source.status));
-  result.vendorId = source.vendorId?.businessName
+  // A populated record must always pass the allowlist, even when legacy data
+  // has no businessName. Never fall back to returning a provider/user object.
+  result.vendorId = record(source.vendorId)
     ? vendorView(source.vendorId, { contact: shareContact })
-    : source.vendorId;
+    : identity(source.vendorId);
   return result;
 }

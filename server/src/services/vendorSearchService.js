@@ -32,8 +32,8 @@ export async function hasActiveVendorOwner(vendor, session = null) {
 
 // Explicit output fields also protect existing records that still contain retired data.
 export function vendorView(vendor, { contact = false, owner = false } = {}) {
-  if (!vendor) return null;
-  const source = vendor.toObject ? vendor.toObject() : vendor;
+  if (!vendor || typeof vendor !== "object" || Array.isArray(vendor)) return null;
+  const source = typeof vendor.toObject === "function" ? vendor.toObject() : vendor;
   // Aggregation bypasses schema casting. Check types as well as field names so
   // malformed legacy objects cannot expose nested private/internal properties.
   const result = {};

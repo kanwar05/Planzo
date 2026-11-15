@@ -3,6 +3,8 @@ export const register = async data => (await api.post("/auth/register", data)).d
 export const login = async data => (await api.post("/auth/login", data)).data.user;
 export const requestLoginOtp = async email => (await api.post("/auth/login/otp/request", { email })).data;
 export const verifyLoginOtp = async data => (await api.post("/auth/login/otp/verify", data)).data.user;
+export const requestEmailVerification = async () => (await api.post("/auth/email-verification/request", {})).data;
+export const verifyInitialEmail = async code => (await api.post("/auth/email-verification/verify", { code })).data.user;
 export const refresh = async () => (await api.post("/auth/refresh")).data.user;
 export const getMe = async () => (await api.get("/auth/me")).data.user;
 export const updateProfile = async data => (await api.patch("/auth/profile", data)).data.user;
