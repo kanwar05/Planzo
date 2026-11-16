@@ -9,6 +9,7 @@ import bookingRoutes from "./routes/bookingRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
 import packageRoutes from "./routes/packageRoutes.js";
 import quotationRoutes from "./routes/quotationRoutes.js";
+import messagingRoutes from "./routes/messagingRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import { requestLogging } from "./middleware/requestLogging.js";
 import { createReadinessHandler } from "./services/readinessService.js";
@@ -28,6 +29,7 @@ const rateLimitHandler = (req, res) =>
     success: false,
     message: "Too many requests. Please try again later.",
   });
+const isMessagingRequest = req => /^\/api\/(?:bookings\/[a-f0-9]{24}\/(?:messages|conversation(?:\/read)?)|conversations\/unread)\/?$/i.test(req.path);
 const limiter = (windowMs, limit, { health = false } = {}) =>
   rateLimit({
     windowMs,
@@ -69,7 +71,11 @@ app.use(
     exposedHeaders: ["X-Request-Id"],
   }),
 );
-app.use(limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300, { health: true }));
+// Conversation polling/receipts need a separate IP budget. Authenticated core
+// limits still apply per user, and unrelated API routes keep their existing cap.
+const generalLimiter = limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300, { health: true });
+const messagingLimiter = limiter(15 * 60 * 1000, Number(process.env.MESSAGING_HTTP_RATE_LIMIT_MAX) || 3000);
+app.use((req, res, next) => (isMessagingRequest(req) ? messagingLimiter : generalLimiter)(req, res, next));
 app.use(cookieParser());
 // CORS validates Origin above. Require it for production cookie mutations as
 // SameSite=None may be needed when the UI and API use different hosts.
@@ -126,6 +132,7 @@ app.use(
 );
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api", messagingRoutes);
 app.use("/api/vendors", packageRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/bookings", quotationRoutes);

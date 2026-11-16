@@ -14,6 +14,7 @@ import { getMyVendorProfile } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
 import { getVendorCompletion, vendorProfileFields } from "../utils/vendor";
 import { useAuth } from "../context/AuthContext";
+import { useUnreadMessages } from "../hooks/useUnreadMessages";
 export default function VendorDashboardPage() {
   useDocumentTitle("Booking requests");
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export default function VendorDashboardPage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
   const [filter, setFilter] = useState("");
+  const unread = useUnreadMessages(bookings, user);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -76,6 +78,8 @@ export default function VendorDashboardPage() {
         <div className="mt-3 flex flex-wrap gap-3"><Button to="/vendor/profile-setup" variant="outline" className="w-full sm:w-auto">{vendor.verificationStatus === "rejected" ? "Correct and resubmit" : "Update business profile"}</Button>{vendor.verificationStatus === "approved" && !vendor.suspended && vendor._id && <Button to={`/vendors/${vendor._id}`} variant="ghost">View public listing <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>}</div>
       </section>
       <BookingMetrics bookings={bookings} />
+      {unread.total > 0 && <p aria-live="polite" className="text-sm font-semibold">{unread.total} unread {unread.total === 1 ? "message" : "messages"} across your bookings</p>}
+      {unread.error && <p className="text-xs text-ink/65">{unread.error}</p>}
       <div className="grid gap-4 rounded-3xl bg-sand p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-coral"><Clock3 className="h-5 w-5" aria-hidden="true" /></span>
@@ -100,7 +104,7 @@ export default function VendorDashboardPage() {
         </label>
       </div>
       <div className="space-y-4">
-        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy) || !verified} onStatus={update} verified={verified} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
+        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy) || !verified} onStatus={update} verified={verified} unreadCount={unread.counts[booking._id] || 0} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
       </div>
     </>}
   </div>;

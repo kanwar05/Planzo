@@ -76,6 +76,18 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character
 export function renderBookingEmail(job) {
   const event = Object.hasOwn(events, job?.eventType) ? events[job.eventType] : null;
   const payload = job?.payload;
+  if (job?.eventType === "message_received") {
+    if (!/^[a-f0-9]{24}$/i.test(String(job.bookingId || "")) ||
+        !["customer", "vendor"].includes(payload?.recipientRole))
+      throw new Error("Message alert requires a valid booking and recipient role.");
+    const destination = `${frontendOrigin()}/bookings/${job.bookingId}/messages`;
+    const introduction = "You have unread messages about a Planzo booking.";
+    return {
+      subject: "Planzo: unread booking messages",
+      text: `${introduction}\n\nSign in to view your conversation: ${destination}\n\nMessage content is only available within Planzo.`,
+      html: `<p>${introduction}</p><p><a href="${escapeHtml(destination)}">Sign in to view your conversation</a></p><p>Message content is only available within Planzo.</p>`,
+    };
+  }
   if (!event || !payload || !["customer", "vendor"].includes(payload.recipientRole))
     throw new Error("Booking email event or recipient role is invalid.");
   const day = payload.eventDateOnly;

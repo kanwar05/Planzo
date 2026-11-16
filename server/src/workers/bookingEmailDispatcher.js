@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import NotificationOutbox from "../models/NotificationOutbox.js";
 import { sendBookingEmail } from "../services/bookingEmailService.js";
+import { shouldDeliverMessageAlert } from "../services/messageNotificationService.js";
 
 export const BOOKING_EMAIL_POLICY = Object.freeze({
   maxAttempts: 5,
@@ -126,14 +127,21 @@ export async function deliverClaimedBookingEmail(job, {
     return { outcome: "stale" };
 
   let failure;
+  let skipped = false;
   try {
-    await boundedDelivery(sender, job, policy.deliveryTimeoutMs);
+    if (job.eventType === "message_received" && !await shouldDeliverMessageAlert(job)) skipped = true;
+    else {
+      if (leaseExpiresAt <= time(now).getTime() + policy.deliveryTimeoutMs) return { outcome: "stale" };
+      await boundedDelivery(sender, job, policy.deliveryTimeoutMs);
+    }
   } catch (error) {
     failure = sanitizeBookingEmailFailure(error);
   }
 
   const finishedAt = time(now);
-  const changes = failure ? {
+  const changes = skipped ? {
+    status: "skipped", nextAttemptAt: null, lastError: "message_alert_no_longer_required",
+  } : failure ? {
     status: "failed",
     nextAttemptAt: job.attempts < policy.maxAttempts
       ? new Date(finishedAt.getTime() + Math.min(
@@ -151,7 +159,7 @@ export async function deliverClaimedBookingEmail(job, {
   }, WRITE_OPTIONS);
   if (!result.modifiedCount) return { outcome: "stale" };
   if (failure) logger.warn("Booking email dispatch failed.", { category: failure });
-  return { outcome: failure ? "failed" : "sent" };
+  return { outcome: skipped ? "skipped" : failure ? "failed" : "sent" };
 }
 
 // Every process sends serially; atomic leases allow multiple processes safely.
@@ -166,7 +174,7 @@ export async function dispatchBookingEmailBatch({
     if (!job) break;
     results.claimed += 1;
     const { outcome } = await deliverClaimedBookingEmail(job, { now, policy, sender, logger });
-    results[outcome] += 1;
+    results[outcome] = (results[outcome] || 0) + 1;
   }
   return results;
 }

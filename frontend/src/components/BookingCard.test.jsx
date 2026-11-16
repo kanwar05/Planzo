@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render as renderComponent, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import BookingCard from "./BookingCard";
+const render = element => renderComponent(element, { wrapper: MemoryRouter });
 const booking = {
   _id: "booking-1",
   eventType: "Wedding",

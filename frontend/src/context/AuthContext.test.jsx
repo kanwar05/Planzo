@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthContext";
 import * as authService from "../services/authService";
+import { readMessageIntent, storeMessageIntent } from "../utils/messageIntent";
 
 vi.mock("../services/authService", () => ({
   getMe: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn()
@@ -18,6 +19,7 @@ describe("account session loading", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    sessionStorage.clear();
   });
   it("uses the shared cookie session for password login", async () => {
     authService.getMe.mockResolvedValue(null);
@@ -50,6 +52,38 @@ describe("account session loading", () => {
     expect(await screen.findByText("Guest")).toBeInTheDocument();
     expect(account.isAuthenticated).toBe(false);
     expect(localStorage.getItem("Planzo_user")).toBeNull();
+  });
+
+  it.each([
+    ["network failure", new Error("Temporarily offline")],
+    ["server failure", { response: { status: 503 } }],
+  ])("preserves an unresolved message identity during initial %s", async (_name, error) => {
+    const intent = { clientMessageId: "pending-message-123456", body: "Confirm the setup time" };
+    storeMessageIntent("previous-customer", "booking", intent);
+    authService.getMe.mockRejectedValue(error);
+    renderSession();
+    await screen.findByText("Guest");
+    expect(account.isAuthenticated).toBe(false);
+    expect(readMessageIntent("previous-customer", "booking")).toEqual(intent);
+  });
+
+  it.each([401, 403])("clears unresolved message intents after confirmed initial authentication failure %s", async status => {
+    storeMessageIntent("previous-customer", "booking", { clientMessageId: "pending-message-123456", body: "Confirm the setup time" });
+    authService.getMe.mockRejectedValue({ response: { status } });
+    renderSession();
+    await screen.findByText("Guest");
+    expect(readMessageIntent("previous-customer", "booking")).toBeNull();
+  });
+
+  it("retains only the authenticated user's pending namespace after a successful session check", async () => {
+    const intent = { clientMessageId: "pending-message-123456", body: "Confirm the setup time" };
+    storeMessageIntent("previous-customer", "booking", intent);
+    storeMessageIntent("current-customer", "booking", intent);
+    authService.getMe.mockResolvedValue({ _id: "current-customer", name: "Aditi", role: "customer" });
+    renderSession();
+    await screen.findByText("Aditi");
+    expect(readMessageIntent("previous-customer", "booking")).toBeNull();
+    expect(readMessageIntent("current-customer", "booking")).toEqual(intent);
   });
 
   it("preserves the account when logout fails and clears it after a successful retry", async () => {

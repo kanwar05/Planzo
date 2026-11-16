@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { retainMessageIntents } from "../utils/messageIntent";
 let authServicePromise;
 const loadAuthService = () => authServicePromise ||= import("../services/authService");
 const AuthContext = createContext(null);
@@ -13,12 +14,17 @@ export function AuthProvider({
     try {
       localStorage.removeItem("Planzo_user");
     } catch {/* Storage may be disabled. */}
-    const expired = () => setUser(null);
+    const expired = () => { retainMessageIntents(); setUser(null); };
     window.addEventListener("planzo:session-expired", expired);
     loadAuthService().then(service => active ? service.getMe() : null).then(data => {
-      if (active) setUser(data);
-    }).catch(() => {
-      if (active) setUser(null);
+      if (active) { retainMessageIntents(data?._id); setUser(data); }
+    }).catch(error => {
+      if (active) {
+        // An offline/server failure does not prove that this tab's previous
+        // session ended. Keep its scoped retry identity for a later login.
+        if ([401, 403].includes(error?.response?.status)) retainMessageIntents();
+        setUser(null);
+      }
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -30,6 +36,7 @@ export function AuthProvider({
   const login = useCallback(async credentials => {
     const authService = await loadAuthService();
     const next = await authService.login(credentials);
+    retainMessageIntents(next._id);
     setUser(next);
     return next;
   }, []);
@@ -40,21 +47,24 @@ export function AuthProvider({
   const verifyLoginOtp = useCallback(async credentials => {
     const authService = await loadAuthService();
     const next = await authService.verifyLoginOtp(credentials);
+    retainMessageIntents(next._id);
     setUser(next);
     return next;
   }, []);
   const register = useCallback(async data => {
     const authService = await loadAuthService();
     const next = await authService.register(data);
+    retainMessageIntents(next._id);
     setUser(next);
     return next;
   }, []);
   const logout = useCallback(async () => {
     const authService = await loadAuthService();
     await authService.logout();
+    retainMessageIntents();
     setUser(null);
   }, []);
-  const updateUser = useCallback(next => setUser(next), []);
+  const updateUser = useCallback(next => { retainMessageIntents(next?._id); setUser(next); }, []);
   const value = useMemo(() => ({
     user,
     loading,

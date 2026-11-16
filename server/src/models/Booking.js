@@ -36,6 +36,9 @@ const bookingSchema = new mongoose.Schema(
     // Optional additive metadata: old bookings need no backfill. Never serialized.
     idempotencyKeyHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
     requestHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
+    // Sends contend with every booking status update without changing its
+    // business timestamps or state; omitted legacy values need no backfill.
+    messagingGuardRevision: { type: Number, default: 0, min: 0, select: false },
     selectedPackage: { type: packageSnapshotSchema, default: undefined },
     quotationRevision: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
     quotationStatus: { type: String, enum: ["none", "offered", "rejected", "accepted"], default: "none" },

@@ -8,6 +8,12 @@ describe("safe authentication return destinations", () => {
       expect(getPackageIntent(value)).toBeUndefined();
     expect(getSafeReturnPath("/vendor/packages")).toBe("/vendor/packages");
   });
+  it("retains only canonical internal booking conversation destinations", () => {
+    const path = `/bookings/${"b".repeat(24)}/messages`;
+    expect(getSafeReturnPath(path)).toBe(path);
+    for (const unsafe of [`${path}?next=//evil.example`, "/bookings/not-an-id/messages", `${path}/extra`])
+      expect(getSafeReturnPath(unsafe)).toBe("/customer/dashboard");
+  });
   it.each(["https://evil.example", "//evil.example", "/\\evil.example", "/%2f%2fevil.example", "/%5cevil.example", "/booking/vendor-1?next=https://evil.example", "javascript:alert(1)", "/booking/../login", "/login", "/verify-account-email", { pathname: "/booking/vendor-1" }])("rejects an unsafe or looping destination %j", value => {
     expect(getSafeReturnPath(value, "/customer/dashboard")).toBe("/customer/dashboard");
   });
