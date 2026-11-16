@@ -5,15 +5,17 @@ import Vendor from "../models/Vendor.js";
 import Availability from "../models/Availability.js";
 import RefreshToken from "../models/RefreshToken.js";
 import EmailOtp from "../models/EmailOtp.js";
-import NotificationOutbox from "../models/NotificationOutbox.js";
+import NotificationOutbox, { NOTIFICATION_EMAIL_EVENTS, OUTBOX_STATUSES } from "../models/NotificationOutbox.js";
 import VendorModerationAudit from "../models/VendorModerationAudit.js";
 import VendorPackage from "../models/VendorPackage.js";
 import Quotation from "../models/Quotation.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 import { inspectDatabaseTopology } from "../config/database.js";
 import { auditBookingDates } from "./bookingDataAudit.js";
 import { safeDocumentId } from "./safeDiagnosticValues.js";
 
-const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation];
+const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message];
 const MAX_TIME_MS = 30000;
 const failure = (code) => Object.assign(new Error("Read-only database preflight failed."), { code });
 const canonical = (value, key) => {
@@ -106,8 +108,8 @@ export async function inspectDatabaseData(db = mongoose.connection.db) {
     ["vendors", "verificationStatus", ["pending", "approved", "rejected", null, ""]],
     ["users", "accountStatus", ["active", "deactivated", "blocked", "suspended", null]],
     ["users", "role", ["customer", "vendor", "admin", null]],
-    ["notificationoutboxes", "status", ["pending", "processing", "sent", "failed"]],
-    ["notificationoutboxes", "eventType", ["booking_requested", "booking_accepted", "booking_rejected", "booking_cancelled", "booking_completed"]],
+    ["notificationoutboxes", "status", OUTBOX_STATUSES],
+    ["notificationoutboxes", "eventType", NOTIFICATION_EMAIL_EVENTS],
     ["notificationoutboxes", "payload.recipientRole", ["customer", "vendor"]],
   ]) statuses.push({ collection, field, ...await issues(db.collection(collection), { $in: [{ $ifNull: [`$${field}`, null] }, allowed] }) });
   const dates = await auditBookingDates(db.collection("bookings"));

@@ -13,11 +13,13 @@ import NotificationOutbox from "../src/models/NotificationOutbox.js";
 import VendorModerationAudit from "../src/models/VendorModerationAudit.js";
 import VendorPackage from "../src/models/VendorPackage.js";
 import Quotation from "../src/models/Quotation.js";
+import Conversation from "../src/models/Conversation.js";
+import Message from "../src/models/Message.js";
 import { databaseConnectionOptions, inspectDatabaseTopology } from "../src/config/database.js";
 import { assertRequiredIndexes, inspectRequiredIndexes, runDatabasePreflight } from "../src/utils/databasePreflight.js";
 import { auditBookingDates } from "../src/utils/bookingDataAudit.js";
 
-const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation];
+const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message];
 let mongo;
 let connection;
 const open = () => mongoose.createConnection(mongo.getUri("preflight-test"), databaseConnectionOptions()).asPromise();

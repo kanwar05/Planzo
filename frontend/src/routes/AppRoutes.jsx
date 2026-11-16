@@ -12,6 +12,7 @@ const AdminBookingsPage = lazy(() => import("../pages/AdminBookingsPage"));
 const AdminUsersPage = lazy(() => import("../pages/AdminUsersPage"));
 const AdminVerifyVendorsPage = lazy(() => import("../pages/AdminVerifyVendorsPage"));
 const BookingRequestPage = lazy(() => import("../pages/BookingRequestPage"));
+const BookingConversationPage = lazy(() => import("../pages/BookingConversationPage"));
 const CustomerDashboardPage = lazy(() => import("../pages/CustomerDashboardPage"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage"));
 const LoginPage = lazy(() => import("../pages/LoginPage"));
@@ -142,6 +143,12 @@ export const appRoutes = [{
       element: <Page component={SettingsPage} />
     }]
   }]
+}, {
+  element: <ProtectedRoute allowedRoles={["customer", "vendor"]} />,
+  children: [{ element: <Layout component={DashboardLayout} />, children: [{
+    path: "/bookings/:bookingId/messages",
+    element: <Page component={BookingConversationPage} />,
+  }] }]
 }, {
   element: <ProtectedRoute allowedRoles={["admin"]} />,
   children: [{

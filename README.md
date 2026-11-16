@@ -20,8 +20,9 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 - Booking creation supports customer-scoped `Idempotency-Key` retries; the booking form reuses a key while retrying an unchanged request. Cancellation/rejection dialogs collect optional reasons.
 - Vendors manage structured INR service packages; customers can select one or keep a custom booking request. Package selection survives safe login/registration redirects.
 - Vendors send itemized quotation revisions. Customer acceptance saves the exact commercial agreement and reserves the date atomically; quoted/package bookings require that acceptance. Existing custom requests without quotations retain direct vendor acceptance.
+- Customers and vendors have private booking conversations, with persisted retry-safe text messages, Socket.IO updates, unread counts and read receipts. Closed bookings retain read-only history; generic new-message emails reuse the durable worker.
 
-Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
+Payments, refunds, payouts, unrestricted direct-user chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens remain outside the current application.
 
 ## Architecture
 
@@ -145,3 +146,5 @@ The server includes read-only `npm run db:preflight` and `npm run email:diagnost
 See [booking security and rollout](docs/BOOKING_SECURITY.md) for the email-verification policy, additive database fields/index, UTC boundaries, retry contract and verification evidence.
 
 See [packages, quotations and rollout](docs/PACKAGES_QUOTATIONS.md) for the commercial workflow, API additions, new collections/indexes, compatibility rules and staging checks. Drain older API writers before enabling commercial bookings.
+
+See [booking messaging and rollout](docs/BOOKING_MESSAGING.md) for message APIs/events, dedicated collections, retention, email throttling, socket proxy/cookie requirements and staging checks. Initial realtime deployment uses one persistent Node API process; `/socket.io` must reach it alongside `/api`.

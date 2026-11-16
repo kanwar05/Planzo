@@ -21,7 +21,7 @@ test("outbox diagnostics report empty state without creating the collection or c
   const before = await connection.db.listCollections().toArray();
   const report = await inspectOutbox(connection.db, { now });
   assert.equal(report.readOnly, true);
-  assert.deepEqual(report.counts, { pending: 0, processing: 0, sent: 0, failed: 0, unknown: 0, ready: 0, expiredLeases: 0, terminalFailures: 0 });
+  assert.deepEqual(report.counts, { pending: 0, processing: 0, sent: 0, failed: 0, skipped: 0, unknown: 0, ready: 0, expiredLeases: 0, terminalFailures: 0 });
   assert.equal(report.oldestReadyAgeMs, null);
   assert.deepEqual(await connection.db.listCollections().toArray(), before);
 });
@@ -46,7 +46,7 @@ test("outbox diagnostics count backlog, expired leases and terminal failures wit
   })));
   const before = await outbox.find().sort({ _id: 1 }).toArray();
   const report = await inspectOutbox(connection.db, { now });
-  assert.deepEqual(report.counts, { pending: 2, processing: 2, sent: 1, failed: 2, unknown: 1, ready: 2, expiredLeases: 1, terminalFailures: 1 });
+  assert.deepEqual(report.counts, { pending: 2, processing: 2, sent: 1, failed: 2, skipped: 0, unknown: 1, ready: 2, expiredLeases: 1, terminalFailures: 1 });
   assert.equal(report.oldestReadyAgeMs, 60000);
   assert.equal(report.samples.ready.length, 2);
   for (const secret of ["PRIVATE_RECIPIENT", "PRIVATE_LOCATION", "PRIVATE_SMTP_PASSWORD", "PRIVATE_STATUS", "recipientEmail", "payload", "lastError"])

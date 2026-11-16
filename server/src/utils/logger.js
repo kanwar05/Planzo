@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 export const requestContext = new AsyncLocalStorage();
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const numbers = new Set(["statusCode", "durationMs", "attempts", "claimed", "sent", "failed", "stale", "port"]);
+const numbers = new Set(["statusCode", "durationMs", "attempts", "claimed", "sent", "failed", "stale", "skipped", "port"]);
 const tokens = new Set(["category", "phase", "method"]);
 
 // Callers supply fixed event/category tokens, never exception messages. Drop

@@ -46,8 +46,52 @@ const event = { eventDate: "2027-02-01", eventType: "Wedding", eventLocation: "G
 const bookings = [{ ...event, _id: "booking-pending", status: "pending" }, { ...event, _id: "booking-accepted", status: "accepted", vendorId: owner }, { ...event, _id: "booking-completed", status: "completed", vendorId: owner }];
 const dates = { availability: { availableDates: [], unavailableDates: ["2027-02-02"], bookedDates: ["2027-02-03"] } };
 const pageInfo = { page: 1, pages: 1, total: 1, hasNextPage: false };
+const messageBookingId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+const closedMessageBookingId = "dddddddddddddddddddddddd";
+const messagePath = `/bookings/${messageBookingId}/messages`;
+const closedMessagePath = `/bookings/${closedMessageBookingId}/messages`;
+const quotation = {
+  _id: "ffffffffffffffffffffffff", revision: 1, serviceDescription: "Seasonal garden wedding decoration",
+  serviceDate: event.eventDate, currency: "INR", items: [{ description: "Floral styling and stage setup", quantity: 1, unitPriceAmount: 1500000 }],
+  additionalCharges: [], discountAmount: 0, subtotalAmount: 1500000, totalAmount: 1500000,
+  deliverables: ["Seasonal flowers and a stage backdrop"], exclusions: ["Venue rental"],
+  terms: "The venue will provide access for setup.", expiresAt: "2027-01-15T12:00:00.000Z",
+};
+const conversationMessages = [
+  { _id: "111111111111111111111111", sequence: 1, senderRole: "customer", clientMessageId: "browser-customer-message-1", body: "Could we include seasonal flowers and confirm the setup time?", createdAt: "2026-11-16T03:00:00.000Z" },
+  { _id: "222222222222222222222222", sequence: 2, senderRole: "vendor", clientMessageId: "browser-vendor-message-2", body: "Seasonal flowers are included. We will coordinate access with the venue before setup.", createdAt: "2026-11-16T03:01:00.000Z" },
+];
+function conversationFixture(bookingId) {
+  const closed = bookingId === closedMessageBookingId;
+  const selfRole = role === "vendor" ? "vendor" : "customer";
+  return {
+    booking: { ...event, _id: bookingId, eventDate: closed ? "2026-11-15" : event.eventDate, status: closed ? "completed" : "pending", quotationRevision: 1, quotationStatus: closed ? "accepted" : "offered",
+      ...(closed ? { acceptedAgreement: { ...quotation, serviceDate: "2026-11-15", expiresAt: "2026-11-15T00:00:00.000Z", quotationId: quotation._id, acceptedAt: "2026-11-14T03:02:00.000Z" } } : {}) },
+    conversation: { _id: closed ? "eeeeeeeeeeeeeeeeeeeeeeee" : "cccccccccccccccccccccccc", bookingId, lastSequence: 2, selfReadSequence: 2, peerReadSequence: 2, unreadCount: 0,
+      readAt: "2026-11-16T03:03:00.000Z", peerReadAt: "2026-11-16T03:03:00.000Z", canSend: !closed, selfRole,
+      peer: { name: selfRole === "vendor" ? "Aditi Customer" : vendor.businessName, role: selfRole === "vendor" ? "customer" : "vendor" } },
+  };
+}
 function fixture(url, method) {
-  const p = new URL(url).pathname.replace(/^.*\/api/, "");
+  const parsed = new URL(url);
+  const p = parsed.pathname.replace(/^.*\/api/, "");
+  // Exercise durable REST fallback; no browser request reaches a live socket server.
+  if (parsed.pathname.startsWith("/socket.io")) return method === "OPTIONS" ? [204, {}] : [503, { message: "Live updates are unavailable in this isolated browser fixture." }];
+  const conversationMatch = p.match(/^\/bookings\/([bd]{24})\/(conversation(?:\/read)?|messages|quotations)$/);
+  if (conversationMatch) {
+    const [, bookingId, resource] = conversationMatch;
+    const details = conversationFixture(bookingId);
+    if (resource === "conversation" && method === "GET") return [200, details];
+    if (resource === "conversation/read" && method === "PATCH") return [200, { conversation: details.conversation }];
+    if (resource === "messages" && method === "GET") {
+      const after = Number(parsed.searchParams.get("after") || 0);
+      const before = Number(parsed.searchParams.get("before") || Number.MAX_SAFE_INTEGER);
+      const messages = conversationMessages.filter(item => item.sequence > after && item.sequence < before).map(item => ({ ...item, bookingId, conversationId: details.conversation._id }));
+      return [200, { conversation: details.conversation, messages, pagination: { hasMore: false, nextBefore: null, nextAfter: messages.at(-1)?.sequence || after } }];
+    }
+    if (resource === "quotations" && method === "GET") return [200, { quotations: [{ ...quotation, bookingId }] }];
+  }
+  if (p === "/conversations/unread" && method === "GET") return [200, { unreadCounts: {}, totalUnread: 0 }];
   if (p === "/auth/me") return role ? [200, { user: { _id: role + "-1", name: "Planzo " + role, email: role + "@example.test", phone: "9999999991", role, emailVerified: true } }] : [401, { message: "Please log in." }];
   if (p === "/auth/refresh") return [401, { message: "Please log in." }];
   if (p === "/vendors") return [200, { vendors: [vendor], pagination: pageInfo }];
@@ -90,13 +134,20 @@ await send("Runtime.enable");
 await send("Network.enable");
 await send("Network.setCacheDisabled", { cacheDisabled: true });
 await send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
-const scenarios = [
+const defaultScenarios = [
   [null, "/", "Every celebration"], [null, "/services", "The right people"], [null, "/vendors?category=Decoration", "Find your kind"], [null, "/vendors/vendor-1", "Celebration Studio"],
   ["customer", "/booking/vendor-1", "Your celebration starts here"], ["customer", "/customer/dashboard", "My bookings"], ["customer", "/settings", "Account settings"],
   ["vendor", "/vendor/dashboard", "Booking requests"], ["vendor", "/vendor/profile-setup", "Manage business profile"], ["vendor", "/vendor/availability", "Date availability"],
   ["admin", "/admin", "Platform overview"], ["admin", "/admin/users", "Registered users"], ["admin", "/admin/vendors/unverified", "Vendor approvals"], ["admin", "/admin/bookings", "All bookings"],
   [null, "/login", "Welcome back"], [null, "/register?role=vendor", "Create your account"], [null, "/forgot-password", "Reset your password"], [null, "/reset-password", "Secure your account"], [null, "/not-a-page", "This party"],
 ];
+// QA_SCENARIOS=messaging keeps the default smoke suite unchanged while allowing
+// focused customer/vendor and closed-history layout checks at chosen widths.
+const scenarios = process.env.QA_SCENARIOS === "messaging" ? [
+  ["customer", messagePath, "Messages with Celebration Studio"],
+  ["vendor", messagePath, "Messages with Aditi Customer"],
+  ["customer", closedMessagePath, "Messages with Celebration Studio"],
+] : defaultScenarios;
 const results = [], navigation = [];
 const evaluate = async expression => {
   const response = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
@@ -122,15 +173,28 @@ try {
       }
       await evaluate("document.fonts.ready.then(()=>true)");
       await delay(150);
+      if (pathname.startsWith("/bookings/")) {
+        await evaluate("document.querySelector('details > summary')?.click()");
+        await delay(100);
+        const messagingState = await evaluate(`(() => {
+          const log = document.querySelector('[role="log"]');
+          const own = document.querySelector('[aria-label="Your message ${role === "vendor" ? 2 : 1}"]');
+          return { history: !!log?.innerText.includes('Seasonal flowers are included') && !!log?.innerText.includes('Could we include seasonal flowers'),
+            timestamp: !!log?.querySelector('time[datetime="2026-11-16T03:00:00.000Z"]') && !!log?.innerText.includes('UTC'),
+            receipt: !!own?.innerText.includes('Read'), summary: document.body.innerText.includes('Garden Venue, Chandigarh') && document.body.innerText.includes('Seasonal garden wedding decoration'),
+            composer: !!document.querySelector('textarea'), liveNotClaimed: !document.body.innerText.includes('Live updates connected') };
+        })()`);
+        navigation.push({ width, action: `${role} persisted message history and REST fallback`, ok: messagingState.history && messagingState.timestamp && messagingState.receipt && messagingState.summary && messagingState.liveNotClaimed && messagingState.composer === (pathname !== closedMessagePath), details: messagingState });
+      }
       snapshot = await evaluate("({text:document.body.innerText.replace(/\\s+/g,' '),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,links:[...document.querySelectorAll('a')].map(a=>a.getAttribute('href')),headings:document.querySelectorAll('h1').length})");
       const overflow = snapshot.scrollWidth > width + 1;
       const offenders = overflow ? await evaluate("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1 && !e.closest('[class*=overflow-x-auto]')).slice(0,12).map(e=>({tag:e.tagName,cls:e.className,text:e.innerText?.slice(0,70),right:e.getBoundingClientRect().right}))") : [];
-      const result = { width, pathname, heading: snapshot.text.includes(heading), overflow, scrollWidth: snapshot.scrollWidth, headings: snapshot.headings, deadLinks: snapshot.links.filter(href => !href || href === "#"), offenders };
+      const result = { width, role, pathname, heading: snapshot.text.includes(heading), overflow, scrollWidth: snapshot.scrollWidth, headings: snapshot.headings, deadLinks: snapshot.links.filter(href => !href || href === "#"), offenders };
       results.push(result);
-      if (!blockAnimations && [320,390,1440].includes(width) && ["/", "/vendors?category=Decoration", "/vendors/vendor-1", "/booking/vendor-1", "/customer/dashboard", "/vendor/profile-setup", "/admin", "/login"].includes(pathname)) {
+      if (!blockAnimations && [320,390,1440].includes(width) && (["/", "/vendors?category=Decoration", "/vendors/vendor-1", "/booking/vendor-1", "/customer/dashboard", "/vendor/profile-setup", "/admin", "/login"].includes(pathname) || pathname.startsWith("/bookings/"))) {
         await delay(500);
         const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-        fs.writeFileSync(path.join(cache, "after-" + pathname.replace(/[^a-z0-9]/gi, "-") + "-" + width + ".png"), Buffer.from(shot.data, "base64"));
+        fs.writeFileSync(path.join(cache, "after-" + (pathname.startsWith("/bookings/") ? role + "-" : "") + pathname.replace(/[^a-z0-9]/gi, "-") + "-" + width + ".png"), Buffer.from(shot.data, "base64"));
       }
       process.stdout.write(JSON.stringify(result) + "\n");
       if (pathname.startsWith("/vendors?") && width < 1024) {
@@ -160,6 +224,7 @@ try {
   }
   const report = { results, navigation, errors, unexpectedRequests: requests.filter(item => item.status === 404), apiRequestsIntercepted: requests.length, note: "Chrome responsive emulation with isolated API fixtures, not real-account integration or native iOS testing." };
   report.blockedAnimationChunk = blockAnimations;
+  report.scenarioGroup = process.env.QA_SCENARIOS || "default";
   fs.writeFileSync(path.join(cache, blockAnimations ? "browser-no-animation-results.json" : "browser-smoke-results.json"), JSON.stringify(report, null, 2));
   const failures = results.filter(item => !item.heading || item.overflow || item.deadLinks.length || item.headings !== 1);
   const navigationFailures = navigation.filter(item => !item.ok);

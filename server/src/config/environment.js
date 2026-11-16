@@ -49,6 +49,7 @@ export function validateEnvironment(env = process.env) {
   }
   for (const [key, fallback, min, max] of [
     ["RATE_LIMIT_MAX", 300, 1, 100000],
+    ["MESSAGING_HTTP_RATE_LIMIT_MAX", 3000, 1, 100000],
     ["AUTH_RATE_LIMIT_MAX", 10, 1, 10000],
     ["PASSWORD_RESET_REQUEST_MAX", 3, 1, 10000],
     ["PASSWORD_RESET_ATTEMPT_MAX", 10, 1, 10000],

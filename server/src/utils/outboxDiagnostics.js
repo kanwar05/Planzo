@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 import { BOOKING_EMAIL_POLICY } from "../workers/bookingEmailDispatcher.js";
 import { safeDocumentId, safeDiagnosticDate } from "./safeDiagnosticValues.js";
+import { OUTBOX_STATUSES, NOTIFICATION_EMAIL_EVENTS } from "../models/NotificationOutbox.js";
 
-const statuses = ["pending", "processing", "sent", "failed"];
-const events = ["booking_requested", "booking_accepted", "booking_rejected", "booking_cancelled", "booking_completed"];
+const statuses = OUTBOX_STATUSES;
+const events = NOTIFICATION_EMAIL_EVENTS;
 
 export async function inspectOutbox(db = mongoose.connection.db, { now = new Date() } = {}) {
   const date = new Date(now);

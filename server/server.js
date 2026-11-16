@@ -1,5 +1,6 @@
 import "dotenv/config";
 import mongoose from "mongoose";
+import { createServer } from "node:http";
 import { validateEnvironment } from "./src/config/environment.js";
 import { assertCanonicalBookingDates, assertBookingReservationFields } from "./src/utils/bookingDataAudit.js";
 import { assertRequiredIndexes } from "./src/utils/databasePreflight.js";
@@ -15,7 +16,7 @@ async function startServer() {
       await Promise.all([
         import("./src/app.js"),
         import("./src/config/database.js"),
-        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp", "NotificationOutbox", "VendorModerationAudit", "VendorPackage", "Quotation"].map(
+        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp", "NotificationOutbox", "VendorModerationAudit", "VendorPackage", "Quotation", "Conversation", "Message"].map(
           (model) => import(`./src/models/${model}.js`),
         ),
       ]);
@@ -36,11 +37,15 @@ async function startServer() {
       mongoose.connection.on(event, () => logEvent(event === "error" ? "error" : "warn", `database_${event}`));
     }
     const port = Number(process.env.PORT) || 5001;
-    const server = app.listen(port, () =>
+    const { createMessagingSocketServer } = await import("./src/realtime/messagingSocket.js");
+    const server = createServer(app);
+    const realtime = createMessagingSocketServer(server, { app });
+    server.listen(port, () =>
       logEvent("info", "api_listening", { port }),
     );
     server.on("error", async (error) => {
       logEvent("error", "api_server_failed", { category: errorCategory(error) });
+      realtime.close();
       try { await mongoose.disconnect(); }
       catch { logEvent("error", "database_cleanup_failed"); }
       finally { process.exitCode = 1; }
@@ -56,7 +61,7 @@ async function startServer() {
         process.exit(1);
       }, 25000);
       deadline.unref();
-      server.close(async () => {
+      realtime.close(async () => {
         try {
           await mongoose.disconnect();
           logEvent("info", "api_shutdown_finished");

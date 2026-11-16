@@ -59,6 +59,8 @@ The package/quotation release adds two collections, four secondary indexes and o
 
 ## Booking email worker
 
+The booking messaging release adds `bookingconversations`/`bookingmessages`, five secondary indexes, a private booking write guard, `message_received` jobs and a terminal `skipped` outbox state. Deploy API and worker together after draining old workers. Follow [messaging deployment and staging](BOOKING_MESSAGING.md#deployment-and-staging-checklist) for the socket proxy, cookies, single-process realtime scope, optional `MESSAGING_HTTP_RATE_LIMIT_MAX`, retention and notification-suppression checks. Retired `conversations`/`messages` data is preserved without migration.
+
 Run one explicit deployment mode: a persistent supervised worker, or a scheduled one-batch process. The API does not dispatch booking email. The worker uses the same `MONGODB_URI`, SMTP configuration and first `CLIENT_URL` origin as the API; shared environment validation also requires the existing authentication secrets. Keep host clocks synchronized.
 
 ```sh

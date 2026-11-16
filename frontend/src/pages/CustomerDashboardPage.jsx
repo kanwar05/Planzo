@@ -11,6 +11,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getMyBookings, updateBookingStatus } from "../services/bookingService";
 import { getApiError } from "../utils/apiError";
 import { useAuth } from "../context/AuthContext";
+import { useUnreadMessages } from "../hooks/useUnreadMessages";
 export default function CustomerDashboardPage() {
   useDocumentTitle("My bookings");
   const { user } = useAuth();
@@ -20,6 +21,7 @@ export default function CustomerDashboardPage() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
   const [filter, setFilter] = useState("");
+  const unread = useUnreadMessages(bookings, user);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -70,6 +72,8 @@ export default function CustomerDashboardPage() {
     </div>}
     {loading ? <LoadingSkeleton /> : <>
       <BookingMetrics bookings={bookings} />
+      {unread.total > 0 && <p aria-live="polite" className="text-sm font-semibold">{unread.total} unread {unread.total === 1 ? "message" : "messages"} across your bookings</p>}
+      {unread.error && <p className="text-xs text-ink/65">{unread.error}</p>}
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-ink/10 pb-5">
         <div className="flex items-center gap-2.5"><CalendarDays className="h-5 w-5 text-coral" aria-hidden="true" /><h2 className="text-base font-bold">Your booking history</h2><span className="rounded-full bg-sand px-2.5 py-1 text-xs font-semibold tabular-nums">{shown.length}</span></div>
         <label className="block w-full sm:w-48">
@@ -83,7 +87,7 @@ export default function CustomerDashboardPage() {
       </label>
       </div>
       <div className="space-y-4">
-        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} busy={Boolean(busy)} onStatus={update} verified={user?.emailVerified === true} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : <EmptyState title={filter ? "No matching bookings" : "No bookings yet"} description={filter ? "Choose another status to see your requests." : "Find a vendor and send your first booking request."} actionTo="/vendors" actionLabel="Browse vendors" />}
+        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} busy={Boolean(busy)} onStatus={update} verified={user?.emailVerified === true} unreadCount={unread.counts[booking._id] || 0} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : <EmptyState title={filter ? "No matching bookings" : "No bookings yet"} description={filter ? "Choose another status to see your requests." : "Find a vendor and send your first booking request."} actionTo="/vendors" actionLabel="Browse vendors" />}
       </div>
     </>}
   </div>;
