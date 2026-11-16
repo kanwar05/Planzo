@@ -32,16 +32,19 @@ export default function CustomerDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
-  const update = async (id, status) => {
+  const update = async (id, status, reason) => {
+    if (busy) return false;
     setBusy(id);
     setError("");
     setMessage("");
     try {
-      await updateBookingStatus(id, status);
+      await updateBookingStatus(id, status, ...(reason === undefined ? [] : [reason]));
       setBookings(await getMyBookings());
       setMessage("Booking cancelled.");
+      return true;
     } catch (err) {
       setError(getApiError(err, "Unable to cancel this booking."));
+      return false;
     } finally {
       setBusy("");
     }

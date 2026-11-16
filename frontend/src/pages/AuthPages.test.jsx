@@ -42,7 +42,7 @@ describe("account entry", () => {
     expect(await screen.findByText("Booking request reached")).toBeInTheDocument();
   });
   it.each(["customer", "vendor"])("registers a %s with the selected role", async (role) => {
-    register.mockResolvedValue({ role });
+    register.mockResolvedValue({ role, emailVerified: true });
     const destination = role === "vendor" ? "/vendor/profile-setup" : "/customer/dashboard";
     render(<MemoryRouter initialEntries={["/register"]}><Routes><Route path="/register" element={<RegisterPage />} /><Route path={destination} element={<p>Account destination reached</p>} /></Routes></MemoryRouter>);
     if (role === "vendor") fireEvent.click(screen.getByRole("button", { name: "vendor registration" }));

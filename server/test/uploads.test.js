@@ -6,6 +6,7 @@ import request from "supertest";
 import cloudinary from "../src/config/cloudinary.js";
 import { errorHandler } from "../src/middleware/errorMiddleware.js";
 import { uploadVendorImages, uploadProfileImage, uploadCoverImage, uploadPortfolioImages } from "../src/middleware/upload.js";
+import { addPortfolioImages } from "../src/controllers/vendorController.js";
 
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII=", "base64");
 const originalUpload = cloudinary.uploader.upload_stream;
@@ -77,6 +78,7 @@ test("profile and cover uploads stream to decoded image hosting and retain contr
     assert.equal(uploads.at(-1).options.resource_type, "image");
     assert.deepEqual(uploads.at(-1).options.allowed_formats, ["jpg", "jpeg", "png", "webp"]);
     assert.equal(uploads.at(-1).options.overwrite, false);
+    assert.equal(uploads.at(-1).options.timeout, 30_000);
   }
   assert.equal(destroyed.length, 0);
 });
@@ -95,6 +97,28 @@ test("business photos preserve existing multipart fields and portfolio array out
   assert.equal(portfolio.status, 200);
   assert.equal(portfolio.body.files.length, 1);
   assert.match(portfolio.body.files[0].filename, /^eventifyy\/vendors\/portfolio\//);
+});
+
+test("portfolio controller rejects non-array upload metadata before provider or profile writes", async () => {
+  let files;
+  const controllerApp = express();
+  controllerApp.post("/portfolio", (req, res, next) => {
+    req.files = files;
+    // Rejection must happen before the controller reads or mutates a profile.
+    Object.defineProperty(req, "vendorProfile", {
+      get() { throw new Error("Unexpected profile access for invalid upload metadata"); },
+    });
+    next();
+  }, addPortfolioImages);
+  controllerApp.use(errorHandler);
+  for (const value of [{ length: 1, 0: { path: "https://example.test/photo.png", filename: "untrusted" } }, "invalid-array", { images: [] }]) {
+    files = value;
+    const response = await request(controllerApp).post("/portfolio");
+    assert.equal(response.status, 400);
+    assert.match(response.body.message, /at least one image/);
+  }
+  assert.equal(uploads.length, 0);
+  assert.equal(destroyed.length, 0);
 });
 
 test("invalid extensions, MIME mismatches and unexpected file fields never reach Cloudinary", async () => {

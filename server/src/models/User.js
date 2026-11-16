@@ -17,6 +17,9 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    // Additive ownership proof. Existing/missing values remain unverified;
+    // password authentication alone must never backfill this timestamp.
+    emailVerifiedAt: { type: Date, default: null },
     phone: {
       type: String,
       required: [true, "Phone number is required."],
@@ -36,6 +39,7 @@ const userSchema = new mongoose.Schema(
       default: "customer",
     },
     authVersion: { type: Number, default: 0, min: 0 },
+    bookingGuardRevision: { type: Number, default: 0, select: false },
     accountStatus: {
       type: String,
       enum: ["active", "deactivated"],
@@ -70,6 +74,7 @@ const userSchema = new mongoose.Schema(
         for (const field of [
           "password",
           "authVersion",
+          "bookingGuardRevision",
           "passwordResetTokenHash",
           "passwordResetExpiresAt",
           "passwordResetConsumedAt",

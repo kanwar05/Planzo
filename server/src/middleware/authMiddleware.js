@@ -3,6 +3,8 @@ import User from "../models/User.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ACCESS_COOKIE_NAME } from "../utils/generateToken.js";
+import { isActiveAccount } from "../utils/accountEligibility.js";
+import { assertVerifiedEmail } from "../utils/emailVerification.js";
 
 export const protect = asyncHandler(async (req, res, next) => {
   res.set("Cache-Control", "no-store");
@@ -56,6 +58,7 @@ export const protect = asyncHandler(async (req, res, next) => {
       `This account is suspended${user.suspensionReason ? `: ${user.suspensionReason}` : "."}`,
     );
   }
+  if (!isActiveAccount(user)) throw new ApiError(403, "This account is unavailable.");
 
   if (
     (payload.authVersion ?? 0) !== (user.authVersion || 0) ||
@@ -84,3 +87,12 @@ export const authorizeRoles =
 
     return next();
   };
+
+export const requireVerifiedEmail = (req, res, next) => {
+  try {
+    assertVerifiedEmail(req.user);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

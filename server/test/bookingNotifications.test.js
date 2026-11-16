@@ -11,6 +11,7 @@ import User from "../src/models/User.js";
 import Vendor from "../src/models/Vendor.js";
 import { setBookingEmailSenderForTests } from "../src/services/bookingEmailService.js";
 import { generateAccessToken } from "../src/utils/generateToken.js";
+import { afterEventDay } from "./helpers/bookingClock.js";
 
 let mongo;
 let sequence = 0;
@@ -27,6 +28,7 @@ function newUser(role = "customer") {
     phone: `987650${String(sequence).padStart(4, "0")}`,
     password: "PlanzoNotifications123!",
     role,
+    emailVerifiedAt: new Date(),
   });
 }
 
@@ -140,7 +142,9 @@ for (const [status, eventType] of [
     const id = created.body.booking._id;
     if (status === "completed")
       assert.equal((await change(fixture.owner, id, "accepted")).status, 200);
-    const response = await change(fixture.owner, id, status);
+    const response = status === "completed"
+      ? await afterEventDay(id, () => change(fixture.owner, id, status))
+      : await change(fixture.owner, id, status);
     assert.equal(response.status, 200, response.body.message);
     assertRecipients(await jobs(id, eventType), eventType, [fixture.customer]);
     assertRecipients(await jobs(id, "booking_requested"), "booking_requested", [fixture.owner]);
@@ -241,7 +245,8 @@ test("genuine reservation conflicts and unsuccessful new requests queue nothing"
   }
   assert.equal((await create(fixture)).status, 409);
   assert.deepEqual(await jobs(), before);
-  assert.equal((await change(fixture.owner, first.body.booking._id, "completed")).status, 200);
+  assert.equal((await afterEventDay(first.body.booking._id,
+    () => change(fixture.owner, first.body.booking._id, "completed"))).status, 200);
   before = await jobs();
   assert.equal((await change(fixture.owner, second.body.booking._id, "accepted")).status, 409);
   assert.deepEqual(await jobs(), before);
@@ -318,7 +323,8 @@ test("enqueue failure rolls back each status write, including its vendor guard a
     });
     let response;
     try {
-      response = await change(action === "cancelled" ? fixture.customer : fixture.owner, id, action);
+      const update = () => change(action === "cancelled" ? fixture.customer : fixture.owner, id, action);
+      response = action === "completed" ? await afterEventDay(id, update) : await update();
     } finally {
       mocked.mock.restore();
     }
@@ -398,7 +404,9 @@ test("orphaned legacy customers do not block booking management and retain termi
     [pendingCancellation, fixture.admin, "cancelled", true],
   ]) {
     const id = created.body.booking._id;
-    const response = await change(actor, id, action, adminRoute);
+    const response = action === "completed"
+      ? await afterEventDay(id, () => change(actor, id, action, adminRoute))
+      : await change(actor, id, action, adminRoute);
     assert.equal(response.status, 200, response.body.message);
     assert.equal((await Booking.findById(id)).status, action);
     const rows = await jobs(id, `booking_${action}`);

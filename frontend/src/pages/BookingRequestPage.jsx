@@ -26,7 +26,9 @@ export default function BookingRequestPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [unresolved, setUnresolved] = useState(false);
   const inFlight = useRef(false);
+  const attempt = useRef(null);
   const requestScope = useRef(null);
   const heading = useRef(null);
   const errorMessage = useRef(null);
@@ -36,8 +38,10 @@ export default function BookingRequestPage() {
     const scope = { active: true };
     requestScope.current = scope;
     inFlight.current = false;
+    attempt.current = null;
     hasMoved.current = false;
     setSubmitting(false);
+    setUnresolved(false);
     setLoading(true);
     setError("");
     setVendor(null);
@@ -67,12 +71,14 @@ export default function BookingRequestPage() {
   const blockedDates = [...new Set([...(availability?.unavailableDates || []), ...(availability?.bookedDates || [])])].sort();
   const blocked = blockedDates.includes(details.eventDate);
   const change = event => {
+    if (inFlight.current || attempt.current) return;
     const { name, value } = event.target;
     setDetails(current => ({ ...current, [name]: value }));
+    attempt.current = null;
     setError("");
   };
   const moveTo = next => {
-    if (inFlight.current) return;
+    if (inFlight.current || attempt.current) return;
     hasMoved.current = true;
     setError("");
     setStep(next);
@@ -81,23 +87,26 @@ export default function BookingRequestPage() {
     event.preventDefault();
     if (inFlight.current) return;
     setError("");
-    if (blocked) {
+    // A lost response may follow a committed booking. Retry that immutable
+    // intent before applying today's rules to a new booking request.
+    const retrying = Boolean(attempt.current);
+    if (!retrying && blocked) {
       setError("This date is unavailable. Please choose another date.");
       setStep(0);
       return;
     }
-    if ((step === 0 || step === 2) && (!details.eventDate || details.eventDate < todayDate() || !details.eventType.trim() || !details.eventLocation.trim())) {
+    if (!retrying && (step === 0 || step === 2) && (!details.eventDate || details.eventDate < todayDate() || !details.eventType.trim() || !details.eventLocation.trim())) {
       setStep(0);
       setError("Choose today or a future event date and add your event type and location.");
       return;
     }
-    if (step >= 1 && details.description.trim().length < 10) {
+    if (!retrying && step >= 1 && details.description.trim().length < 10) {
       setStep(1);
       setError("Add at least 10 characters to your event description.");
       return;
     }
-    if (!event.currentTarget.reportValidity()) return;
-    if (step < 2) {
+    if (!retrying && !event.currentTarget.reportValidity()) return;
+    if (!retrying && step < 2) {
       moveTo(step + 1);
       return;
     }
@@ -105,10 +114,20 @@ export default function BookingRequestPage() {
     inFlight.current = true;
     setSubmitting(true);
     try {
-      await createBooking({ vendorId, ...details });
+      attempt.current ||= { key: crypto.randomUUID(), payload: { vendorId, ...details } };
+      setUnresolved(true);
+      await createBooking(attempt.current.payload, { idempotencyKey: attempt.current.key });
       if (scope.active) setSent(true);
     } catch (err) {
-      if (scope.active) setError(getApiError(err, "Unable to send booking request."));
+      if (scope.active) {
+        // A first-attempt application rejection cannot have created a booking.
+        // A rejected retry cannot prove the earlier uncertain attempt failed.
+        if (!retrying && [400, 401, 403, 404, 409, 413, 415, 422, 429].includes(err.response?.status)) {
+          attempt.current = null;
+          setUnresolved(false);
+        }
+        setError(getApiError(err, "Unable to send booking request."));
+      }
     } finally {
       if (scope.active) {
         inFlight.current = false;
@@ -135,13 +154,13 @@ export default function BookingRequestPage() {
       <header className="mb-7 mt-5 sm:mb-10">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-coral">Make it a date</p>
         <h1 className="mt-3 font-editorial text-4xl leading-tight sm:text-5xl">Your celebration starts here.</h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-ink/65">A few details, a thoughtful brief, and your plans are on their way.</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-ink/65">A few details, a thoughtful brief, and your plans are on their way. Booking dates reserve a whole UTC calendar day.</p>
       </header>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_310px] lg:gap-8">
         <div className="min-w-0 rounded-[1.75rem] border border-ink/10 bg-white p-5 shadow-soft sm:p-8">
           <ol aria-label="Booking progress" className="mb-8 grid grid-cols-3 gap-2 border-b border-ink/10 pb-6">
             {steps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined}>
-              <button type="button" disabled={index > step || submitting} onClick={() => moveTo(index)} className={`flex min-h-11 w-full items-center gap-2 rounded-lg text-left text-[11px] font-semibold sm:text-xs ${step === index ? "text-coral" : index < step ? "text-ink" : "text-ink/65"}`}>
+              <button type="button" disabled={index > step || submitting || unresolved} onClick={() => moveTo(index)} className={`flex min-h-11 w-full items-center gap-2 rounded-lg text-left text-[11px] font-semibold sm:text-xs ${step === index ? "text-coral" : index < step ? "text-ink" : "text-ink/65"}`}>
                 <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] ${index < step ? "bg-sage text-ink" : step === index ? "bg-coral text-white" : "bg-sand text-ink/65"}`}>{index < step ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : `0${index + 1}`}</span>{label}
               </button>
             </li>)}
@@ -149,6 +168,7 @@ export default function BookingRequestPage() {
           <h2 ref={heading} tabIndex={-1} className="font-editorial text-3xl focus:outline-none">{["Tell us about your event.", "Bring your vision to life.", "One last look."][step]}</h2>
           <p className="mt-2 text-sm leading-6 text-ink/65">{["Choose your date and where it all happens.", "Help your vendor understand what you have in mind.", "Review your details before sending them to the vendor."][step]}</p>
           {error && <p ref={errorMessage} tabIndex={-1} role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800 focus:outline-none">{error}</p>}
+          {unresolved && !submitting && <div className="mt-4 rounded-xl bg-sand p-4 text-sm leading-6 text-ink/75"><p role="status">We could not confirm whether your request was sent. Send it again to check the same request before changing its details. Retrying here will not create a second request.</p><Button to="/customer/dashboard" variant="ghost" className="mt-2 !px-0">View my bookings</Button></div>}
           <form onSubmit={submit} className="mt-6 space-y-5" aria-busy={submitting}>
             {step === 0 && <>
               <label className="block min-w-0"><span className="label">Event date</span><input required name="eventDate" type="date" min={todayDate()} value={details.eventDate} onChange={change} className="field min-w-0" aria-invalid={blocked || undefined} aria-describedby={blocked ? "unavailable-date" : "date-help"} /></label>
@@ -170,8 +190,8 @@ export default function BookingRequestPage() {
               <div className="flex gap-3 rounded-xl border border-ink/10 p-4"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-coral" aria-hidden="true" /><p className="text-xs leading-6 text-ink/65">This sends a booking request. The vendor will review your plans and confirm availability. The starting price is a guide; final service details are agreed with the vendor.</p></div>
             </>}
             <div className="flex flex-col-reverse gap-3 border-t border-ink/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              {step > 0 && <Button type="button" variant="ghost" disabled={submitting} onClick={() => moveTo(step - 1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" />{step === 2 ? "Edit details" : "Back"}</Button>}
-              <Button type="submit" loading={submitting} disabled={submitting || blocked} className="w-full sm:ml-auto sm:w-auto">{step === 2 ? "Send booking request" : step === 1 ? "Review request" : "Continue"}{step < 2 && <ArrowRight className="h-4 w-4" aria-hidden="true" />}</Button>
+              {step > 0 && <Button type="button" variant="ghost" disabled={submitting || unresolved} onClick={() => moveTo(step - 1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" />{step === 2 ? "Edit details" : "Back"}</Button>}
+              <Button type="submit" loading={submitting} disabled={submitting || (blocked && !unresolved)} className="w-full sm:ml-auto sm:w-auto">{step === 2 ? "Send booking request" : step === 1 ? "Review request" : "Continue"}{step < 2 && <ArrowRight className="h-4 w-4" aria-hidden="true" />}</Button>
             </div>
           </form>
         </div>

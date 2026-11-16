@@ -25,3 +25,30 @@ test("invalid lifetimes, ports, proxy and partially configured integrations fail
   assert.throws(() => validateEnvironment({ ...base, SMTP_USER: "only-user" }), /SMTP_USER/);
   assert.throws(() => validateEnvironment({ ...base, CLOUDINARY_CLOUD_NAME: "only-cloud" }), /Cloudinary/);
 });
+
+test("access lifetimes cannot be already expired, subsecond or longer than one day", () => {
+  for (const value of ["0s", "-1m", "120", "25h", "2d"])
+    assert.throws(() => validateEnvironment({ ...base, JWT_ACCESS_EXPIRES_IN: value }), /JWT_ACCESS_EXPIRES_IN/);
+  for (const value of ["1s", "15m", "24h"])
+    assert.doesNotThrow(() => validateEnvironment({ ...base, JWT_ACCESS_EXPIRES_IN: value }));
+});
+
+test("rate and cookie overrides must be finite positive integers within documented bounds", () => {
+  for (const key of ["RATE_LIMIT_MAX", "AUTH_RATE_LIMIT_MAX", "PASSWORD_RESET_REQUEST_MAX", "PASSWORD_RESET_ATTEMPT_MAX", "ACCESS_COOKIE_MAX_AGE_MS", "REFRESH_COOKIE_MAX_AGE_MS"]) {
+    for (const value of ["0", "-1", "1.5", "Infinity", "not-a-number", "9007199254740992"])
+      assert.throws(() => validateEnvironment({ ...base, [key]: value }), new RegExp(key));
+  }
+  assert.throws(() => validateEnvironment({ ...base, ACCESS_COOKIE_MAX_AGE_MS: "86400001" }), /ACCESS_COOKIE_MAX_AGE_MS/);
+  assert.throws(() => validateEnvironment({ ...base, REFRESH_COOKIE_MAX_AGE_MS: String(366 * 86400000) }), /REFRESH_COOKIE_MAX_AGE_MS/);
+});
+
+test("database waits and slow-request thresholds reject unbounded or invalid startup settings", () => {
+  for (const key of ["MONGO_SERVER_SELECTION_TIMEOUT_MS", "MONGO_CONNECT_TIMEOUT_MS", "MONGO_SOCKET_TIMEOUT_MS", "MONGO_WAIT_QUEUE_TIMEOUT_MS"]) {
+    for (const value of ["999", "120001", "1.5", "Infinity"])
+      assert.throws(() => validateEnvironment({ ...base, [key]: value }), new RegExp(key));
+    assert.doesNotThrow(() => validateEnvironment({ ...base, [key]: "1000" }));
+    assert.doesNotThrow(() => validateEnvironment({ ...base, [key]: "120000" }));
+  }
+  for (const value of ["99", "60001", "NaN"])
+    assert.throws(() => validateEnvironment({ ...base, SLOW_REQUEST_MS: value }), /SLOW_REQUEST_MS/);
+});

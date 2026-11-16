@@ -15,6 +15,9 @@ Planzo is a MERN event-services marketplace for discovering approved vendors and
 - A customer's accepted/completed booking reveals only business contacts the vendor explicitly provided for sharing. Public APIs never return them or private account contacts.
 - HTTP-only cookie authentication, rotating refresh tokens, strong password hashing, single-use password recovery, and verified email changes remain.
 - Customers/vendors can use email OTP or passwords.
+- Customer booking creation and vendor marketplace writes require verified email ownership. Existing accounts can still sign in, view history, manage their account and cancel their own eligible bookings while completing verification.
+- Booking dates use UTC calendar days throughout the API and UI. Completion is permitted only after the full event date has elapsed.
+- Booking creation supports customer-scoped `Idempotency-Key` retries; the booking form reuses a key while retrying an unchanged request. Cancellation/rejection dialogs collect optional reasons.
 
 Payments, refunds, payouts, chat, external calendars, favorites, reviews, notification feeds/schedulers, document verification, advanced analytics, and preference/session-management screens have been removed.
 
@@ -136,3 +139,5 @@ Review the [operations runbook](docs/OPERATIONS.md) before upgrading an existing
 The server includes read-only `npm run db:preflight` and `npm run email:diagnostics`, bounded database settings, safe request/lifecycle logs, security regressions and CI. Production API traffic requires HTTPS through the configured trusted proxy; cookie mutations always require an allowed Origin even when Authorization is present. Health probes remain accessible internally over HTTP. Follow the [staging verification instructions](docs/OPERATIONS.md#verification-and-staging-probes) before launch. No backend hosting service is provisioned by the repository. Backup restoration, actual browser/provider behavior and hosted failover still require staging evidence.
 
 [API reference](server/README.md) · [Operations](docs/OPERATIONS.md) · [Cleanup and validation record](docs/CLEANUP.md)
+
+See [booking security and rollout](docs/BOOKING_SECURITY.md) for the email-verification policy, additive database fields/index, UTC boundaries, retry contract and verification evidence.

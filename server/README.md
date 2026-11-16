@@ -21,6 +21,8 @@ JSON responses use `success`, optional `message`, and the relevant resource. Err
 | POST | /api/auth/refresh | Valid refresh cookie; atomically rotates credentials |
 | POST | /api/auth/logout | Revokes refresh cookie and clears cookies |
 | GET | /api/auth/me | Current active user |
+| POST | /api/auth/email-verification/request | Current user; request a code for the account's current email only |
+| POST | /api/auth/email-verification/verify | Current user; six-digit code proves current email ownership |
 | PATCH | /api/auth/profile | Current user; name and phone, no direct email changes |
 | PATCH | /api/auth/password | Current user; currentPassword and newPassword |
 | POST | /api/auth/forgot-password | Public; generic response, single-use email link |
@@ -29,7 +31,9 @@ JSON responses use `success`, optional `message`, and the relevant resource. Err
 | POST | /api/auth/email-change/confirm | Public; token; replaces verified address and revokes credentials |
 | DELETE | /api/auth/account | Current customer/vendor; password; guarded deactivation, preserves history |
 
-Passwords require 8–128 characters including lowercase, uppercase, a digit and a symbol. Account email links expire after 15 minutes; only hashes are stored. No raw tokens appear in responses or logs. Failed SMTP recovery delivery retains a generic response and invalidates the undelivered token. The first configured CLIENT_URL origin is the email-link destination.
+Passwords require at least 8 characters including lowercase, uppercase, a digit and a symbol, with a maximum of 72 UTF-8 bytes for bcrypt. Account email links expire after 15 minutes; only hashes are stored. No raw tokens appear in responses or logs. Failed SMTP recovery delivery retains a generic response and invalidates the undelivered token. The first configured CLIENT_URL origin is the email-link destination.
+
+Authentication responses include `user.emailVerified`. Registration and password login preserve the session without treating a password as proof of mailbox ownership. Initial verification and email OTP login share the existing challenge, cooldown, five-attempt budget and single-use consumption. A successful OTP login or confirmed email change records ownership. Missing legacy proof remains unverified. Customers need proof to create bookings; vendors need proof for marketplace writes/status transitions. History reads, account management and customer cancellation remain available; admin authorization remains independent. See [rollout and credential-version compatibility](../docs/BOOKING_SECURITY.md).
 
 ## Vendor marketplace and profile
 
@@ -82,7 +86,9 @@ Pending → accepted/rejected/cancelled. Accepted → completed/cancelled. Rejec
 
 Customers can only cancel their own pending/accepted bookings. Vendors accept/reject their own incoming pending requests and complete accepted requests. Admins manage allowed transitions. The database enforces one accepted/completed booking per vendor/date, and conditional updates reject stale transitions. Pending requests do not reserve dates. Basic date checks currently use the UTC date boundary on the API.
 
-Both admin endpoints use the same graph; admins can cancel accepted bookings but cannot reopen or cancel terminal states. Same-status accept/reject/cancel repeats retain the existing HTTP 409 contract and leave reasons/timestamps unchanged. Requests racing another transition either commit a legal transition or return 409. Event dates must be real YYYY-MM-DD dates; today is allowed, and acceptance rechecks that a pending request has not become past or unavailable. There is no new requirement to wait until the event day before completing a booking.
+Both admin endpoints use the same graph; admins can cancel accepted bookings but cannot reopen or cancel terminal states. Same-status accept/reject/cancel repeats retain the existing HTTP 409 contract and leave reasons/timestamps unchanged. Requests racing another transition either commit a legal transition or return 409. Event dates must be real YYYY-MM-DD UTC calendar dates; today is allowed, and acceptance rechecks that a pending request has not become past or unavailable. Completion requires an accepted booking whose whole UTC event date has ended, including admin actions, and the transaction rechecks eligibility. Cancellation/rejection remain independent of the event date and accept optional plain-text `reason` up to 1,000 characters; invalid types/lengths fail validation, while unsafe control/bidi characters are removed and line endings normalized.
+
+`POST /api/bookings` accepts an optional `Idempotency-Key` header of 16–128 ASCII letters, digits, dots, underscores, colons or hyphens. New requests return 201; the same customer/key and normalized payload return the original booking with 200 even after its status/date eligibility changes. A changed payload with that key returns 409. The booking and retry metadata commit with notification intent in one transaction. Retries enqueue no extra email. Other customers have independent key scopes. Key hashes are private and retained with the booking; requests without a key preserve legacy independent-request behavior. Forward the header through proxies; CORS permits it for allowed browser origins. The reservation unique index remains separate.
 
 Only the associated customer receives intentionally shared vendor contacts on accepted/completed bookings. Vendors and admins can view sharing contacts for authorized management. Customer email/phone and vendor private account contact information are not exposed in booking payloads.
 

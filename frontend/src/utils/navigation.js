@@ -3,3 +3,11 @@ export function getDashboardPath(role) {
   if (role === "vendor") return "/vendor/dashboard";
   return "/customer/dashboard";
 }
+
+// Return destinations come from router state, never from an arbitrary URL.
+// Only known application pathnames are accepted; queries/escapes are not needed.
+export function getSafeReturnPath(value, fallback = "/customer/dashboard") {
+  if (typeof value !== "string" || /[%\\?#\s]/.test(value)) return fallback;
+  const routes = /^(?:\/(?:booking|vendors)\/[A-Za-z0-9-]+|\/(?:vendors|services|settings|customer\/dashboard|vendor\/(?:dashboard|profile-setup|availability|settings)|admin(?:\/(?:users|bookings|settings|vendors\/unverified))?)|\/)$/;
+  return routes.test(value) ? value : fallback;
+}

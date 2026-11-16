@@ -1,17 +1,7 @@
 import Availability from "../models/Availability.js";
 import Booking from "../models/Booking.js";
 import ApiError from "./ApiError.js";
-
-export function normalizeDateOnly(value, fieldName = "date") {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new ApiError(400, `${fieldName} must use YYYY-MM-DD.`);
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw new ApiError(400, `Please provide a valid ${fieldName}.`);
-  }
-  return value;
-}
+export { normalizeDateOnly } from "./bookingDates.js";
 
 export function bookingDateFilter(dateOnly) {
   const dayStart = new Date(`${dateOnly}T00:00:00.000Z`);

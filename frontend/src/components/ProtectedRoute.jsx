@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getDashboardPath } from "../utils/navigation";
 
-export default function ProtectedRoute({ allowedRoles = [] }) {
+export default function ProtectedRoute({ allowedRoles = [], requireVerified = false }) {
   const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
@@ -23,6 +23,10 @@ export default function ProtectedRoute({ allowedRoles = [] }) {
 
   if (allowedRoles.length && !allowedRoles.includes(user.role)) {
     return <Navigate to={getDashboardPath(user.role)} replace />;
+  }
+
+  if (requireVerified && user.role !== "admin" && user.emailVerified !== true) {
+    return <Navigate to="/verify-account-email" state={{ from: location }} replace />;
   }
 
   return <Outlet />;

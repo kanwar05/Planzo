@@ -31,6 +31,9 @@ const bookingSchema = new mongoose.Schema(
     eventLocation: { type: String, required: true, trim: true, maxlength: 300 },
     description: { type: String, trim: true, maxlength: 2000, default: "" },
     notes: { type: String, trim: true, maxlength: 1000, default: "" },
+    // Optional additive metadata: old bookings need no backfill. Never serialized.
+    idempotencyKeyHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
+    requestHash: { type: String, select: false, match: /^[a-f0-9]{64}$/ },
     status: {
       type: String,
       enum: BOOKING_STATUSES,
@@ -71,4 +74,12 @@ bookingSchema.index(
   },
 );
 bookingSchema.index({ customerId: 1, createdAt: -1 });
+bookingSchema.index(
+  { customerId: 1, idempotencyKeyHash: 1 },
+  {
+    name: "one_booking_per_customer_idempotency_key",
+    unique: true,
+    partialFilterExpression: { idempotencyKeyHash: { $type: "string" } },
+  },
+);
 export default mongoose.model("Booking", bookingSchema);

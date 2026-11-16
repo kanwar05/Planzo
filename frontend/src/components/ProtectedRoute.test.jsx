@@ -14,15 +14,16 @@ const {
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => state
 }));
-const renderGuard = (allowedRoles = ["vendor"]) => render(<MemoryRouter initialEntries={["/private"]}>
+const renderGuard = (allowedRoles = ["vendor"], requireVerified = false) => render(<MemoryRouter initialEntries={["/private"]}>
     <Routes>
-      <Route element={<ProtectedRoute allowedRoles={allowedRoles} />}>
+      <Route element={<ProtectedRoute allowedRoles={allowedRoles} requireVerified={requireVerified} />}>
         <Route path="/private" element={<p>Private vendor content</p>} />
       </Route>
       <Route path="/login" element={<p>Login page</p>} />
       <Route path="/customer/dashboard" element={<p>Customer dashboard</p>} />
       <Route path="/vendor/dashboard" element={<p>Vendor dashboard</p>} />
       <Route path="/admin" element={<p>Admin dashboard</p>} />
+      <Route path="/verify-account-email" element={<p>Verify email ownership</p>} />
     </Routes>
   </MemoryRouter>);
 describe("role-based route access", () => {
@@ -59,6 +60,17 @@ describe("role-based route access", () => {
       isAuthenticated: true
     });
     renderGuard();
+    expect(screen.getByText("Private vendor content")).toBeInTheDocument();
+  });
+  it.each([undefined, false])("requires proof for marketplace routes when emailVerified is %s", emailVerified => {
+    Object.assign(state, { user: { role: "vendor", emailVerified }, loading: false, isAuthenticated: true });
+    renderGuard(["vendor"], true);
+    expect(screen.getByText("Verify email ownership")).toBeInTheDocument();
+    expect(screen.queryByText("Private vendor content")).not.toBeInTheDocument();
+  });
+  it("keeps verified marketplace access and administrator compatibility", () => {
+    Object.assign(state, { user: { role: "admin", emailVerified: false }, loading: false, isAuthenticated: true });
+    renderGuard(["admin"], true);
     expect(screen.getByText("Private vendor content")).toBeInTheDocument();
   });
 });

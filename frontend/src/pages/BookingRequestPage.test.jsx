@@ -63,7 +63,7 @@ describe("booking request", () => {
       eventLocation: "Venue, Delhi",
       description: "Decorate the wedding venue.",
       notes: "Use seasonal flowers."
-    }));
+    }, { idempotencyKey: expect.any(String) }));
     expect(await screen.findByText("Request sent!")).toBeInTheDocument();
   });
   it.each(["2027-02-02", "2027-02-03"])("disables a request for unavailable date %s", async date => {
@@ -108,6 +108,74 @@ describe("booking request", () => {
     expect(screen.getByRole("button", { name: "Edit details" })).toBeDisabled();
     await act(async () => { finish({ _id: "booking-1" }); });
     expect(await screen.findByText("Request sent!")).toBeInTheDocument();
+  });
+  it("locks an uncertain intent against edits and replays its original payload and key", async () => {
+    createBooking.mockRejectedValueOnce(new Error("Network interrupted.")).mockRejectedValueOnce(new Error("Network interrupted."));
+    renderPage();
+    await completeDetails();
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    await screen.findByRole("alert");
+    const firstKey = createBooking.mock.calls[0][1].idempotencyKey;
+    expect(firstKey).toMatch(/^[a-f0-9-]{36}$/i);
+    expect(screen.getByRole("button", { name: "Edit details" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("could not confirm");
+    fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    expect(screen.queryByLabelText("Customer notes (optional)")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    await waitFor(() => expect(createBooking).toHaveBeenCalledTimes(2));
+    await screen.findByRole("alert");
+    expect(createBooking.mock.calls[1][1].idempotencyKey).toBe(firstKey);
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    expect(await screen.findByText("Request sent!")).toBeInTheDocument();
+    expect(createBooking.mock.calls[2]).toEqual(createBooking.mock.calls[0]);
+  });
+  it("allows a corrected new intent after a definite first-attempt validation rejection", async () => {
+    createBooking.mockRejectedValueOnce({ response: { status: 400, data: { message: "Please correct your notes." } } });
+    renderPage();
+    await completeDetails();
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    await screen.findByRole("alert");
+    const firstKey = createBooking.mock.calls[0][1].idempotencyKey;
+    expect(screen.getByRole("button", { name: "Edit details" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    fireEvent.change(screen.getByLabelText("Customer notes (optional)"), { target: { value: "Bring extra flowers." } });
+    fireEvent.click(screen.getByRole("button", { name: "Review request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    expect(await screen.findByText("Request sent!")).toBeInTheDocument();
+    expect(createBooking.mock.calls[1][1].idempotencyKey).not.toBe(firstKey);
+    expect(createBooking.mock.calls[1][0].notes).toBe("Bring extra flowers.");
+  });
+  it("replays an uncertain request across UTC midnight instead of validating it as a new past request", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-02-01T23:59:59.999Z"));
+    try {
+      createBooking.mockRejectedValueOnce(new Error("Response lost after commit."));
+      renderPage();
+      await completeDetails();
+      fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+      await screen.findByRole("alert");
+      const originalCall = createBooking.mock.calls[0];
+      vi.setSystemTime(new Date("2027-02-02T00:00:00.000Z"));
+      fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+      expect(await screen.findByText("Request sent!")).toBeInTheDocument();
+      expect(createBooking.mock.calls[1]).toEqual(originalCall);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("does not discard an earlier uncertain key when a retry is temporarily unauthorized", async () => {
+    createBooking.mockRejectedValueOnce(new Error("Response lost."))
+      .mockRejectedValueOnce({ response: { status: 403, data: { message: "Verify your email." } } });
+    renderPage();
+    await completeDetails();
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Verify your email."));
+    expect(screen.getByRole("button", { name: "Edit details" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Send booking request" }));
+    expect(await screen.findByText("Request sent!")).toBeInTheDocument();
+    expect(createBooking.mock.calls[2]).toEqual(createBooking.mock.calls[0]);
   });
   it("keeps whitespace-only event details on the first step", async () => {
     renderPage();

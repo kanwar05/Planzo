@@ -233,6 +233,6 @@ test("worker CLI refuses the test environment without connecting or sending", ()
     env: { ...process.env, NODE_ENV: "test", MONGODB_URI: "mongodb://private:secret@unreachable.invalid/production" },
   });
   assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /Booking email worker startup failed/);
+  assert.match(result.stderr, /email_worker_startup_failed/);
   assert.doesNotMatch(result.stdout + result.stderr, /secret|unreachable|MongoDB connected/);
 });

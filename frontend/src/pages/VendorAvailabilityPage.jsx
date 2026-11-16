@@ -67,7 +67,7 @@ export default function VendorAvailabilityPage() {
     {loading ? <LoadingSkeleton /> : !availability ? <EmptyState title="Availability unavailable" description={error || "Create your business profile first."} actionTo="/vendor/profile-setup" actionLabel="Business profile" /> : <>
     <div className="flex items-start gap-3 rounded-2xl bg-sage p-4 text-sm leading-6 text-ink sm:p-5">
       <CalendarCheck2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-      <p>Dates are available by default. Mark dates you cannot work. Accepted bookings reserve a date automatically.</p>
+      <p>Dates are available by default. Mark dates you cannot work. Accepted bookings reserve a whole UTC calendar day automatically.</p>
     </div>
     <Card className="p-5 sm:p-7">
       <WorkspaceSectionTitle icon={CalendarDays} title="Mark a date unavailable" description="Taking time off or booked elsewhere? Block the date here." />

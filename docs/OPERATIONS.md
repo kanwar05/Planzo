@@ -53,7 +53,7 @@ For an existing database:
 5. Repeat preflight until it passes, then run local regressions and staging checks. Measure index-build time and review database permissions, disk capacity and rollback compatibility.
 6. Coordinate production cutover with a fresh backup and a writer pause where necessary. Old API/worker releases may not participate in current revision guards or enqueue notification intents. Historical bookings are not automatically emailed.
 
-Preserve retired collections/fields until retention and compatibility have been reviewed separately. This cleanup introduces no database migration or schema change.
+Preserve retired collections/fields until retention and compatibility have been reviewed separately. The booking-security rollout adds nullable email ownership proof, credential-version binding on OTP challenges and optional private booking retry metadata with a partial unique index. No ownership backfill or booking rewrite is performed. Follow [booking security rollout](BOOKING_SECURITY.md#database-and-rollout) before serving the updated API.
 
 ## Booking email worker
 
