@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { services } from "../data/services";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getApiError } from "../utils/apiError";
-import { getSafeReturnPath } from "../utils/navigation";
+import { getPackageIntent, getSafeReturnPath } from "../utils/navigation";
 
 export default function RegisterPage() {
   useDocumentTitle("Create account");
@@ -41,7 +41,7 @@ export default function RegisterPage() {
         : getSafeReturnPath(location.state?.from?.pathname);
       const destinationState = user.role === "vendor" ? {
         businessName: form.get("businessName"), serviceCategory: form.get("serviceCategory"),
-      } : undefined;
+      } : getPackageIntent(location.state?.packageId);
       navigate(user.emailVerified === true ? destination : "/verify-account-email", {
         replace: true,
         state: user.emailVerified === true ? destinationState : {
@@ -151,7 +151,7 @@ export default function RegisterPage() {
       </form>
       <p className="mt-6 border-t border-ink/10 pt-6 text-center text-sm leading-7 text-ink/65">
         Already have an account?{" "}
-        <Link to="/login" state={{ from: { pathname: getSafeReturnPath(location.state?.from?.pathname) } }} className="font-bold text-coral">
+        <Link to="/login" state={{ from: { pathname: getSafeReturnPath(location.state?.from?.pathname) }, ...getPackageIntent(location.state?.packageId) }} className="font-bold text-coral">
           Log in
         </Link>
       </p>

@@ -10,8 +10,10 @@ import Toast from "../components/Toast";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getMyBookings, updateBookingStatus } from "../services/bookingService";
 import { getApiError } from "../utils/apiError";
+import { useAuth } from "../context/AuthContext";
 export default function CustomerDashboardPage() {
   useDocumentTitle("My bookings");
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -81,7 +83,7 @@ export default function CustomerDashboardPage() {
       </label>
       </div>
       <div className="space-y-4">
-        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} busy={Boolean(busy)} onStatus={update} />) : <EmptyState title={filter ? "No matching bookings" : "No bookings yet"} description={filter ? "Choose another status to see your requests." : "Find a vendor and send your first booking request."} actionTo="/vendors" actionLabel="Browse vendors" />}
+        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} busy={Boolean(busy)} onStatus={update} verified={user?.emailVerified === true} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : <EmptyState title={filter ? "No matching bookings" : "No bookings yet"} description={filter ? "Choose another status to see your requests." : "Find a vendor and send your first booking request."} actionTo="/vendors" actionLabel="Browse vendors" />}
       </div>
     </>}
   </div>;

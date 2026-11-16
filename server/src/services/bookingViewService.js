@@ -1,4 +1,6 @@
 import { vendorView } from "./vendorSearchService.js";
+import { packageSnapshot } from "./packageViewService.js";
+import { acceptedAgreementView } from "./quotationViewService.js";
 
 export const populateBooking = (query) =>
   query
@@ -50,9 +52,16 @@ export function bookingView(booking, viewer) {
     viewer?.role === "vendor" && viewerId &&
     identity(source.vendorId?.userId) === viewerId;
   const isParticipant = viewer?.role === "admin" || isOwner || isCustomer;
-  if (isParticipant)
+  if (isParticipant) {
     for (const key of ["rejectionReason", "cancellationReason"])
       if (typeof source[key] === "string") result[key] = source[key];
+    if (source.selectedPackage) result.selectedPackage = packageSnapshot(source.selectedPackage);
+    if (Number.isSafeInteger(source.quotationRevision) && source.quotationRevision >= 0)
+      result.quotationRevision = source.quotationRevision;
+    if (["none", "offered", "rejected", "accepted"].includes(source.quotationStatus))
+      result.quotationStatus = source.quotationStatus;
+    if (source.acceptedAgreement) result.acceptedAgreement = acceptedAgreementView(source.acceptedAgreement);
+  }
   const shareContact =
     viewer?.role === "admin" ||
     isOwner ||

@@ -1,9 +1,11 @@
 import { ArrowRight, CalendarDays, Check, CheckCircle2, ChevronLeft, MapPin, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import BookingPackageSelector from "../components/BookingPackageSelector";
+import PackageDetails from "../components/PackageDetails";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getVendorAvailability } from "../services/availabilityService";
 import { createBooking } from "../services/bookingService";
@@ -11,6 +13,7 @@ import { getVendorById } from "../services/vendorService";
 import { getApiError } from "../utils/apiError";
 import { formatCurrency, formatDate, todayDate } from "../utils/format";
 import { getVendorImage } from "../utils/vendor";
+import { getPackageIntent } from "../utils/navigation";
 
 const steps = ["Your event", "The brief", "Review"];
 const emptyDetails = { eventDate: "", eventType: "", eventLocation: "", description: "", notes: "" };
@@ -18,6 +21,11 @@ const emptyDetails = { eventDate: "", eventType: "", eventLocation: "", descript
 export default function BookingRequestPage() {
   useDocumentTitle("Request booking");
   const { vendorId } = useParams();
+  const location = useLocation();
+  const initialPackageId = getPackageIntent(location.state?.packageId)?.packageId || "";
+  const [packageId, setPackageId] = useState(initialPackageId);
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [packageInvalid, setPackageInvalid] = useState(Boolean(initialPackageId));
   const [vendor, setVendor] = useState(null);
   const [availability, setAvailability] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +57,9 @@ export default function BookingRequestPage() {
     setDetails(emptyDetails);
     setStep(0);
     setSent(false);
+    setPackageId(initialPackageId);
+    setSelectedPackage(null);
+    setPackageInvalid(Boolean(initialPackageId));
     Promise.all([getVendorById(vendorId), getVendorAvailability(vendorId)])
       .then(([profile, data]) => {
         if (scope.active) {
@@ -59,7 +70,12 @@ export default function BookingRequestPage() {
       .catch(err => { if (scope.active) setError(getApiError(err, "Unable to load booking details.")); })
       .finally(() => { if (scope.active) setLoading(false); });
     return () => { scope.active = false; };
-  }, [vendorId]);
+  }, [vendorId, initialPackageId]);
+
+  const choosePackage = useCallback((id, item, invalid) => {
+    if (inFlight.current || attempt.current) return;
+    setPackageId(id); setSelectedPackage(item); setPackageInvalid(invalid);
+  }, []);
 
   useEffect(() => {
     if (hasMoved.current || sent) heading.current?.focus();
@@ -90,6 +106,7 @@ export default function BookingRequestPage() {
     // A lost response may follow a committed booking. Retry that immutable
     // intent before applying today's rules to a new booking request.
     const retrying = Boolean(attempt.current);
+    if (!retrying && packageInvalid) { setError("Choose an active package or a custom booking request."); return; }
     if (!retrying && blocked) {
       setError("This date is unavailable. Please choose another date.");
       setStep(0);
@@ -114,7 +131,7 @@ export default function BookingRequestPage() {
     inFlight.current = true;
     setSubmitting(true);
     try {
-      attempt.current ||= { key: crypto.randomUUID(), payload: { vendorId, ...details } };
+      attempt.current ||= { key: crypto.randomUUID(), payload: { vendorId, ...details, ...(packageId ? { packageId } : {}) } };
       setUnresolved(true);
       await createBooking(attempt.current.payload, { idempotencyKey: attempt.current.key });
       if (scope.active) setSent(true);
@@ -170,6 +187,7 @@ export default function BookingRequestPage() {
           {error && <p ref={errorMessage} tabIndex={-1} role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800 focus:outline-none">{error}</p>}
           {unresolved && !submitting && <div className="mt-4 rounded-xl bg-sand p-4 text-sm leading-6 text-ink/75"><p role="status">We could not confirm whether your request was sent. Send it again to check the same request before changing its details. Retrying here will not create a second request.</p><Button to="/customer/dashboard" variant="ghost" className="mt-2 !px-0">View my bookings</Button></div>}
           <form onSubmit={submit} className="mt-6 space-y-5" aria-busy={submitting}>
+            {step === 0 && <BookingPackageSelector vendorId={vendorId} packageId={packageId} onSelect={choosePackage} disabled={submitting || unresolved} />}
             {step === 0 && <>
               <label className="block min-w-0"><span className="label">Event date</span><input required name="eventDate" type="date" min={todayDate()} value={details.eventDate} onChange={change} className="field min-w-0" aria-invalid={blocked || undefined} aria-describedby={blocked ? "unavailable-date" : "date-help"} /></label>
               {blocked ? <p id="unavailable-date" role="alert" className="!mt-2 text-sm text-red-800">This date is unavailable or already booked.</p> : <p id="date-help" className="!mt-2 text-xs leading-5 text-ink/65">Choose today or a future date. The vendor will confirm your request.</p>}
@@ -183,6 +201,7 @@ export default function BookingRequestPage() {
               <label className="block"><span className="label">Customer notes (optional)</span><textarea name="notes" maxLength={1000} rows={3} value={details.notes} onChange={change} className="field resize-y" placeholder="Anything else the vendor should know" /></label>
             </>}
             {step === 2 && <>
+              {selectedPackage && <section aria-label="Selected package" className="rounded-xl border p-4"><PackageDetails item={selectedPackage} /></section>}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-4"><span className="text-xs text-ink/65">{Number(vendor.pricing) > 0 ? "Starting price" : "Service pricing"}</span><strong className="text-lg">{Number(vendor.pricing) > 0 ? formatCurrency(vendor.pricing) : "Price on request"}</strong></div>
               <dl className="divide-y divide-ink/10 rounded-2xl bg-sand/50 px-4 sm:px-5">
                 {[["Event date", formatDate(details.eventDate)], ["Event type", details.eventType], ["Event location", details.eventLocation], ["Event description", details.description], ...(details.notes ? [["Customer notes", details.notes]] : [])].map(([label, value]) => <div key={label} className="py-4"><dt className="text-[11px] font-bold uppercase tracking-wider text-ink/65">{label}</dt><dd className="mt-1.5 whitespace-pre-line break-words text-sm leading-6">{value}</dd></div>)}
@@ -191,7 +210,7 @@ export default function BookingRequestPage() {
             </>}
             <div className="flex flex-col-reverse gap-3 border-t border-ink/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
               {step > 0 && <Button type="button" variant="ghost" disabled={submitting || unresolved} onClick={() => moveTo(step - 1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" />{step === 2 ? "Edit details" : "Back"}</Button>}
-              <Button type="submit" loading={submitting} disabled={submitting || (blocked && !unresolved)} className="w-full sm:ml-auto sm:w-auto">{step === 2 ? "Send booking request" : step === 1 ? "Review request" : "Continue"}{step < 2 && <ArrowRight className="h-4 w-4" aria-hidden="true" />}</Button>
+              <Button type="submit" loading={submitting} disabled={submitting || ((blocked || packageInvalid) && !unresolved)} className="w-full sm:ml-auto sm:w-auto">{step === 2 ? "Send booking request" : step === 1 ? "Review request" : "Continue"}{step < 2 && <ArrowRight className="h-4 w-4" aria-hidden="true" />}</Button>
             </div>
           </form>
         </div>

@@ -15,6 +15,7 @@ import { hasActiveVendorOwner } from "../services/vendorSearchService.js";
 import { bookingView, populateBooking } from "../services/bookingViewService.js";
 import { assertBookingCompletionDay, storedBookingDay, utcToday } from "../utils/bookingDates.js";
 import { assertVerifiedEmail } from "../utils/emailVerification.js";
+import { getSelectablePackage, packageSnapshot } from "../services/packageService.js";
 
 const identity = (value) => String(value?._id || value || "");
 
@@ -40,12 +41,16 @@ function requestIdentity(req, bookingData) {
   if (key === undefined) return null;
   if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{16,128}$/.test(key))
     throw new ApiError(400, "Idempotency-Key must contain 16 to 128 letters, numbers, dots, colons, underscores or hyphens.");
+  const payload = [
+    String(bookingData.vendorId), bookingData.eventType, bookingData.eventDateOnly,
+    bookingData.eventLocation, bookingData.description, bookingData.notes,
+  ];
+  // Preserve historical hashes for unchanged custom requests created before
+  // packages existed; package selection adds identity only when supplied.
+  if (bookingData.packageId) payload.push(bookingData.packageId);
   return {
     idempotencyKeyHash: digest(key),
-    requestHash: digest(JSON.stringify([
-      String(bookingData.vendorId), bookingData.eventType, bookingData.eventDateOnly,
-      bookingData.eventLocation, bookingData.description, bookingData.notes,
-    ])),
+    requestHash: digest(JSON.stringify(payload)),
   };
 }
 
@@ -68,6 +73,12 @@ export const createBooking = asyncHandler(async (req, res) => {
   ]);
   validateObjectId(req.body.vendorId, "vendor id");
   const eventDateOnly = normalizeDateOnly(req.body.eventDate, "event date");
+  let packageId;
+  if (req.body.packageId !== undefined) {
+    if (typeof req.body.packageId !== "string" || !/^[a-f0-9]{24}$/i.test(req.body.packageId))
+      throw new ApiError(400, "Provide a valid package id.");
+    packageId = req.body.packageId.toLowerCase();
+  }
   const bookingData = {
     _id: new mongoose.Types.ObjectId(),
     customerId: req.user._id,
@@ -79,7 +90,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     description: text(req.body, "description", 2000),
     notes: text(req.body, "notes", 1000, true),
   };
-  const requestIdentityData = requestIdentity(req, bookingData);
+  const requestIdentityData = requestIdentity(req, { ...bookingData, packageId });
   if (requestIdentityData) Object.assign(bookingData, requestIdentityData);
   const eventId = randomUUID();
   let result;
@@ -98,7 +109,9 @@ export const createBooking = asyncHandler(async (req, res) => {
       if (identity(currentVendor.userId) === identity(req.user))
         throw new ApiError(400, "You cannot book your own vendor profile.");
       await assertVendorAvailable({ vendorId: currentVendor._id, dateOnly: eventDateOnly, session });
-      const [created] = await Booking.create([bookingData], { session });
+      const selectedPackage = packageId
+        ? packageSnapshot(await getSelectablePackage(packageId, currentVendor, { session })) : undefined;
+      const [created] = await Booking.create([{ ...bookingData, ...(selectedPackage ? { selectedPackage } : {}) }], { session });
       await enqueueBookingEmails({
         booking: created, eventType: "booking_requested", eventId, session,
       });
@@ -191,6 +204,8 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
       409,
       `Booking cannot move from ${booking.status} to ${status}.`,
     );
+  if (status === "accepted" && (booking.selectedPackage || booking.quotationRevision > 0 || booking.acceptedAgreement))
+    throw new ApiError(409, "The customer must accept a final quotation for this booking.");
 
   const changes = { status };
   if (["accepted", "completed"].includes(status)) {
@@ -212,6 +227,11 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   let updated;
   try {
     const persist = async (session, currentVendor = vendor) => {
+      if (status === "accepted") {
+        const current = await Booking.findById(booking._id).session(session);
+        if (current?.selectedPackage || current?.quotationRevision > 0 || current?.acceptedAgreement)
+          throw new ApiError(409, "The customer must accept a final quotation for this booking.");
+      }
       if (status === "completed") assertBookingCompletionDay(changes.eventDateOnly);
       if (status === "accepted") {
         if (!(await hasActiveVendorOwner(currentVendor, session)))

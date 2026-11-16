@@ -6,6 +6,7 @@ import { useParams } from "react-router-dom";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import VendorPackages from "../components/VendorPackages";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useModalFocus } from "../hooks/useModalFocus";
 import { getVendorById } from "../services/vendorService";
@@ -91,6 +92,8 @@ export default function VendorDetailsPage() {
             {vendor.city && vendor.city !== vendor.location && <p className="mt-2 text-xs text-ink/65">Based in {vendor.city}</p>}
             {approved && <p className="mt-3 text-xs leading-6 text-ink/65">This business listing has been manually reviewed for the marketplace. Identity verification is not provided.</p>}
           </header>
+
+          <VendorPackages vendorId={vendor._id} />
 
           <section className="border-b border-ink/10 py-7 sm:py-9"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-ink/65">Meet your event people</p><h2 className="mt-2 font-editorial text-3xl">A little about us.</h2><p className="mt-5 whitespace-pre-line break-words text-sm leading-8 text-ink/70">{vendor.description || "This vendor hasn’t added a business introduction yet. Include your event needs in your booking request to start the conversation."}</p></section>
 

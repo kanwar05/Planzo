@@ -3,6 +3,7 @@ import { CalendarDays, MapPin, UserRound } from "lucide-react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import BookingReasonDialog from "../components/BookingReasonDialog";
+import BookingQuotations from "../components/BookingQuotations";
 import BookingStatus, { bookingStatuses } from "../components/BookingStatus";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -104,6 +105,7 @@ export default function AdminBookingsPage() {
             <div className="min-w-0"><dt className="flex items-center gap-2 text-xs font-medium text-ink/65"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Event date</dt><dd className="mt-1.5 text-sm font-bold">{formatDate(booking.eventDate)}</dd></div>
             <div className="min-w-0"><dt className="flex items-center gap-2 text-xs font-medium text-ink/65"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Location</dt><dd className="mt-1.5 break-words text-sm font-bold">{booking.eventLocation}</dd></div>
           </dl>
+          <BookingQuotations booking={booking} role="admin" disabled={Boolean(busy)} />
           {booking.description && <p className="mt-5 whitespace-pre-line break-words text-sm leading-7 text-ink/75">
             {booking.description}
           </p>}

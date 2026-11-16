@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { requestEmailVerification, verifyInitialEmail } from "../services/authService";
 import { getApiError } from "../utils/apiError";
-import { getDashboardPath, getSafeReturnPath } from "../utils/navigation";
+import { getDashboardPath, getPackageIntent, getSafeReturnPath } from "../utils/navigation";
 
 export default function VerifyAccountEmailPage() {
   useDocumentTitle("Verify your email");
@@ -22,7 +22,7 @@ export default function VerifyAccountEmailPage() {
   const destinationState = destination === "/vendor/profile-setup" && draft ? {
     businessName: typeof draft.businessName === "string" ? draft.businessName : "",
     serviceCategory: typeof draft.serviceCategory === "string" ? draft.serviceCategory : "",
-  } : undefined;
+  } : getPackageIntent(draft?.packageId || location.state?.packageId || location.state?.from?.state?.packageId);
   if (user?.emailVerified === true || user?.role === "admin") {
     return <Navigate to={destination} state={destinationState} replace />;
   }

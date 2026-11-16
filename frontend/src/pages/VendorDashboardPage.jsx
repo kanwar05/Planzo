@@ -100,7 +100,7 @@ export default function VendorDashboardPage() {
         </label>
       </div>
       <div className="space-y-4">
-        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy) || !verified} onStatus={update} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
+        {shown.length ? shown.map(booking => <BookingCard key={booking._id} booking={booking} role="vendor" busy={Boolean(busy) || !verified} onStatus={update} verified={verified} onBookingChange={next => setBookings(current => current.map(item => item._id === next._id ? next : item))} />) : filter ? <div className="space-y-3"><EmptyState title="No matching requests" description={`There are no ${filter} booking requests.`} /><Button variant="outline" onClick={() => setFilter("")}>Show all requests</Button></div> : <EmptyState title="No booking requests" description="Customer requests will appear here. Keep your profile and availability up to date." actionTo="/vendor/availability" actionLabel="Manage availability" />}
       </div>
     </>}
   </div>;

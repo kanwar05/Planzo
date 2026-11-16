@@ -24,6 +24,7 @@ const VendorDashboardPage = lazy(() => import("../pages/VendorDashboardPage"));
 const VendorAvailabilityPage = lazy(() => import("../pages/VendorAvailabilityPage"));
 const VendorDetailsPage = lazy(() => import("../pages/VendorDetailsPage"));
 const VendorProfilePage = lazy(() => import("../pages/VendorProfilePage"));
+const VendorPackagesPage = lazy(() => import("../pages/VendorPackagesPage"));
 const VendorsPage = lazy(() => import("../pages/VendorsPage"));
 const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
 const VerifyAccountEmailPage = lazy(() => import("../pages/VerifyAccountEmailPage"));
@@ -132,6 +133,10 @@ export const appRoutes = [{
       path: "/vendor/profile-setup",
       element: <ProtectedRoute requireVerified />,
       children: [{ index: true, element: <Page component={VendorProfilePage} /> }]
+    }, {
+      path: "/vendor/packages",
+      element: <ProtectedRoute requireVerified />,
+      children: [{ index: true, element: <Page component={VendorPackagesPage} /> }]
     }, {
       path: "/vendor/settings",
       element: <Page component={SettingsPage} />

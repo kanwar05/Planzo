@@ -5,6 +5,7 @@ import BookingRequestPage from "./BookingRequestPage";
 import { getVendorById } from "../services/vendorService";
 import { getVendorAvailability } from "../services/availabilityService";
 import { createBooking } from "../services/bookingService";
+vi.mock("../services/packageService", () => ({ getVendorPackages: vi.fn().mockResolvedValue([]) }));
 vi.mock("../services/vendorService", () => ({
   getVendorById: vi.fn()
 }));
