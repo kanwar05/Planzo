@@ -4,7 +4,8 @@ export const BOOKING_EMAIL_EVENTS = [
   "booking_requested", "booking_accepted", "booking_rejected",
   "booking_cancelled", "booking_completed",
 ];
-export const NOTIFICATION_EMAIL_EVENTS = [...BOOKING_EMAIL_EVENTS, "message_received"];
+export const SUPPORT_EMAIL_EVENTS = ["support_case_created", "support_case_assigned", "support_case_updated", "support_case_resolved", "support_case_closed", "support_case_reopened"];
+export const NOTIFICATION_EMAIL_EVENTS = [...BOOKING_EMAIL_EVENTS, "message_received", ...SUPPORT_EMAIL_EVENTS];
 export const OUTBOX_STATUSES = ["pending", "processing", "sent", "failed", "skipped"];
 
 // Explicit snapshot fields prevent private account/booking data from slipping
@@ -16,8 +17,9 @@ const payloadSchema = new mongoose.Schema({
   eventType: { type: String, default: "", maxlength: 120 },
   eventDateOnly: { type: String, default: "", maxlength: 10 },
   eventLocation: { type: String, default: "", maxlength: 300 },
-  recipientRole: { type: String, enum: ["customer", "vendor"], required: true },
+  recipientRole: { type: String, enum: ["customer", "vendor", "admin"], required: true },
   conversationId: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", default: undefined },
+  supportCaseId: { type: mongoose.Schema.Types.ObjectId, ref: "SupportCase", default: undefined },
 }, { _id: false });
 
 const outboxSchema = new mongoose.Schema({

@@ -17,8 +17,10 @@ describe("booking quotations", () => {
     expect(within(latest).getByText("Quotation total").nextElementSibling).toHaveTextContent("₹240.02 INR");
     expect(within(latest).getByText("Setup before guests arrive.")).toBeInTheDocument();
     expect(screen.getByText("Previous quotation revisions (1)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept quotation and reserve date" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /acknowledge cancellation policy/ }));
     fireEvent.click(screen.getByRole("button", { name: "Accept quotation and reserve date" }));
-    await waitFor(() => expect(acceptQuotation).toHaveBeenCalledWith("booking-1", 2));
+    await waitFor(() => expect(acceptQuotation).toHaveBeenCalledWith("booking-1", 2, { key: "legacy", version: 0 }));
     expect(await screen.findByRole("region", { name: "Accepted agreement" })).toHaveTextContent("Version 2");
     expect(onBookingChange).toHaveBeenCalledWith(expect.objectContaining({ status: "accepted", acceptedAgreement: agreement }));
     expect(screen.queryByRole("button", { name: "Accept quotation and reserve date" })).not.toBeInTheDocument();
@@ -45,7 +47,9 @@ describe("booking quotations", () => {
     acceptQuotation.mockRejectedValue({ response: { data: { message: "Vendor is unavailable on this date." } } });
     render(<BookingQuotations booking={booking} />);
     fireEvent.click(screen.getByRole("button", { name: "Review quotations" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept quotation and reserve date" }));
+    await screen.findByRole("button", { name: "Accept quotation and reserve date" });
+    fireEvent.click(screen.getByRole("checkbox", { name: /acknowledge cancellation policy/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept quotation and reserve date" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("unavailable");
     expect(screen.queryByRole("region", { name: "Accepted agreement" })).not.toBeInTheDocument();
   });
@@ -76,6 +80,7 @@ describe("booking quotations", () => {
     render(<BookingQuotations booking={booking} />);
     fireEvent.click(screen.getByRole("button", { name: "Review quotations" }));
     const button = await screen.findByRole("button", { name: "Accept quotation and reserve date" });
+    fireEvent.click(screen.getByRole("checkbox", { name: /acknowledge cancellation policy/ }));
     fireEvent.click(button); fireEvent.click(button);
     expect(acceptQuotation).toHaveBeenCalledTimes(1);
     await act(async () => { finish({ ...booking, status: "accepted", acceptedAgreement: { ...quote, acceptedAt: new Date().toISOString() } }); });

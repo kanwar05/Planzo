@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import packageSnapshotSchema from "./packageSnapshotSchema.js";
 import { agreementSchema } from "./quotationSchemas.js";
+import { cancellationPolicySnapshotSchema, cancellationRecordSchema } from "./cancellationPolicySchemas.js";
 
 export const BOOKING_STATUSES = [
   "pending",
@@ -39,6 +40,8 @@ const bookingSchema = new mongoose.Schema(
     // Sends contend with every booking status update without changing its
     // business timestamps or state; omitted legacy values need no backfill.
     messagingGuardRevision: { type: Number, default: 0, min: 0, select: false },
+    requestCancellationPolicy: { type: cancellationPolicySnapshotSchema, default: undefined },
+    cancellation: { type: cancellationRecordSchema, default: undefined },
     selectedPackage: { type: packageSnapshotSchema, default: undefined },
     quotationRevision: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
     quotationStatus: { type: String, enum: ["none", "offered", "rejected", "accepted"], default: "none" },

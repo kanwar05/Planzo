@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { getPackageIntent, getSafeReturnPath } from "./navigation";
 
 describe("safe authentication return destinations", () => {
+  it("preserves only canonical internal support and policy destinations", () => {
+    const booking = `/bookings/${"b".repeat(24)}/support`, support = `/support/cases/${"c".repeat(24)}`;
+    for (const path of [booking, support, "/admin/support", "/admin/cancellation-policies"]) expect(getSafeReturnPath(path)).toBe(path);
+    for (const path of [`${support}?next=//evil.example`, "/support/cases/invalid", `${booking}/extra`, "/support//evil.example"])
+      expect(getSafeReturnPath(path)).toBe("/customer/dashboard");
+  });
   it("carries only validated package identifiers without expanding redirect URLs", () => {
     expect(getPackageIntent("1234567890ABCDEF12345678")).toEqual({ packageId: "1234567890abcdef12345678" });
     for (const value of ["//evil.example", "a".repeat(25), {}, ["1234567890abcdef12345678"], "1234567890abcdef12345678?next=evil"])

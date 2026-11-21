@@ -18,7 +18,7 @@ export const createQuotation = asyncHandler(async (req, res) => {
     quotation: quotationView(result.quotation), booking: await renderedBooking(result.booking, req.user) });
 });
 const decide = decision => asyncHandler(async (req, res) => {
-  const booking = await decideQuotation(req.params.bookingId, req.params.revision, req.user, decision);
+  const booking = await decideQuotation(req.params.bookingId, req.params.revision, req.user, decision, req.body);
   res.json({ success: true, message: decision === "accept" ? "Quotation accepted." : "Quotation rejected.",
     booking: await renderedBooking(booking, req.user) });
 });

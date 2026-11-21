@@ -104,7 +104,7 @@ test("the complete status matrix preserves customer, vendor and admin business r
   ]);
   const actors = [
     { user: fixture.customer, actions: ["cancelled"] },
-    { user: fixture.owner, actions: ["accepted", "rejected", "completed"] },
+    { user: fixture.owner, actions: ["accepted", "rejected", "completed", "cancelled"] },
     { user: fixture.admin, actions: states },
     { user: fixture.admin, actions: states, adminRoute: true },
   ];
@@ -119,7 +119,8 @@ test("the complete status matrix preserves customer, vendor and admin business r
         const previous = await stored(booking._id);
         const expected = !actor.actions.includes(to) ? 403
           : allowedMoves.has(`${from}:${to}`) ? 200 : 409;
-        const response = await change(actor.user, booking._id, to, undefined, actor.adminRoute);
+        const reason = actor.user.role === "vendor" && to === "cancelled" ? "Vendor cancellation reason" : undefined;
+        const response = await change(actor.user, booking._id, to, reason, actor.adminRoute);
         const label = `${actor.user.role}${actor.adminRoute ? " admin route" : ""}: ${from} -> ${to}`;
         assert.equal(response.status, expected, `${label}: ${response.body.message}`);
         if (expected === 200) {
@@ -144,10 +145,11 @@ test("ownership and role checks apply to lists, creation and repeated terminal a
   const booking = await seedBooking(fixture, { status: "accepted" });
   for (const [user, status] of [
     [stranger, "cancelled"], [otherOwner, "accepted"],
-    [fixture.customer, "accepted"], [fixture.owner, "cancelled"],
+    [fixture.customer, "accepted"],
   ]) {
     assert.equal((await change(user, booking._id, status)).status, 403);
   }
+  assert.equal((await change(fixture.owner, booking._id, "cancelled")).status, 400);
   assert.equal((await change(fixture.customer, booking._id, "cancelled", undefined, true)).status, 403);
   assert.equal((await create(fixture.owner, fixture.vendor)).status, 403);
   assert.equal((await create(fixture.admin, fixture.vendor)).status, 403);
@@ -166,7 +168,7 @@ test("ownership and role checks apply to lists, creation and repeated terminal a
   assert.equal((await change(fixture.customer, booking._id, "cancelled")).status, 200);
   const previous = await stored(booking._id);
   assert.equal((await change(stranger, booking._id, "cancelled")).status, 403);
-  assert.equal((await change(fixture.owner, booking._id, "cancelled")).status, 403);
+  assert.equal((await change(fixture.owner, booking._id, "cancelled")).status, 409);
   assert.deepEqual(await stored(booking._id), previous);
 });
 

@@ -1,5 +1,6 @@
 import { formatDate } from "../utils/format";
 import { formatMoney } from "../utils/money";
+import CancellationPolicyDetails from "./CancellationPolicyDetails";
 
 const instant = value => {
   const date = new Date(value);
@@ -16,6 +17,7 @@ export default function QuotationDetails({ quotation, accepted = false }) {
     {quotation.deliverables?.length > 0 && <div><h5 className="text-sm font-bold">Agreed deliverables</h5><ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-7">{quotation.deliverables.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
     {quotation.exclusions?.length > 0 && <div><h5 className="text-sm font-bold">Exclusions</h5><ul className="mt-2 list-disc pl-5 text-sm leading-7">{quotation.exclusions.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
     {quotation.terms && <div><h5 className="text-sm font-bold">Terms and conditions</h5><p className="mt-2 whitespace-pre-line break-words text-sm leading-7">{quotation.terms}</p></div>}
+    <CancellationPolicyDetails policy={quotation.cancellationPolicy} legacy={accepted && !quotation.cancellationPolicy} />
     <p className="text-xs leading-6 text-ink/65">{accepted ? `Accepted: ${instant(quotation.acceptedAt)}. This snapshot is preserved even if packages or profiles change.` : `Expires: ${instant(quotation.expiresAt)}. Review the entire scope and conditions before accepting.`}</p>
     <p className="rounded-xl bg-sand p-3 text-xs leading-6">{accepted ? "This records your commercial agreement. No online payment is collected." : "The package guide price is not an obligation. Only your explicit acceptance agrees this quotation."}</p>
   </section>;

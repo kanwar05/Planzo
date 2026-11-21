@@ -148,3 +148,5 @@ See [booking security and rollout](docs/BOOKING_SECURITY.md) for the email-verif
 See [packages, quotations and rollout](docs/PACKAGES_QUOTATIONS.md) for the commercial workflow, API additions, new collections/indexes, compatibility rules and staging checks. Drain older API writers before enabling commercial bookings.
 
 See [booking messaging and rollout](docs/BOOKING_MESSAGING.md) for message APIs/events, dedicated collections, retention, email throttling, socket proxy/cookie requirements and staging checks. Initial realtime deployment uses one persistent Node API process; `/socket.io` must reach it alongside `/api`.
+
+See [cancellation, support, and payment readiness](docs/CANCELLATION_SUPPORT_PAYMENTS.md) for versioned cancellation rules, booking-linked dispute workflows, private evidence handling, notification behavior, future integer-paise payment boundaries, and staging rollout checks. Payment gateways, refunds, fees, and payouts remain disabled.

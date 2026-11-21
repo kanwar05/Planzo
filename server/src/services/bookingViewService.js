@@ -1,6 +1,7 @@
 import { vendorView } from "./vendorSearchService.js";
 import { packageSnapshot } from "./packageViewService.js";
 import { acceptedAgreementView } from "./quotationViewService.js";
+import { cancellationPolicyView, cancellationRecordView } from "./cancellationPolicyViewService.js";
 
 export const populateBooking = (query) =>
   query
@@ -61,6 +62,8 @@ export function bookingView(booking, viewer) {
     if (["none", "offered", "rejected", "accepted"].includes(source.quotationStatus))
       result.quotationStatus = source.quotationStatus;
     if (source.acceptedAgreement) result.acceptedAgreement = acceptedAgreementView(source.acceptedAgreement);
+    if (source.requestCancellationPolicy) result.requestCancellationPolicy = cancellationPolicyView(source.requestCancellationPolicy);
+    if (source.cancellation) result.cancellation = cancellationRecordView(source.cancellation, { admin: viewer?.role === "admin" });
   }
   const shareContact =
     viewer?.role === "admin" ||

@@ -6,6 +6,7 @@ import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import BookingPackageSelector from "../components/BookingPackageSelector";
 import PackageDetails from "../components/PackageDetails";
+import PendingCancellationNotice from "../components/PendingCancellationNotice";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getVendorAvailability } from "../services/availabilityService";
 import { createBooking } from "../services/bookingService";
@@ -201,6 +202,7 @@ export default function BookingRequestPage() {
               <label className="block"><span className="label">Customer notes (optional)</span><textarea name="notes" maxLength={1000} rows={3} value={details.notes} onChange={change} className="field resize-y" placeholder="Anything else the vendor should know" /></label>
             </>}
             {step === 2 && <>
+              <PendingCancellationNotice vendorId={vendorId} />
               {selectedPackage && <section aria-label="Selected package" className="rounded-xl border p-4"><PackageDetails item={selectedPackage} /></section>}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 px-4 py-4"><span className="text-xs text-ink/65">{Number(vendor.pricing) > 0 ? "Starting price" : "Service pricing"}</span><strong className="text-lg">{Number(vendor.pricing) > 0 ? formatCurrency(vendor.pricing) : "Price on request"}</strong></div>
               <dl className="divide-y divide-ink/10 rounded-2xl bg-sand/50 px-4 sm:px-5">

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import multer from "multer";
 import cloudinary, { isCloudinaryConfigured } from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
@@ -13,7 +13,7 @@ const imageTypes = new Map([
 ]);
 const ownedAsset = Symbol("uploadedCloudinaryAsset");
 
-function imageStorage(folder) {
+function imageStorage(folder, { deliveryType } = {}) {
   return {
     _handleFile(req, file, callback) {
       const targetFolder = typeof folder === "function" ? folder(file) : folder;
@@ -21,10 +21,14 @@ function imageStorage(folder) {
       let completed = false;
       let inputFailed = false;
       let stream;
+      let receivedBytes = 0;
+      const checksum = deliveryType ? createHash("sha256") : null;
+      const trackInput = chunk => { receivedBytes += chunk.length; checksum?.update(chunk); };
       const remove = async () =>
         cloudinary.uploader.destroy(publicId, {
           resource_type: "image",
           invalidate: true,
+          ...(deliveryType ? { type: deliveryType } : {}),
         });
       const cleanFailure = () =>
         remove().catch(() => {
@@ -34,6 +38,7 @@ function imageStorage(folder) {
         req.removeListener("aborted", abortInput);
         req.res?.removeListener("close", abortResponse);
         file.stream.removeListener("error", abortInput);
+        file.stream.removeListener("data", trackInput);
       };
       const abortInput = () => {
         if (inputFailed || completed) return;
@@ -68,14 +73,16 @@ function imageStorage(folder) {
         if (error) {
           await cleanFailure();
           callback(
-            new ApiError(502, "The business photo could not be uploaded."),
+            new ApiError(502, deliveryType ? "The evidence image could not be uploaded." : "The business photo could not be uploaded."),
           );
           return;
         }
         callback(null, {
-          path: result.secure_url,
+          path: deliveryType ? undefined : result.secure_url,
           filename: publicId,
-          size: result.bytes,
+          size: deliveryType ? receivedBytes : result.bytes,
+          ...(deliveryType ? { deliveryType, sha256: checksum.digest("hex"),
+            format: result.format === "jpeg" ? "jpg" : result.format || path.extname(file.originalname).slice(1).toLowerCase().replace(/^jpeg$/, "jpg") } : {}),
           [ownedAsset]: publicId,
         });
       };
@@ -90,7 +97,7 @@ function imageStorage(folder) {
             allowed_formats: ["jpg", "jpeg", "png", "webp"],
             overwrite: false,
             timeout: 30_000,
-            transformation: [{ quality: "auto" }],
+            ...(deliveryType ? { type: deliveryType } : { transformation: [{ quality: "auto" }] }),
           },
           (error, result) => {
             void finish(error, result);
@@ -99,6 +106,7 @@ function imageStorage(folder) {
         stream.once("error", (error) => {
           void finish(error);
         });
+        if (deliveryType) file.stream.on("data", trackInput);
         file.stream.pipe(stream);
       } catch (error) {
         void finish(error);
@@ -116,6 +124,7 @@ function imageStorage(folder) {
           cloudinary.uploader.destroy(publicId, {
             resource_type: "image",
             invalidate: true,
+            ...(deliveryType ? { type: deliveryType } : {}),
           }),
         )
         .then(() => callback(null), callback);
@@ -123,10 +132,10 @@ function imageStorage(folder) {
   };
 }
 
-const uploader = (folder, files) =>
+const uploader = (folder, files, options = {}) =>
   multer({
-    storage: imageStorage(folder),
-    limits: { fileSize: 5 * 1024 * 1024, files, fields: 0, parts: files },
+    storage: imageStorage(folder, options),
+    limits: { fileSize: 5 * 1024 * 1024, files, fields: options.fields || 0, parts: files + (options.fields || 0), fieldSize: 100 },
     fileFilter(req, file, callback) {
       const expected = imageTypes.get(
         path.extname(file.originalname || "").toLowerCase(),
@@ -167,3 +176,28 @@ export const uploadCoverImage = configuredUpload(
 export const uploadPortfolioImages = configuredUpload(
   uploader("eventifyy/vendors/portfolio", 8).array("images", 8),
 );
+
+// Evidence is authenticated media, never a public portfolio URL. Preserve the
+// original bytes rather than applying a lossy presentation transformation.
+export const uploadSupportEvidence = configuredUpload(
+  uploader("planzo/support-evidence", 3, { deliveryType: "authenticated", fields: 1 }).array("evidence", 3),
+);
+
+export function supportEvidenceFileInfo(file) {
+  const publicId = file?.[ownedAsset];
+  if (!publicId || publicId !== file.filename || !/^planzo\/support-evidence\/[a-f0-9-]{36}$/.test(publicId) ||
+      file.deliveryType !== "authenticated" || !["jpg", "png", "webp"].includes(file.format) ||
+      !Number.isSafeInteger(file.size) || file.size < 1 || file.size > 5 * 1024 * 1024 ||
+      !/^[a-f0-9]{64}$/.test(file.sha256 || "")) throw new ApiError(400, "Invalid evidence upload metadata.");
+  return { publicId, format: file.format, bytes: file.size, sha256: file.sha256 };
+}
+
+export async function cleanupSupportEvidence(files = []) {
+  const results = await Promise.allSettled(files.map(file => {
+    const publicId = file?.[ownedAsset];
+    if (!publicId || !/^planzo\/support-evidence\/[a-f0-9-]{36}$/.test(publicId)) return null;
+    return cloudinary.uploader.destroy(publicId, { resource_type: "image", type: "authenticated", invalidate: true });
+  }));
+  if (results.some(result => result.status === "rejected" || result.value && !["ok", "not found"].includes(result.value.result)))
+    logEvent("error", "support_evidence_cleanup_failed");
+}

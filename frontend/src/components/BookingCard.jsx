@@ -7,6 +7,7 @@ import { canCompleteBooking, formatDate } from "../utils/format";
 import { getVendorImage } from "../utils/vendor";
 import BookingReasonDialog from "./BookingReasonDialog";
 import BookingQuotations from "./BookingQuotations";
+import BookingCancellationInfo from "./BookingCancellationInfo";
 
 export default function BookingCard({ booking, role = "customer", busy = false, onStatus, verified = true, onBookingChange, unreadCount = 0 }) {
   const [reasonAction, setReasonAction] = useState("");
@@ -15,7 +16,7 @@ export default function BookingCard({ booking, role = "customer", busy = false, 
   const statusReason = booking.status === "rejected" ? booking.rejectionReason : booking.status === "cancelled" ? booking.cancellationReason : "";
   const contacts = role === "customer" && ["accepted", "completed"].includes(booking.status) ? vendor?.contactDetails : null;
   const commercial = Boolean(booking.selectedPackage || booking.quotationRevision);
-  const actions = role === "vendor" ? booking.status === "pending" ? [...(commercial ? [] : [["Accept", "accepted"]]), ["Reject", "rejected"]] : canCompleteBooking(booking) ? [["Mark completed", "completed"]] : [] : ["pending", "accepted"].includes(booking.status) ? [["Cancel booking", "cancelled"]] : [];
+  const actions = role === "vendor" ? booking.status === "pending" ? [...(commercial ? [] : [["Accept", "accepted"]]), ["Reject", "rejected"], ["Cancel booking", "cancelled"]] : booking.status === "accepted" ? [...(canCompleteBooking(booking) ? [["Mark completed", "completed"]] : []), ["Cancel booking", "cancelled"]] : [] : ["pending", "accepted"].includes(booking.status) ? [["Cancel booking", "cancelled"]] : [];
   return <><Card as="article" className="overflow-hidden !rounded-2xl !shadow-none">
     <div className="p-4 sm:p-6">
       <div className="flex items-start gap-3 sm:gap-4">
@@ -26,6 +27,8 @@ export default function BookingCard({ booking, role = "customer", busy = false, 
       {booking.description && <p className="mt-4 whitespace-pre-line break-words text-sm leading-7 text-ink/70">{booking.description}</p>}
       {booking.notes && <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-ink/65"><strong className="font-semibold text-ink/80">Customer notes: </strong>{booking.notes}</p>}
       <BookingQuotations booking={booking} role={role} verified={verified} disabled={busy} onBookingChange={onBookingChange} />
+      <BookingCancellationInfo booking={booking} />
+      {["customer", "vendor"].includes(role) && <div className="mt-3"><Button to={`/bookings/${booking._id}/support`} variant="ghost" className="!px-0 !text-xs">Get support for this booking</Button></div>}
       {["customer", "vendor"].includes(role) && <div className="mt-4"><Button to={`/bookings/${booking._id}/messages`} variant="outline" className="w-full sm:w-auto">{role === "vendor" ? "Message Customer" : "Message Vendor"}{unreadCount > 0 && <span aria-label={`${unreadCount} unread messages`} className="rounded-full bg-coral px-2 py-0.5 text-xs tabular-nums text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}</Button></div>}
       {statusReason && <p className="mt-4 break-words rounded-xl border border-ink/10 px-4 py-3 text-sm leading-6 text-ink/65"><strong className="font-semibold">Status note: </strong>{statusReason}</p>}
       {contacts && (contacts.email || contacts.phone) && <section aria-label="Vendor contact details" className="mt-5 rounded-xl bg-sage/65 p-4"><div className="flex items-center justify-between"><h3 className="text-xs font-bold">Vendor contact details</h3><ArrowUpRight className="h-4 w-4 text-ink/65" aria-hidden="true" /></div><div className="mt-2 grid gap-1 text-sm sm:flex sm:flex-wrap sm:gap-x-6">{contacts.phone && <a href={`tel:${contacts.phone.replace(/[^+\d]/g, "")}`} className="flex min-h-11 items-center gap-2 font-semibold"><Phone className="h-4 w-4 shrink-0" aria-hidden="true" />{contacts.phone}</a>}{contacts.email && <a href={`mailto:${contacts.email}`} className="flex min-h-11 items-center gap-2 break-all font-semibold"><Mail className="h-4 w-4 shrink-0" aria-hidden="true" />{contacts.email}</a>}</div></section>}
@@ -36,7 +39,7 @@ export default function BookingCard({ booking, role = "customer", busy = false, 
       if (["rejected", "cancelled"].includes(status)) { setReasonError(""); setReasonAction(status); }
       else onStatus(booking._id, status);
     }}>{label}</Button>)}</div>}
-  </Card><BookingReasonDialog booking={reasonAction ? booking : null} status={reasonAction} busy={busy} error={reasonError} onClose={() => setReasonAction("")} onConfirm={async reason => {
+  </Card><BookingReasonDialog booking={reasonAction ? booking : null} status={reasonAction} role={role} busy={busy} error={reasonError} onClose={() => setReasonAction("")} onConfirm={async reason => {
     const result = await onStatus(booking._id, reasonAction, ...(reason === undefined ? [] : [reason]));
     if (result === false) setReasonError("Unable to update this booking. Please try again.");
     else setReasonAction("");
