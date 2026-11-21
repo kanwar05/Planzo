@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { cancellationPolicySnapshotSchema } from "./cancellationPolicySchemas.js";
 
 export const MAX_COMMERCIAL_AMOUNT = 100_000_000_000;
 export const MAX_QUOTATION_REVISIONS = 100;
@@ -16,6 +17,7 @@ const chargeSchema = new mongoose.Schema({
 // Shared typed value object for append-only revisions and accepted agreements.
 // Amounts are integer INR paise; accepted copies never depend on live packages.
 export const quotationContentDefinition = {
+  cancellationPolicy: { type: cancellationPolicySnapshotSchema, default: undefined },
   selectedPackageId: { type: mongoose.Schema.Types.ObjectId, default: undefined },
   selectedPackageTitle: { type: String, maxlength: 120, default: undefined },
   serviceDescription: { type: String, required: true, maxlength: 2000 },
@@ -37,4 +39,5 @@ export const agreementSchema = new mongoose.Schema({
   quotationId: { type: mongoose.Schema.Types.ObjectId, required: true },
   revision: { ...integer(1, Number.MAX_SAFE_INTEGER), required: true },
   acceptedAt: { type: Date, required: true },
+  cancellationPolicyAcknowledgedAt: { type: Date, default: undefined },
 }, { _id: false });

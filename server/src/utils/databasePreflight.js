@@ -11,11 +11,14 @@ import VendorPackage from "../models/VendorPackage.js";
 import Quotation from "../models/Quotation.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import CancellationPolicy from "../models/CancellationPolicy.js";
+import SupportCase, { SUPPORT_CASE_CATEGORIES, SUPPORT_CASE_STATUSES } from "../models/SupportCase.js";
+import SupportCaseEvent, { SUPPORT_CASE_EVENT_KINDS } from "../models/SupportCaseEvent.js";
 import { inspectDatabaseTopology } from "../config/database.js";
 import { auditBookingDates } from "./bookingDataAudit.js";
 import { safeDocumentId } from "./safeDiagnosticValues.js";
 
-const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message];
+const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message, CancellationPolicy, SupportCase, SupportCaseEvent];
 const MAX_TIME_MS = 30000;
 const failure = (code) => Object.assign(new Error("Read-only database preflight failed."), { code });
 const canonical = (value, key) => {
@@ -110,7 +113,12 @@ export async function inspectDatabaseData(db = mongoose.connection.db) {
     ["users", "role", ["customer", "vendor", "admin", null]],
     ["notificationoutboxes", "status", OUTBOX_STATUSES],
     ["notificationoutboxes", "eventType", NOTIFICATION_EMAIL_EVENTS],
-    ["notificationoutboxes", "payload.recipientRole", ["customer", "vendor"]],
+    ["notificationoutboxes", "payload.recipientRole", ["customer", "vendor", "admin"]],
+    ["bookingsupportcases", "status", SUPPORT_CASE_STATUSES],
+    ["bookingsupportcases", "category", SUPPORT_CASE_CATEGORIES],
+    ["bookingsupportevents", "kind", SUPPORT_CASE_EVENT_KINDS],
+    ["bookingsupportevents", "visibility", ["participants", "admin"]],
+    ["bookingsupportevents", "actorRole", ["customer", "vendor", "admin"]],
   ]) statuses.push({ collection, field, ...await issues(db.collection(collection), { $in: [{ $ifNull: [`$${field}`, null] }, allowed] }) });
   const dates = await auditBookingDates(db.collection("bookings"));
   const legacyVendorApprovals = await db.collection("vendors").countDocuments({ verificationStatus: { $exists: false } }, { maxTimeMS: MAX_TIME_MS });

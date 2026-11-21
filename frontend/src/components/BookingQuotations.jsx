@@ -5,11 +5,13 @@ import QuotationDetails from "./QuotationDetails";
 import QuotationEditor from "./QuotationEditor";
 import { acceptQuotation, getQuotations, rejectQuotation } from "../services/quotationService";
 import { getApiError } from "../utils/apiError";
+import { legacyCancellationPolicy } from "./CancellationPolicyDetails";
 
 export default function BookingQuotations({ booking, role = "customer", verified = true, disabled = false, onBookingChange }) {
   const [current, setCurrent] = useState(booking), [open, setOpen] = useState(false), [editing, setEditing] = useState(false);
   const [quotes, setQuotes] = useState([]), [loading, setLoading] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(""), [message, setMessage] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
   const lock = useRef(false), generation = useRef(0);
   useEffect(() => { setCurrent(booking); }, [booking]);
   const load = useCallback(async () => {
@@ -24,15 +26,17 @@ export default function BookingQuotations({ booking, role = "customer", verified
     return () => { generation.current += 1; };
   }, [open, load]);
   const latest = [...quotes].sort((a, b) => b.revision - a.revision)[0];
+  const policy = latest?.cancellationPolicy || legacyCancellationPolicy;
+  useEffect(() => { setAcknowledged(false); }, [latest?._id, latest?.revision, policy.key, policy.version]);
   const expired = latest && (!Number.isFinite(new Date(latest.expiresAt).getTime()) || new Date(latest.expiresAt).getTime() <= Date.now());
   const revisionLimit = Math.max(current.quotationRevision || 0, latest?.revision || 0) >= 100;
   const mayOffer = role === "vendor" && current.status === "pending" && verified && !revisionLimit;
   const mayRespond = role === "customer" && verified && current.status === "pending" && current.quotationStatus !== "rejected" && latest;
   const respond = async accept => {
-    if (lock.current || disabled || !latest) return;
+    if (lock.current || disabled || !latest || (accept && !acknowledged)) return;
     lock.current = true; setBusy(true); setError(""); setMessage("");
     try {
-      const next = accept ? await acceptQuotation(current._id, latest.revision) : await rejectQuotation(current._id, latest.revision);
+      const next = accept ? await acceptQuotation(current._id, latest.revision, { key: policy.key, version: policy.version }) : await rejectQuotation(current._id, latest.revision);
       setCurrent(next); setMessage(accept ? "Quotation accepted. Your date is reserved and the agreement is saved." : "Quotation rejected. The booking remains pending for a revised offer or cancellation.");
       onBookingChange?.(next);
     } catch (err) { setError(getApiError(err, "Unable to update the quotation. Refresh history before trying again.")); }
@@ -57,7 +61,7 @@ export default function BookingQuotations({ booking, role = "customer", verified
           <QuotationDetails quotation={latest} />
           {expired && current.status === "pending" && <p role="status" className="text-sm text-red-800">This quotation has expired. Ask the vendor for a new revision.</p>}
           {current.quotationStatus === "rejected" && <p className="text-sm text-ink/65">The latest quotation was rejected. Its record remains in history.</p>}
-          {mayRespond && <div className="space-y-3 rounded-xl bg-sand p-4"><p className="text-xs leading-6">Accepting agrees the exact listed price, scope and terms and reserves this vendor for your date.</p><div className="flex flex-wrap gap-3"><Button disabled={busy || disabled || expired} loading={busy} onClick={() => respond(true)}>Accept quotation and reserve date</Button><Button variant="outline" disabled={busy || disabled} onClick={() => respond(false)}>Reject quotation</Button></div></div>}
+          {mayRespond && <div className="space-y-3 rounded-xl bg-sand p-4"><p className="text-xs leading-6">Accepting agrees the exact listed price, scope and terms and reserves this vendor for your date.</p><label className="flex items-start gap-3 text-xs leading-6"><input type="checkbox" checked={acknowledged} disabled={busy || disabled || expired} onChange={event => setAcknowledged(event.target.checked)} className="mt-1" /><span>I have read and acknowledge cancellation policy version {policy.version}.</span></label><div className="flex flex-wrap gap-3"><Button disabled={busy || disabled || expired || !acknowledged} loading={busy} onClick={() => respond(true)}>Accept quotation and reserve date</Button><Button variant="outline" disabled={busy || disabled} onClick={() => respond(false)}>Reject quotation</Button></div></div>}
         </>}
         {mayOffer && !editing && <Button disabled={busy || disabled || Boolean(error)} onClick={() => setEditing(true)}>{latest ? "Create quotation revision" : "Create quotation"}</Button>}
         {role === "vendor" && revisionLimit && <p className="text-sm text-ink/65">This booking has reached its limit of 100 quotation revisions.</p>}

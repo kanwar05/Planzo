@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useModalFocus } from "../hooks/useModalFocus";
 const customerLinks = [["My bookings", "/customer/dashboard", CalendarDays], ["Explore vendors", "/vendors", Store], ["My account", "/settings", Settings]];
 const vendorLinks = [["Booking requests", "/vendor/dashboard", CalendarDays], ["Business profile", "/vendor/profile-setup", Store], ["Service packages", "/vendor/packages", Store], ["Availability", "/vendor/availability", CalendarRange], ["My account", "/vendor/settings", Settings]];
-const adminLinks = [["Overview", "/admin", LayoutDashboard], ["Users", "/admin/users", Users], ["Vendor approvals", "/admin/vendors/unverified", Store], ["Bookings", "/admin/bookings", CalendarDays], ["My account", "/admin/settings", Settings]];
+const adminLinks = [["Overview", "/admin", LayoutDashboard], ["Users", "/admin/users", Users], ["Vendor approvals", "/admin/vendors/unverified", Store], ["Bookings", "/admin/bookings", CalendarDays], ["Support cases", "/admin/support", Users], ["Cancellation policies", "/admin/cancellation-policies", CalendarRange], ["My account", "/admin/settings", Settings]];
 export default function DashboardLayout() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");

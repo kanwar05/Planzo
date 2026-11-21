@@ -41,7 +41,8 @@ const terms = (extra = {}) => ({ expectedRevision: 0, serviceDescription: "Weddi
 const offer = (actor, bookingId, body = terms(), key = randomUUID()) => request(app)
   .post(`/api/bookings/${bookingId}/quotations`).set("Authorization", auth(actor)).set("Idempotency-Key", key).send(body);
 const decide = (actor, bookingId, revision = 1, action = "accept") => request(app)
-  .post(`/api/bookings/${bookingId}/quotations/${revision}/${action}`).set("Authorization", auth(actor)).send({});
+  .post(`/api/bookings/${bookingId}/quotations/${revision}/${action}`).set("Authorization", auth(actor))
+  .send(action === "accept" ? { cancellationPolicyAcknowledgment: { key: "standard", version: 1 } } : {});
 const history = (actor, bookingId) => request(app).get(`/api/bookings/${bookingId}/quotations`).set("Authorization", auth(actor));
 const stored = bookingId => Booking.findById(bookingId).lean();
 

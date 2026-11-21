@@ -13,6 +13,10 @@ const AdminUsersPage = lazy(() => import("../pages/AdminUsersPage"));
 const AdminVerifyVendorsPage = lazy(() => import("../pages/AdminVerifyVendorsPage"));
 const BookingRequestPage = lazy(() => import("../pages/BookingRequestPage"));
 const BookingConversationPage = lazy(() => import("../pages/BookingConversationPage"));
+const BookingSupportPage = lazy(() => import("../pages/BookingSupportPage"));
+const SupportCasePage = lazy(() => import("../pages/SupportCasePage"));
+const AdminSupportCasesPage = lazy(() => import("../pages/AdminSupportCasesPage"));
+const AdminCancellationPoliciesPage = lazy(() => import("../pages/AdminCancellationPoliciesPage"));
 const CustomerDashboardPage = lazy(() => import("../pages/CustomerDashboardPage"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage"));
 const LoginPage = lazy(() => import("../pages/LoginPage"));
@@ -148,6 +152,14 @@ export const appRoutes = [{
   children: [{ element: <Layout component={DashboardLayout} />, children: [{
     path: "/bookings/:bookingId/messages",
     element: <Page component={BookingConversationPage} />,
+  }, {
+    path: "/bookings/:bookingId/support",
+    element: <Page component={BookingSupportPage} />,
+  }] }]
+}, {
+  element: <ProtectedRoute allowedRoles={["customer", "vendor", "admin"]} />,
+  children: [{ element: <Layout component={DashboardLayout} />, children: [{
+    path: "/support/cases/:caseId", element: <Page component={SupportCasePage} />,
   }] }]
 }, {
   element: <ProtectedRoute allowedRoles={["admin"]} />,
@@ -168,6 +180,12 @@ export const appRoutes = [{
     }, {
       path: "/admin/settings",
       element: <Page component={SettingsPage} />
+    }, {
+      path: "/admin/support",
+      element: <Page component={AdminSupportCasesPage} />
+    }, {
+      path: "/admin/cancellation-policies",
+      element: <Page component={AdminCancellationPoliciesPage} />
     }]
   }]
 }, {

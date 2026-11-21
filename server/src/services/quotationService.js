@@ -11,6 +11,8 @@ import { lockAccountForBooking, lockVendorForBooking, withBookingTransaction } f
 import { hasActiveVendorOwner } from "./vendorSearchService.js";
 import { enqueueBookingEmails } from "./bookingNotificationService.js";
 import { quotationContentView, quotationView } from "./quotationViewService.js";
+import { currentCancellationPolicy } from "./cancellationPolicyService.js";
+import { cancellationPolicyView, legacyCancellationPolicy } from "./cancellationPolicyViewService.js";
 
 const same = (left, right) => String(left?._id || left || "") === String(right?._id || right || "");
 const hash = value => createHash("sha256").update(value).digest("hex");
@@ -39,6 +41,8 @@ const strings = (value, name) => {
 
 export function normalizeQuotation(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw invalid("Quotation body must be an object.");
+  if (body.cancellationPolicy !== undefined || body.cancellationPolicyAcknowledgedAt !== undefined)
+    throw invalid("Cancellation policies are selected by the marketplace, not quotation input.");
   if (body.currency !== undefined && body.currency !== "INR") throw invalid("Quotations use INR only.");
   if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 50)
     throw invalid("A quotation must contain between 1 and 50 itemized services.");
@@ -152,6 +156,7 @@ export async function offerQuotation(bookingId, actor, body, key) {
       const [quotation] = await Quotation.create([{
         bookingId: booking._id, vendorId: booking.vendorId, customerId: booking.customerId, createdById: actor._id,
         revision: expectedRevision + 1, requestKeyHash, requestHash, ...content,
+        cancellationPolicy: await currentCancellationPolicy(session),
         ...(selected?.packageId ? { selectedPackageId: selected.packageId, selectedPackageTitle: selected.title } : {}),
       }], { session });
       const updated = await Booking.findOneAndUpdate({
@@ -169,7 +174,7 @@ export async function offerQuotation(bookingId, actor, body, key) {
   return result;
 }
 
-export async function decideQuotation(bookingId, revisionInput, actor, decision) {
+export async function decideQuotation(bookingId, revisionInput, actor, decision, body = {}) {
   validateQuotationId(bookingId);
   const revision = quotationRevision(revisionInput);
   if (actor.role !== "customer") throw new ApiError(403, "Only the booking customer may decide a quotation.");
@@ -199,10 +204,19 @@ export async function decideQuotation(bookingId, revisionInput, actor, decision)
         if (day !== quotation.serviceDate || day < utcToday()) throw new ApiError(409, "The booking date is no longer eligible for acceptance.");
         if (!(await hasActiveVendorOwner(vendor, session))) throw new ApiError(409, "Vendor must be approved and active to accept a quotation.");
         await assertVendorAvailable({ vendorId: vendor._id, dateOnly: day, excludeBookingId: booking._id, session });
+        const policy = quotation.cancellationPolicy ? cancellationPolicyView(quotation.cancellationPolicy) : legacyCancellationPolicy();
+        if (!policy) throw new ApiError(409, "The quotation's cancellation policy needs operator review.");
+        const acknowledgment = body?.cancellationPolicyAcknowledgment;
+        if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => key !== "cancellationPolicyAcknowledgment") ||
+            !acknowledgment || typeof acknowledgment !== "object" || Array.isArray(acknowledgment) ||
+            Object.keys(acknowledgment).some(key => !["key", "version"].includes(key)) ||
+            acknowledgment.key !== policy.key || !Number.isSafeInteger(acknowledgment.version) || acknowledgment.version !== policy.version)
+          throw invalid("Explicitly acknowledge this quotation's cancellation policy key and version before accepting.");
         // Evaluate expiry with the database clock at the conditional write too.
         filter.$expr = { $gt: [{ $literal: quotation.expiresAt }, "$$NOW"] };
         changes = { status: "accepted", quotationStatus: "accepted", acceptedAgreement: {
           ...quotationContentView(quotation), quotationId: quotation._id, revision, acceptedAt: new Date(),
+          cancellationPolicy: policy, cancellationPolicyAcknowledgedAt: new Date(),
         } };
       } else changes = { quotationStatus: "rejected" };
       const updated = await Booking.findOneAndUpdate(filter, { $set: changes }, { new: true, session, runValidators: true });

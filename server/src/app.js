@@ -10,6 +10,9 @@ import vendorRoutes from "./routes/vendorRoutes.js";
 import packageRoutes from "./routes/packageRoutes.js";
 import quotationRoutes from "./routes/quotationRoutes.js";
 import messagingRoutes from "./routes/messagingRoutes.js";
+import cancellationPolicyRoutes from "./routes/cancellationPolicyRoutes.js";
+import supportCaseRoutes from "./routes/supportCaseRoutes.js";
+import supportEvidenceRoutes from "./routes/supportEvidenceRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import { requestLogging } from "./middleware/requestLogging.js";
 import { createReadinessHandler } from "./services/readinessService.js";
@@ -17,19 +20,27 @@ import ApiError from "./utils/ApiError.js";
 import asyncHandler from "./utils/asyncHandler.js";
 
 const app = express();
+
 const isProduction = process.env.NODE_ENV === "production";
-const allowedOrigins = (
-  process.env.CLIENT_URL || (isProduction ? "" : "http://localhost:5173")
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+
+const allowedOrigins = [
+  "https://planzo-iota.vercel.app",
+  "http://localhost:5173",
+  ...(process.env.CLIENT_URL || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+];
+
 const rateLimitHandler = (req, res) =>
   res.status(429).json({
     success: false,
     message: "Too many requests. Please try again later.",
   });
-const isMessagingRequest = req => /^\/api\/(?:bookings\/[a-f0-9]{24}\/(?:messages|conversation(?:\/read)?)|conversations\/unread)\/?$/i.test(req.path);
+const isMessagingRequest = (req) =>
+  /^\/api\/(?:bookings\/[a-f0-9]{24}\/(?:messages|conversation(?:\/read)?)|conversations\/unread)\/?$/i.test(
+    req.path,
+  );
 const limiter = (windowMs, limit, { health = false } = {}) =>
   rateLimit({
     windowMs,
@@ -37,9 +48,12 @@ const limiter = (windowMs, limit, { health = false } = {}) =>
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) =>
-      (health && ["/", "/api/health", "/api/health/live", "/api/ready"].includes(req.path)) ||
+      (health &&
+        ["/", "/api/health", "/api/health/live", "/api/ready"].includes(
+          req.path,
+        )) ||
       (process.env.NODE_ENV === "test" &&
-      req.get("x-enable-rate-limit-test") !== "true"),
+        req.get("x-enable-rate-limit-test") !== "true"),
     handler: rateLimitHandler,
   });
 
@@ -51,9 +65,14 @@ app.use(helmet());
 // never redirect a password/body or construct a redirect from the Host header.
 // Health probes remain available over the platform's internal HTTP connection.
 app.use((req, res, next) => {
-  if (process.env.NODE_ENV === "production" && !req.secure &&
-      !["/", "/api/health", "/api/health/live", "/api/ready"].includes(req.path)) {
-    return res.status(426).json({ success: false, message: "HTTPS is required." });
+  if (
+    process.env.NODE_ENV === "production" &&
+    !req.secure &&
+    !["/", "/api/health", "/api/health/live", "/api/ready"].includes(req.path)
+  ) {
+    return res
+      .status(426)
+      .json({ success: false, message: "HTTPS is required." });
   }
   return next();
 });
@@ -73,9 +92,18 @@ app.use(
 );
 // Conversation polling/receipts need a separate IP budget. Authenticated core
 // limits still apply per user, and unrelated API routes keep their existing cap.
-const generalLimiter = limiter(15 * 60 * 1000, Number(process.env.RATE_LIMIT_MAX) || 300, { health: true });
-const messagingLimiter = limiter(15 * 60 * 1000, Number(process.env.MESSAGING_HTTP_RATE_LIMIT_MAX) || 3000);
-app.use((req, res, next) => (isMessagingRequest(req) ? messagingLimiter : generalLimiter)(req, res, next));
+const generalLimiter = limiter(
+  15 * 60 * 1000,
+  Number(process.env.RATE_LIMIT_MAX) || 300,
+  { health: true },
+);
+const messagingLimiter = limiter(
+  15 * 60 * 1000,
+  Number(process.env.MESSAGING_HTTP_RATE_LIMIT_MAX) || 3000,
+);
+app.use((req, res, next) =>
+  (isMessagingRequest(req) ? messagingLimiter : generalLimiter)(req, res, next),
+);
 app.use(cookieParser());
 // CORS validates Origin above. Require it for production cookie mutations as
 // SameSite=None may be needed when the UI and API use different hosts.
@@ -87,8 +115,7 @@ app.use((req, res, next) => {
     unsafe &&
     !req.get("origin") &&
     (req.get("sec-fetch-site") === "cross-site" ||
-      (process.env.NODE_ENV === "production" &&
-        cookieAuth))
+      (process.env.NODE_ENV === "production" && cookieAuth))
   )
     return res.status(403).json({
       success: false,
@@ -104,7 +131,9 @@ app.use(["/api/auth", "/api/bookings", "/api/admin"], (req, res, next) => {
 });
 
 app.get(["/", "/api/health", "/api/health/live"], (req, res) =>
-  res.set("Cache-Control", "no-store").json({ success: true, message: "Planzo API is running." }),
+  res
+    .set("Cache-Control", "no-store")
+    .json({ success: true, message: "Planzo API is running." }),
 );
 app.get("/api/ready", asyncHandler(createReadinessHandler()));
 const authLimiter = limiter(
@@ -120,8 +149,14 @@ const confirmationLimiter = limiter(
   Number(process.env.PASSWORD_RESET_ATTEMPT_MAX) || 10,
 );
 app.use(["/api/auth/login", "/api/auth/register"], authLimiter);
-app.use(["/api/auth/login/otp/request", "/api/auth/email-verification/request"], recoveryLimiter);
-app.use(["/api/auth/login/otp/verify", "/api/auth/email-verification/verify"], confirmationLimiter);
+app.use(
+  ["/api/auth/login/otp/request", "/api/auth/email-verification/request"],
+  recoveryLimiter,
+);
+app.use(
+  ["/api/auth/login/otp/verify", "/api/auth/email-verification/verify"],
+  confirmationLimiter,
+);
 app.use(
   ["/api/auth/forgot-password", "/api/auth/email-change"],
   recoveryLimiter,
@@ -133,6 +168,9 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", messagingRoutes);
+app.use("/api", cancellationPolicyRoutes);
+app.use("/api", supportEvidenceRoutes);
+app.use("/api", supportCaseRoutes);
 app.use("/api/vendors", packageRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/bookings", quotationRoutes);

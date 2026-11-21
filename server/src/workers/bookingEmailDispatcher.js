@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import NotificationOutbox from "../models/NotificationOutbox.js";
 import { sendBookingEmail } from "../services/bookingEmailService.js";
 import { shouldDeliverMessageAlert } from "../services/messageNotificationService.js";
+import { shouldDeliverSupportAlert } from "../services/supportNotificationService.js";
+import { SUPPORT_EMAIL_EVENTS } from "../models/NotificationOutbox.js";
 
 export const BOOKING_EMAIL_POLICY = Object.freeze({
   maxAttempts: 5,
@@ -130,6 +132,7 @@ export async function deliverClaimedBookingEmail(job, {
   let skipped = false;
   try {
     if (job.eventType === "message_received" && !await shouldDeliverMessageAlert(job)) skipped = true;
+    else if (SUPPORT_EMAIL_EVENTS.includes(job.eventType) && !await shouldDeliverSupportAlert(job)) skipped = true;
     else {
       if (leaseExpiresAt <= time(now).getTime() + policy.deliveryTimeoutMs) return { outcome: "stale" };
       await boundedDelivery(sender, job, policy.deliveryTimeoutMs);
@@ -140,7 +143,8 @@ export async function deliverClaimedBookingEmail(job, {
 
   const finishedAt = time(now);
   const changes = skipped ? {
-    status: "skipped", nextAttemptAt: null, lastError: "message_alert_no_longer_required",
+    status: "skipped", nextAttemptAt: null,
+    lastError: SUPPORT_EMAIL_EVENTS.includes(job.eventType) ? "support_alert_no_longer_required" : "message_alert_no_longer_required",
   } : failure ? {
     status: "failed",
     nextAttemptAt: job.attempts < policy.maxAttempts

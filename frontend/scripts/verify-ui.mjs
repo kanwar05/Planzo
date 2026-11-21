@@ -50,13 +50,24 @@ const messageBookingId = "bbbbbbbbbbbbbbbbbbbbbbbb";
 const closedMessageBookingId = "dddddddddddddddddddddddd";
 const messagePath = `/bookings/${messageBookingId}/messages`;
 const closedMessagePath = `/bookings/${closedMessageBookingId}/messages`;
+const supportCaseId = "777777777777777777777777", closedSupportCaseId = "888888888888888888888888";
+const policy = { key: "standard", version: 2, title: "Marketplace cancellation terms", description: "The quoted policy is preserved when accepted.", customerPendingCutoffHours: null, customerAcceptedCutoffHours: 24, vendorCutoffHours: 0, consequences: "Contact support for coordination. No payment or refund is initiated." };
 const quotation = {
   _id: "ffffffffffffffffffffffff", revision: 1, serviceDescription: "Seasonal garden wedding decoration",
   serviceDate: event.eventDate, currency: "INR", items: [{ description: "Floral styling and stage setup", quantity: 1, unitPriceAmount: 1500000 }],
   additionalCharges: [], discountAmount: 0, subtotalAmount: 1500000, totalAmount: 1500000,
   deliverables: ["Seasonal flowers and a stage backdrop"], exclusions: ["Venue rental"],
   terms: "The venue will provide access for setup.", expiresAt: "2027-01-15T12:00:00.000Z",
+  cancellationPolicy: policy,
 };
+function supportFixture(caseId = supportCaseId) {
+  const closed = caseId === closedSupportCaseId;
+  return { _id: caseId, bookingId: messageBookingId, category: "cancellation_disagreement", subject: "Cancellation concern", description: "Please review the cancellation terms and help us coordinate the event.",
+    status: closed ? "closed" : "investigating", revision: 3, assigned: true,
+    ...(role === "admin" ? { assignedAdminId: "999999999999999999999999" } : {}),
+    evidence: [{ evidenceId: "666666666666666666666666", format: "png", bytes: 1000, uploaderRole: "customer", createdAt: "2026-11-16T03:00:00.000Z" }],
+    agreementSnapshot: { ...quotation, quotationId: quotation._id, acceptedAt: "2026-11-14T03:00:00.000Z" } };
+}
 const conversationMessages = [
   { _id: "111111111111111111111111", sequence: 1, senderRole: "customer", clientMessageId: "browser-customer-message-1", body: "Could we include seasonal flowers and confirm the setup time?", createdAt: "2026-11-16T03:00:00.000Z" },
   { _id: "222222222222222222222222", sequence: 2, senderRole: "vendor", clientMessageId: "browser-vendor-message-2", body: "Seasonal flowers are included. We will coordinate access with the venue before setup.", createdAt: "2026-11-16T03:01:00.000Z" },
@@ -77,6 +88,18 @@ function fixture(url, method) {
   const p = parsed.pathname.replace(/^.*\/api/, "");
   // Exercise durable REST fallback; no browser request reaches a live socket server.
   if (parsed.pathname.startsWith("/socket.io")) return method === "OPTIONS" ? [204, {}] : [503, { message: "Live updates are unavailable in this isolated browser fixture." }];
+  if (p === "/cancellation-policies") return [200, { policy }];
+  if (p === "/admin/cancellation-policies") return [200, { policies: [policy], activePolicy: policy, pagination: { hasMore: false } }];
+  if (p === `/bookings/${messageBookingId}/cancellation-policy`) return [200, { policy, source: "accepted", eligibility: { customerCanCancel: true, vendorCanCancel: true, adminCanCancel: true, adminOverrideRequired: false } }];
+  if (p === `/bookings/${messageBookingId}/support-cases`) return [200, { cases: [supportFixture()] }];
+  if (p === "/admin/support/cases") return [200, { cases: [supportFixture()], pagination: pageInfo }];
+  const supportMatch = p.match(/^\/support\/cases\/([78]{24})(\/events)?$/);
+  if (supportMatch) {
+    const record = supportFixture(supportMatch[1]);
+    if (!supportMatch[2]) return [200, { case: record, booking: { ...event, _id: messageBookingId, status: "accepted", quotationRevision: 1, acceptedAgreement: record.agreementSnapshot } }];
+    return [200, { events: [{ _id: "555555555555555555555555", sequence: 1, kind: "created", actorRole: "customer", body: "Public concern recorded for investigation.", createdAt: "2026-11-16T03:00:00.000Z" },
+      ...(role === "admin" ? [{ _id: "444444444444444444444444", sequence: 2, kind: "private_note", visibility: "admin", actorRole: "admin", body: "INTERNAL_ONLY: review the evidence before recording a decision.", createdAt: "2026-11-16T03:01:00.000Z" }] : [])], pagination: { hasMore: false } }];
+  }
   const conversationMatch = p.match(/^\/bookings\/([bd]{24})\/(conversation(?:\/read)?|messages|quotations)$/);
   if (conversationMatch) {
     const [, bookingId, resource] = conversationMatch;
@@ -99,7 +122,7 @@ function fixture(url, method) {
   if (p === "/vendors/me") return [200, { vendor: owner }];
   if (p.endsWith("/availability")) return [200, dates];
   if (p === "/vendors/vendor-1") return [200, { vendor }];
-  if (p === "/bookings/my-bookings" || p === "/bookings/vendor-requests") return [200, { bookings }];
+  if (p === "/bookings/my-bookings" || p === "/bookings/vendor-requests") return [200, { bookings: process.env.QA_SCENARIOS === "support" ? [{ ...event, _id: messageBookingId, status: "pending", quotationRevision: 1, quotationStatus: "offered" }] : bookings }];
   if (p === "/admin/stats") return [200, { stats: { totalCustomers: 3, totalVendors: 2, totalBookings: 3, pendingBookings: 1, acceptedBookings: 1, completedBookings: 1, pendingVendors: 1 } }];
   if (p === "/admin/users") return [200, { users: [{ _id: "customer-1", name: "Aditi Customer", email: "customer@example.test", role: "customer", accountStatus: "active", suspendedAt: null }], pagination: pageInfo }];
   if (p === "/admin/vendors") return [200, { vendors: [{ ...owner, verificationStatus: "pending", userId: { name: "Vendor Owner", email: "owner@example.test" } }], pagination: pageInfo }];
@@ -147,6 +170,15 @@ const scenarios = process.env.QA_SCENARIOS === "messaging" ? [
   ["customer", messagePath, "Messages with Celebration Studio"],
   ["vendor", messagePath, "Messages with Aditi Customer"],
   ["customer", closedMessagePath, "Messages with Celebration Studio"],
+] : process.env.QA_SCENARIOS === "support" ? [
+  ["customer", `/bookings/${messageBookingId}/support`, "Support for your booking"],
+  ["customer", `/support/cases/${supportCaseId}`, "Cancellation concern"],
+  ["vendor", `/support/cases/${closedSupportCaseId}`, "Cancellation concern"],
+  ["admin", "/admin/support", "Support investigations"],
+  ["admin", `/support/cases/${supportCaseId}`, "Cancellation concern"],
+  ["admin", "/admin/cancellation-policies", "Cancellation policies"],
+  ["customer", "/customer/dashboard", "My bookings"],
+  ["vendor", "/vendor/dashboard", "Booking requests"],
 ] : defaultScenarios;
 const results = [], navigation = [];
 const evaluate = async expression => {
@@ -173,7 +205,7 @@ try {
       }
       await evaluate("document.fonts.ready.then(()=>true)");
       await delay(150);
-      if (pathname.startsWith("/bookings/")) {
+      if (pathname.startsWith("/bookings/") && pathname.endsWith("/messages")) {
         await evaluate("document.querySelector('details > summary')?.click()");
         await delay(100);
         const messagingState = await evaluate(`(() => {
@@ -186,15 +218,32 @@ try {
         })()`);
         navigation.push({ width, action: `${role} persisted message history and REST fallback`, ok: messagingState.history && messagingState.timestamp && messagingState.receipt && messagingState.summary && messagingState.liveNotClaimed && messagingState.composer === (pathname !== closedMessagePath), details: messagingState });
       }
+      if (process.env.QA_SCENARIOS === "support") {
+        if (pathname.startsWith("/support/cases/")) {
+          const state = await evaluate("({publicUpdate:document.body.innerText.includes('Public concern recorded'),privateNote:document.body.innerText.includes('INTERNAL_ONLY'),composer:!![...document.querySelectorAll('label')].find(n=>n.innerText.includes('Public case update')),evidence:document.body.innerText.includes('View evidence 1')})");
+          navigation.push({ width, action: `${role} case visibility and evidence`, ok: state.publicUpdate && state.evidence && state.privateNote === (role === "admin") && state.composer === (pathname !== `/support/cases/${closedSupportCaseId}`), details: state });
+        }
+        if (pathname === "/customer/dashboard") {
+          await evaluate("[...document.querySelectorAll('button')].find(b=>b.innerText==='Review quotations')?.click()"); await delay(150);
+          const blocked = await evaluate("[...document.querySelectorAll('button')].find(b=>b.innerText==='Accept quotation and reserve date')?.disabled===true");
+          await evaluate("document.querySelector('input[type=checkbox]')?.click()"); await delay(100);
+          navigation.push({ width, action: "Quotation policy acknowledgment gates acceptance", ok: blocked && await evaluate("[...document.querySelectorAll('button')].find(b=>b.innerText==='Accept quotation and reserve date')?.disabled===false") });
+        }
+        if (pathname === "/vendor/dashboard") {
+          await evaluate("[...document.querySelectorAll('button')].find(b=>b.innerText==='Cancel booking')?.click()"); await delay(150);
+          navigation.push({ width, action: "Vendor cancellation requires a reason", ok: await evaluate("!!document.querySelector('[role=dialog],dialog')?.querySelector('textarea[required]') && [...document.querySelectorAll('button')].find(b=>b.innerText==='Confirm cancellation')?.disabled===true") });
+          await key("Escape"); await delay(100);
+        }
+      }
       snapshot = await evaluate("({text:document.body.innerText.replace(/\\s+/g,' '),width:innerWidth,scrollWidth:document.documentElement.scrollWidth,links:[...document.querySelectorAll('a')].map(a=>a.getAttribute('href')),headings:document.querySelectorAll('h1').length})");
       const overflow = snapshot.scrollWidth > width + 1;
       const offenders = overflow ? await evaluate("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1 && !e.closest('[class*=overflow-x-auto]')).slice(0,12).map(e=>({tag:e.tagName,cls:e.className,text:e.innerText?.slice(0,70),right:e.getBoundingClientRect().right}))") : [];
       const result = { width, role, pathname, heading: snapshot.text.includes(heading), overflow, scrollWidth: snapshot.scrollWidth, headings: snapshot.headings, deadLinks: snapshot.links.filter(href => !href || href === "#"), offenders };
       results.push(result);
-      if (!blockAnimations && [320,390,1440].includes(width) && (["/", "/vendors?category=Decoration", "/vendors/vendor-1", "/booking/vendor-1", "/customer/dashboard", "/vendor/profile-setup", "/admin", "/login"].includes(pathname) || pathname.startsWith("/bookings/"))) {
+      if (!blockAnimations && [320,390,1440].includes(width) && (["/", "/vendors?category=Decoration", "/vendors/vendor-1", "/booking/vendor-1", "/customer/dashboard", "/vendor/profile-setup", "/admin", "/login"].includes(pathname) || pathname.startsWith("/bookings/") || process.env.QA_SCENARIOS === "support")) {
         await delay(500);
         const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-        fs.writeFileSync(path.join(cache, "after-" + (pathname.startsWith("/bookings/") ? role + "-" : "") + pathname.replace(/[^a-z0-9]/gi, "-") + "-" + width + ".png"), Buffer.from(shot.data, "base64"));
+        fs.writeFileSync(path.join(cache, "after-" + (pathname.startsWith("/bookings/") || pathname.startsWith("/support/") ? role + "-" : "") + pathname.replace(/[^a-z0-9]/gi, "-") + "-" + width + ".png"), Buffer.from(shot.data, "base64"));
       }
       process.stdout.write(JSON.stringify(result) + "\n");
       if (pathname.startsWith("/vendors?") && width < 1024) {

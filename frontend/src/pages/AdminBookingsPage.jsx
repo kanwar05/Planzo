@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import Card from "../components/Card";
 import BookingReasonDialog from "../components/BookingReasonDialog";
 import BookingQuotations from "../components/BookingQuotations";
+import BookingCancellationInfo from "../components/BookingCancellationInfo";
 import BookingStatus, { bookingStatuses } from "../components/BookingStatus";
 import EmptyState from "../components/EmptyState";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -51,12 +52,12 @@ export default function AdminBookingsPage() {
     load();
     return () => { loadVersion.current += 1; };
   }, [load]);
-  const cancel = async (id, reason) => {
+  const cancel = async (id, reason, options) => {
     if (busy) return false;
     setBusy(id);
     setError("");
     try {
-      await updateBookingStatus(id, "cancelled", ...(reason === undefined ? [] : [reason]));
+      await updateBookingStatus(id, "cancelled", ...(options ? [reason, options] : reason === undefined ? [] : [reason]));
       setPendingCancellation(null);
       await load();
       setMessage("Booking cancelled.");
@@ -106,6 +107,7 @@ export default function AdminBookingsPage() {
             <div className="min-w-0"><dt className="flex items-center gap-2 text-xs font-medium text-ink/65"><MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Location</dt><dd className="mt-1.5 break-words text-sm font-bold">{booking.eventLocation}</dd></div>
           </dl>
           <BookingQuotations booking={booking} role="admin" disabled={Boolean(busy)} />
+          <BookingCancellationInfo booking={booking} />
           {booking.description && <p className="mt-5 whitespace-pre-line break-words text-sm leading-7 text-ink/75">
             {booking.description}
           </p>}
@@ -117,6 +119,6 @@ export default function AdminBookingsPage() {
       </div>
       <Pagination pagination={pagination} page={page} onPage={setPage} disabled={Boolean(busy)} />
     </>}
-    <BookingReasonDialog booking={pendingCancellation} status="cancelled" busy={Boolean(busy)} error={pendingCancellation ? error : ""} onClose={() => { if (!busy) setPendingCancellation(null); }} onConfirm={reason => cancel(pendingCancellation._id, reason)} />
+    <BookingReasonDialog booking={pendingCancellation} status="cancelled" role="admin" busy={Boolean(busy)} error={pendingCancellation ? error : ""} onClose={() => { if (!busy) setPendingCancellation(null); }} onConfirm={(reason, options) => cancel(pendingCancellation._id, reason, options)} />
   </div>;
 }

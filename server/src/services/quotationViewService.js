@@ -1,3 +1,5 @@
+import { cancellationPolicyView, legacyCancellationPolicy } from "./cancellationPolicyViewService.js";
+
 const identifier = value => {
   const id = typeof value === "string" ? value : value?._bsontype === "ObjectId" && typeof value.toHexString === "function" ? value.toHexString() : "";
   return /^[a-f0-9]{24}$/i.test(id) ? id : undefined;
@@ -24,6 +26,7 @@ export function quotationContentView(input) {
   for (const key of ["deliverables", "exclusions"])
     result[key] = (Array.isArray(source[key]) ? source[key] : []).filter(item => typeof item === "string").slice(0, 30);
   if (date(source.expiresAt)) result.expiresAt = source.expiresAt;
+  if (source.cancellationPolicy) result.cancellationPolicy = cancellationPolicyView(source.cancellationPolicy);
   return result;
 }
 
@@ -35,6 +38,9 @@ export function quotationView(input) {
     if (identifier(source[key])) result[key] = identifier(source[key]);
   if (Number.isSafeInteger(source.revision) && source.revision > 0) result.revision = source.revision;
   if (date(source.createdAt)) result.createdAt = source.createdAt;
+  // An unaccepted legacy revision is presented with its grandfathered terms,
+  // without rewriting the append-only source quotation.
+  if (!source.cancellationPolicy) result.cancellationPolicy = legacyCancellationPolicy();
   return result;
 }
 
@@ -45,5 +51,6 @@ export function acceptedAgreementView(input) {
   if (identifier(source.quotationId)) result.quotationId = identifier(source.quotationId);
   if (Number.isSafeInteger(source.revision) && source.revision > 0) result.revision = source.revision;
   if (date(source.acceptedAt)) result.acceptedAt = source.acceptedAt;
+  if (date(source.cancellationPolicyAcknowledgedAt)) result.cancellationPolicyAcknowledgedAt = source.cancellationPolicyAcknowledgedAt;
   return result;
 }

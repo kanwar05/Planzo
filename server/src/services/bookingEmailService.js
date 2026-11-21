@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import net from "node:net";
 import nodemailer from "nodemailer";
 import { validateEmail } from "../utils/validation.js";
+import { SUPPORT_EMAIL_EVENTS } from "../models/NotificationOutbox.js";
 
 let testSender;
 const DELIVERY_TIMEOUT_MS = 35_000;
@@ -76,6 +77,17 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character
 export function renderBookingEmail(job) {
   const event = Object.hasOwn(events, job?.eventType) ? events[job.eventType] : null;
   const payload = job?.payload;
+  if (SUPPORT_EMAIL_EVENTS.includes(job?.eventType)) {
+    if (!/^[a-f0-9]{24}$/i.test(String(payload?.supportCaseId || "")) ||
+        !["customer", "vendor", "admin"].includes(payload?.recipientRole))
+      throw new Error("Support alert requires a valid case and recipient role.");
+    const destination = `${frontendOrigin()}/support/cases/${payload.supportCaseId}`;
+    const introduction = job.eventType === "support_case_assigned" && payload.recipientRole === "admin"
+      ? "A Planzo support case has been assigned to you." : "There is an update to your Planzo support case.";
+    return { subject: "Planzo support case update",
+      text: `${introduction}\n\nSign in to review the case: ${destination}\n\nEvidence and administrator notes are not included in this email.`,
+      html: `<p>${introduction}</p><p><a href="${escapeHtml(destination)}">Sign in to review the case</a></p><p>Evidence and administrator notes are not included in this email.</p>` };
+  }
   if (job?.eventType === "message_received") {
     if (!/^[a-f0-9]{24}$/i.test(String(job.bookingId || "")) ||
         !["customer", "vendor"].includes(payload?.recipientRole))
