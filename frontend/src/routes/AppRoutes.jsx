@@ -17,6 +17,7 @@ const BookingSupportPage = lazy(() => import("../pages/BookingSupportPage"));
 const SupportCasePage = lazy(() => import("../pages/SupportCasePage"));
 const AdminSupportCasesPage = lazy(() => import("../pages/AdminSupportCasesPage"));
 const AdminCancellationPoliciesPage = lazy(() => import("../pages/AdminCancellationPoliciesPage"));
+const AdminFinancialsPage = lazy(() => import("../pages/AdminFinancialsPage"));
 const CustomerDashboardPage = lazy(() => import("../pages/CustomerDashboardPage"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage"));
 const LoginPage = lazy(() => import("../pages/LoginPage"));
@@ -177,6 +178,9 @@ export const appRoutes = [{
     }, {
       path: "/admin/bookings",
       element: <Page component={AdminBookingsPage} />
+    }, {
+      path: "/admin/financials",
+      element: <Page component={AdminFinancialsPage} />
     }, {
       path: "/admin/settings",
       element: <Page component={SettingsPage} />

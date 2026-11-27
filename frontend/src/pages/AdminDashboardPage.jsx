@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, CalendarCheck2, CalendarDays, CheckCircle2, Clock3, ShieldCheck, Store, Users } from "lucide-react";
+import { ArrowUpRight, CalendarCheck2, CalendarDays, CheckCircle2, Clock3, ShieldCheck, Store, Users, WalletCards } from "lucide-react";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
@@ -50,6 +50,7 @@ export default function AdminDashboardPage() {
           <div className="mt-5 space-y-3">
             <Button to="/admin/users" variant="outline" className="w-full !justify-between !rounded-2xl !p-4"><span className="flex items-center gap-3"><Users className="h-5 w-5 text-coral" aria-hidden="true" /> Manage users</span><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>
             <Button to="/admin/bookings" variant="outline" className="w-full !justify-between !rounded-2xl !p-4"><span className="flex items-center gap-3"><CalendarDays className="h-5 w-5 text-coral" aria-hidden="true" /> View bookings</span><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>
+            <Button to="/admin/financials" variant="outline" className="w-full !justify-between !rounded-2xl !p-4"><span className="flex items-center gap-3"><WalletCards className="h-5 w-5 text-coral" aria-hidden="true" /> Financial reporting</span><ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>
           </div>
         </Card>
       </section>

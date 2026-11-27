@@ -14,11 +14,16 @@ import Message from "../models/Message.js";
 import CancellationPolicy from "../models/CancellationPolicy.js";
 import SupportCase, { SUPPORT_CASE_CATEGORIES, SUPPORT_CASE_STATUSES } from "../models/SupportCase.js";
 import SupportCaseEvent, { SUPPORT_CASE_EVENT_KINDS } from "../models/SupportCaseEvent.js";
+import Payment from "../models/Payment.js";
+import Refund from "../models/Refund.js";
+import FinancialTransaction from "../models/FinancialTransaction.js";
+import PaymentWebhookEvent from "../models/PaymentWebhookEvent.js";
+import PaymentReconciliationException from "../models/PaymentReconciliationException.js";
 import { inspectDatabaseTopology } from "../config/database.js";
 import { auditBookingDates } from "./bookingDataAudit.js";
 import { safeDocumentId } from "./safeDiagnosticValues.js";
 
-const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message, CancellationPolicy, SupportCase, SupportCaseEvent];
+const models = [Booking, User, Vendor, Availability, RefreshToken, EmailOtp, NotificationOutbox, VendorModerationAudit, VendorPackage, Quotation, Conversation, Message, CancellationPolicy, SupportCase, SupportCaseEvent, Payment, Refund, FinancialTransaction, PaymentWebhookEvent, PaymentReconciliationException];
 const MAX_TIME_MS = 30000;
 const failure = (code) => Object.assign(new Error("Read-only database preflight failed."), { code });
 const canonical = (value, key) => {
@@ -119,6 +124,14 @@ export async function inspectDatabaseData(db = mongoose.connection.db) {
     ["bookingsupportevents", "kind", SUPPORT_CASE_EVENT_KINDS],
     ["bookingsupportevents", "visibility", ["participants", "admin"]],
     ["bookingsupportevents", "actorRole", ["customer", "vendor", "admin"]],
+    ["payments", "status", ["creating", "created", "authorized", "captured", "failed", "partially_refunded", "refunded", "reconciliation_required"]],
+    ["payments", "installment", ["deposit", "balance"]],
+    ["payments", "settlementStatus", ["unfunded", "held", "payable", "settled"]],
+    ["refunds", "status", ["processing", "processed", "failed", "reconciliation_required"]],
+    ["financialtransactions", "kind", ["order_created", "payment_authorized", "payment_captured", "payment_failed", "refund_requested", "refund_processed", "refund_failed", "reconciliation_exception"]],
+    ["paymentwebhookevents", "status", ["received", "processed", "unmatched", "failed"]],
+    ["paymentreconciliationexceptions", "status", ["open", "resolved"]],
+    ["paymentreconciliationexceptions", "reason", ["unmatched_provider_event", "amount_mismatch", "currency_mismatch", "duplicate_capture", "booking_state_changed_after_order", "provider_timeout", "provider_rejection", "refund_mismatch"]],
   ]) statuses.push({ collection, field, ...await issues(db.collection(collection), { $in: [{ $ifNull: [`$${field}`, null] }, allowed] }) });
   const dates = await auditBookingDates(db.collection("bookings"));
   const legacyVendorApprovals = await db.collection("vendors").countDocuments({ verificationStatus: { $exists: false } }, { maxTimeMS: MAX_TIME_MS });

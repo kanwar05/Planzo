@@ -13,10 +13,18 @@ import {
   getVendorModerationAudit,
 } from "../controllers/adminController.js";
 import { authorizeRoles, protect } from "../middleware/authMiddleware.js";
+import {
+  createRefund,
+  getFinancialReport,
+  resolveException,
+} from "../controllers/paymentController.js";
 
 const router = Router();
 router.use(protect, authorizeRoles("admin"));
 router.get("/stats", getAdminStats);
+router.get("/financials", getFinancialReport);
+router.post("/payments/:paymentId/refunds", createRefund);
+router.patch("/financials/exceptions/:exceptionId", resolveException);
 router.get("/users", getUsers);
 router.get("/vendors", getVendorsForAdmin);
 router.get("/vendors/unverified", getUnverifiedVendors);

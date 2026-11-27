@@ -86,6 +86,36 @@ test("every booking event renders branded plain text and responsive HTML for eac
   }
 });
 
+test("payment and refund email templates report status without exposing payment instrument data", () => {
+  for (const [eventType, expected] of [
+    ["payment_succeeded", /payment.*confirmed/i],
+    ["payment_failed", /payment attempt.*not completed/i],
+    ["refund_processed", /refund.*processed/i],
+    ["refund_failed", /refund.*could not be processed/i],
+  ]) {
+    const notification = job({
+      eventType,
+      paymentId: "private-payment-id",
+      cardNumber: "4111111111111111",
+      payload: {
+        recipientRole: "customer",
+        paymentAmountPaise: 12345,
+        paymentStage: "refund",
+        cardNumber: "4111111111111111",
+        bankAccount: "private-account",
+      },
+    });
+    const message = renderBookingEmail(notification);
+    for (const body of [message.text, message.html]) {
+      assert.match(body, expected);
+      assert.match(body, /₹123\.45/);
+      assert.equal(body.includes("private-payment-id"), false);
+      assert.equal(body.includes("4111111111111111"), false);
+      assert.equal(body.includes("private-account"), false);
+    }
+  }
+});
+
 test("HTML escapes every dynamic value and keeps the dashboard destination independent of payload input", () => {
   const unsafe = `<img src=x onerror="alert('x')"> & <script>bad()</script>`;
   const notification = job({ bookingId: unsafe });

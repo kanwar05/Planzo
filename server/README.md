@@ -126,6 +126,27 @@ Vendor moderation supports status/search/suspended filters and stable pagination
 
 Account deactivation and vendor-profile deletion share account/vendor guards with new booking creation, so a newly submitted request cannot be orphaned by either operation. Profiles with any booking history still cannot be deleted; accounts with pending/accepted bookings still cannot deactivate. See [database preflight and rollout](../docs/OPERATIONS.md#database-preflight-and-rollout) before upgrading an existing marketplace.
 
+## Razorpay payments (test mode only)
+
+| Method | Path | Access / purpose |
+| --- | --- | --- |
+| GET | /api/payments/bookings/:bookingId | Customer's payment/refund history |
+| POST | /api/payments/bookings/:bookingId/orders | Customer; accepted quotation installment and required `Idempotency-Key` |
+| POST | /api/payments/verify | Customer; verifies Checkout signature and fetches provider payment state |
+| GET | /api/payments/bookings/:bookingId/invoice | Customer PDF for the accepted commercial agreement |
+| GET | /api/payments/:paymentId/receipt | Customer PDF after a captured payment |
+| GET | /api/payments/vendor/settlements | Vendor's held, reporting-only settlement totals |
+| POST | /api/payments/webhook | Razorpay; raw-body signature-verified event endpoint |
+| GET | /api/admin/financials | Admin payment, refund, ledger and reconciliation report |
+| POST | /api/admin/payments/:paymentId/refunds | Admin-reviewed partial/full refund; paise amount, reason and idempotency key |
+| PATCH | /api/admin/financials/exceptions/:exceptionId | Admin records a reconciliation resolution note |
+
+Payment amounts come from the immutable accepted quotation and are stored as integer INR paise. A balance order is unavailable until the deposit is captured. Razorpay callbacks are not authoritative: the API verifies the signature and checks Razorpay server-to-server, while signed webhooks independently update durable payment state. Webhook event IDs and payment/refund ledger keys are unique; unmatched events retry and eventually remain visible as reconciliation exceptions. Provider timeouts are not blindly retried because the provider may have completed the operation despite a lost response.
+
+Set `RAZORPAY_MODE=test`, `RAZORPAY_KEY_ID` (`rzp_test_*`), `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` on the server only. The three credentials must be set together. Never add them to frontend `VITE_*` variables. Configure the Razorpay webhook URL as `https://<api-host>/api/payments/webhook` for `payment.captured`, `payment.authorized`, `payment.failed`, `order.paid`, `refund.created`, `refund.processed` and `refund.failed`. Keep the separate email worker running to dispatch payment/refund notifications through the existing SMTP outbox. See [payment staging and rollout](../docs/OPERATIONS.md#razorpay-payment-staging-and-rollout).
+
+`PAYMENT_DEPOSIT_BPS` defaults to 3000 (30%) and `PLATFORM_COMMISSION_BPS` to 0; these are configurable rollout assumptions, not approved commercial terms. Obtain business/legal approval before setting production-facing terms. Existing cancellation policies specify cancellation cutoffs but do not promise or calculate refunds; this integration deliberately requires manual admin refund review and records policy/cancellation snapshots without inventing an automatic refund formula. Vendor balances are held for reporting only: no payout operation is implemented. PDFs are informational booking invoices/receipts, not GST tax invoices and do not calculate tax. Live Razorpay mode is rejected by configuration.
+
 ## Tests and data
 
 Run `npm run check` and `npm test`. Run `npm run data:audit` for the existing read-only date/legacy report, `npm run db:preflight` for topology, installed index definitions, required fields, statuses and date conflicts, and `npm run email:diagnostics` for safe aggregate queue diagnostics. None of these commands writes data/indexes or sends mail. Preflight exits nonzero on unsafe/missing configuration or findings. Review [database preflight and rollout](../docs/OPERATIONS.md#database-preflight-and-rollout) before deploying to an existing database.

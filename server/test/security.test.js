@@ -54,10 +54,12 @@ test("auth endpoints return a clean response when rate limited", async () => {
 });
 
 test("removed integrations no longer expose API endpoints", async () => {
-  for (const endpoint of ["payments", "chat", "calendar", "favorites", "notifications", "reviews", "settings", "analytics"]) {
+  for (const endpoint of ["chat", "calendar", "favorites", "notifications", "reviews", "settings", "analytics"]) {
     const response = await request(app).get(`/api/${endpoint}`);
     assert.equal(response.status, 404, endpoint);
   }
+  const payments = await request(app).get("/api/payments");
+  assert.equal(payments.status, 401);
 });
 
 test("cross-site requests without a trusted Origin cannot mutate accounts", async () => {

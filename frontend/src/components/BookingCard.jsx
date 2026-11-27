@@ -8,6 +8,7 @@ import { getVendorImage } from "../utils/vendor";
 import BookingReasonDialog from "./BookingReasonDialog";
 import BookingQuotations from "./BookingQuotations";
 import BookingCancellationInfo from "./BookingCancellationInfo";
+import BookingPayments from "./BookingPayments";
 
 export default function BookingCard({ booking, role = "customer", busy = false, onStatus, verified = true, onBookingChange, unreadCount = 0 }) {
   const [reasonAction, setReasonAction] = useState("");
@@ -28,6 +29,7 @@ export default function BookingCard({ booking, role = "customer", busy = false, 
       {booking.notes && <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-ink/65"><strong className="font-semibold text-ink/80">Customer notes: </strong>{booking.notes}</p>}
       <BookingQuotations booking={booking} role={role} verified={verified} disabled={busy} onBookingChange={onBookingChange} />
       <BookingCancellationInfo booking={booking} />
+      {role === "customer" && <BookingPayments booking={booking} verified={verified} />}
       {["customer", "vendor"].includes(role) && <div className="mt-3"><Button to={`/bookings/${booking._id}/support`} variant="ghost" className="!px-0 !text-xs">Get support for this booking</Button></div>}
       {["customer", "vendor"].includes(role) && <div className="mt-4"><Button to={`/bookings/${booking._id}/messages`} variant="outline" className="w-full sm:w-auto">{role === "vendor" ? "Message Customer" : "Message Vendor"}{unreadCount > 0 && <span aria-label={`${unreadCount} unread messages`} className="rounded-full bg-coral px-2 py-0.5 text-xs tabular-nums text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}</Button></div>}
       {statusReason && <p className="mt-4 break-words rounded-xl border border-ink/10 px-4 py-3 text-sm leading-6 text-ink/65"><strong className="font-semibold">Status note: </strong>{statusReason}</p>}

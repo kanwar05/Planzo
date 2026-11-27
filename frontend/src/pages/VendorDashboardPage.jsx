@@ -15,6 +15,7 @@ import { getApiError } from "../utils/apiError";
 import { getVendorCompletion, vendorProfileFields } from "../utils/vendor";
 import { useAuth } from "../context/AuthContext";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import VendorSettlementSummary from "../components/VendorSettlementSummary";
 export default function VendorDashboardPage() {
   useDocumentTitle("Booking requests");
   const { user } = useAuth();
@@ -78,6 +79,7 @@ export default function VendorDashboardPage() {
         <div className="mt-3 flex flex-wrap gap-3"><Button to="/vendor/profile-setup" variant="outline" className="w-full sm:w-auto">{vendor.verificationStatus === "rejected" ? "Correct and resubmit" : "Update business profile"}</Button>{vendor.verificationStatus === "approved" && !vendor.suspended && vendor._id && <Button to={`/vendors/${vendor._id}`} variant="ghost">View public listing <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Button>}</div>
       </section>
       <BookingMetrics bookings={bookings} />
+      <VendorSettlementSummary />
       {unread.total > 0 && <p aria-live="polite" className="text-sm font-semibold">{unread.total} unread {unread.total === 1 ? "message" : "messages"} across your bookings</p>}
       {unread.error && <p className="text-xs text-ink/65">{unread.error}</p>}
       <div className="grid gap-4 rounded-3xl bg-sand p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
