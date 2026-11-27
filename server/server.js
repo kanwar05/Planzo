@@ -16,7 +16,7 @@ async function startServer() {
       await Promise.all([
         import("./src/app.js"),
         import("./src/config/database.js"),
-        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp", "NotificationOutbox", "VendorModerationAudit", "VendorPackage", "Quotation", "Conversation", "Message", "CancellationPolicy", "SupportCase", "SupportCaseEvent"].map(
+        ...["Booking", "User", "Vendor", "Availability", "RefreshToken", "EmailOtp", "NotificationOutbox", "VendorModerationAudit", "VendorPackage", "Quotation", "Conversation", "Message", "CancellationPolicy", "SupportCase", "SupportCaseEvent", "Payment", "Refund", "FinancialTransaction", "PaymentWebhookEvent", "PaymentReconciliationException"].map(
           (model) => import(`./src/models/${model}.js`),
         ),
       ]);

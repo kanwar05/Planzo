@@ -1,5 +1,12 @@
 import { api } from "./api";
 export const getAdminStats = async () => (await api.get("/admin/stats")).data.stats;
+export const getAdminFinancials = async () => (await api.get("/admin/financials")).data.report;
+export const createPaymentRefund = async (paymentId, amountPaise, reason, idempotencyKey) =>
+  (await api.post(`/admin/payments/${paymentId}/refunds`, { amountPaise, reason }, {
+    headers: { "Idempotency-Key": idempotencyKey },
+  })).data.refund;
+export const resolvePaymentException = async (exceptionId, resolutionNote) =>
+  (await api.patch(`/admin/financials/exceptions/${exceptionId}`, { resolutionNote })).data.exception;
 export const getAdminUsers = async params => (await api.get("/admin/users", {
   params
 })).data;

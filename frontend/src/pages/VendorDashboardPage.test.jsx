@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import VendorDashboardPage from "./VendorDashboardPage";
 import { getVendorRequests, updateBookingStatus } from "../services/bookingService";
 import { getMyVendorProfile } from "../services/vendorService";
+import { getVendorSettlement } from "../services/paymentService";
 const { account } = vi.hoisted(() => ({ account: { user: { role: "vendor", emailVerified: true } } }));
 vi.mock("../context/AuthContext", () => ({ useAuth: () => account }));
 vi.mock("../services/bookingService", () => ({
@@ -12,6 +13,9 @@ vi.mock("../services/bookingService", () => ({
 }));
 vi.mock("../services/vendorService", () => ({
   getMyVendorProfile: vi.fn()
+}));
+vi.mock("../services/paymentService", () => ({
+  getVendorSettlement: vi.fn()
 }));
 const request = {
   _id: "booking-1",
@@ -30,6 +34,11 @@ describe("vendor booking management", () => {
     getMyVendorProfile.mockResolvedValue({
       businessName: "Event Studio",
       verificationStatus: "approved"
+    });
+    getVendorSettlement.mockResolvedValue({
+      status: "held",
+      payoutsEnabled: false,
+      totals: { grossCapturedPaise: 0, platformCommissionPaise: 0, vendorPayablePaise: 0 }
     });
   });
   it.each([["Accept", "accepted"], ["Reject", "rejected"]])("sends the %s transition for a pending request", async (label, status) => {

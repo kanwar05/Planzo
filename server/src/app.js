@@ -13,6 +13,8 @@ import messagingRoutes from "./routes/messagingRoutes.js";
 import cancellationPolicyRoutes from "./routes/cancellationPolicyRoutes.js";
 import supportCaseRoutes from "./routes/supportCaseRoutes.js";
 import supportEvidenceRoutes from "./routes/supportEvidenceRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import { razorpayWebhook } from "./controllers/paymentController.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import { requestLogging } from "./middleware/requestLogging.js";
 import { createReadinessHandler } from "./services/readinessService.js";
@@ -123,6 +125,11 @@ app.use((req, res, next) => {
     });
   return next();
 });
+app.post(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json", limit: "256kb" }),
+  razorpayWebhook,
+);
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 app.use(["/api/auth", "/api/bookings", "/api/admin"], (req, res, next) => {
@@ -166,6 +173,7 @@ app.use(
   confirmationLimiter,
 );
 app.use("/api/auth", authRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", messagingRoutes);
 app.use("/api", cancellationPolicyRoutes);

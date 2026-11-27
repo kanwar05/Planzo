@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import net from "node:net";
 import nodemailer from "nodemailer";
 import { validateEmail } from "../utils/validation.js";
-import { SUPPORT_EMAIL_EVENTS } from "../models/NotificationOutbox.js";
+import { PAYMENT_EMAIL_EVENTS, SUPPORT_EMAIL_EVENTS } from "../models/NotificationOutbox.js";
 
 let testSender;
 const DELIVERY_TIMEOUT_MS = 35_000;
@@ -98,6 +98,31 @@ export function renderBookingEmail(job) {
       subject: "Planzo: unread booking messages",
       text: `${introduction}\n\nSign in to view your conversation: ${destination}\n\nMessage content is only available within Planzo.`,
       html: `<p>${introduction}</p><p><a href="${escapeHtml(destination)}">Sign in to view your conversation</a></p><p>Message content is only available within Planzo.</p>`,
+    };
+  }
+  if (PAYMENT_EMAIL_EVENTS.includes(job?.eventType)) {
+    const payload = job.payload;
+    if (!/^[a-f0-9]{24}$/i.test(String(job.bookingId || "")) ||
+        payload?.recipientRole !== "customer" ||
+        !Number.isSafeInteger(payload.paymentAmountPaise) || payload.paymentAmountPaise < 0 ||
+        !["deposit", "balance", "refund"].includes(payload.paymentStage))
+      throw new Error("Payment alert is missing its safe customer snapshot.");
+    const amount = new Intl.NumberFormat("en-IN", {
+      style: "currency", currency: "INR",
+    }).format(payload.paymentAmountPaise / 100);
+    const introductions = {
+      payment_succeeded: "A payment for your Planzo booking has been confirmed.",
+      payment_failed: "A payment attempt for your Planzo booking was not completed.",
+      refund_processed: "A refund for your Planzo booking has been processed.",
+      refund_failed: "A refund for your Planzo booking could not be processed. Contact Planzo support.",
+    };
+    const introduction = introductions[job.eventType];
+    if (!introduction) throw new Error("Payment alert type is invalid.");
+    const destination = `${frontendOrigin()}/customer/dashboard`;
+    return {
+      subject: "Planzo payment status update",
+      text: `${introduction}\n\nAmount: ${amount}\nType: ${payload.paymentStage}\nBooking reference: ${job.bookingId}\n\nSign in to review payment history: ${destination}\n\nNo card or bank details are included in this email.`,
+      html: `<p>${escapeHtml(introduction)}</p><p>Amount: ${escapeHtml(amount)}<br>Type: ${escapeHtml(payload.paymentStage)}<br>Booking reference: ${escapeHtml(job.bookingId)}</p><p><a href="${escapeHtml(destination)}">Sign in to review payment history</a></p><p>No card or bank details are included in this email.</p>`,
     };
   }
   if (!event || !payload || !["customer", "vendor"].includes(payload.recipientRole))

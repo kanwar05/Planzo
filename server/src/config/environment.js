@@ -72,6 +72,27 @@ export function validateEnvironment(env = process.env) {
     throw new Error("COOKIE_SAME_SITE must be lax, strict, or none.");
   if (env.SMTP_SECURE && !["true", "false"].includes(env.SMTP_SECURE))
     throw new Error("SMTP_SECURE must be true or false.");
+  const razorpayValues = [
+    env.RAZORPAY_KEY_ID,
+    env.RAZORPAY_KEY_SECRET,
+    env.RAZORPAY_WEBHOOK_SECRET,
+  ];
+  if (razorpayValues.some(Boolean)) {
+    if (!razorpayValues.every(Boolean))
+      throw new Error("Set RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and RAZORPAY_WEBHOOK_SECRET together.");
+    if (!env.RAZORPAY_KEY_ID.startsWith("rzp_test_"))
+      throw new Error("This rollout only permits Razorpay test-mode key IDs.");
+  }
+  if (env.RAZORPAY_MODE && env.RAZORPAY_MODE !== "test")
+    throw new Error("RAZORPAY_MODE must be test until production payment compliance is approved.");
+  for (const [key, fallback, min, max] of [
+    ["PAYMENT_DEPOSIT_BPS", 3000, 1, 10000],
+    ["PLATFORM_COMMISSION_BPS", 0, 0, 10000],
+  ]) {
+    const value = Number(env[key] ?? fallback);
+    if (!Number.isSafeInteger(value) || value < min || value > max)
+      throw new Error(`${key} must be an integer between ${min} and ${max}.`);
+  }
   const smtpPassword = env.SMTP_APP_PASSWORD || env.SMTP_PASS;
   if (Boolean(env.SMTP_USER) !== Boolean(smtpPassword))
     throw new Error(
